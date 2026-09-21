@@ -1,63 +1,155 @@
 # Flutter DOM Compiler
 
-An experimental build tool that turns a **small, static subset of existing Flutter source into HTML and CSS**, with an explicitly selected Flutter widget loaded on demand as an island.
+**Flutter source. Native documents. Flutter islands when needed.**
 
-The goal is to reuse Flutter UI for fast, indexable native web pages, while keeping Flutter available for complex interactions. This is a feasibility prototype, **not a drop-in replacement for Flutter Web**.
+An experimental Dart CLI that compiles a supported subset of existing Flutter UI into HTML and CSS, while retaining explicit interactive regions as lazy-loaded Flutter web islands.
 
-## What works in v0.1
+**Early research prototype, not a drop-in Flutter Web replacement.** It does not yet compile arbitrary applications or provide a native DOM state runtime.
 
-- Parses real Dart source with the Dart analyzer; no regex widget conversion.
-- Expands local, field-free `StatelessWidget` classes with a single return expression.
-- Converts literal text and basic layout into static HTML and approximate CSS.
-- Generates page title, description, language and explicit heading levels from a sidecar configuration.
-- Compiles one explicit, parameterless Flutter island using the real Flutter toolchain.
-- Loads that island only after a native button is pressed. The document itself needs no Flutter engine.
-- Reports unsupported expressions and widget arguments as build errors.
-- Supports strict `--dom-only` builds which reject islands.
+[Quick start](#quick-start) · [Comparison](#compared-with-flutter-web) · [Benchmarks](#benchmarks) · [Compatibility](docs/COMPATIBILITY.md) · [Roadmap](docs/PLAN.md) · [Contributing](CONTRIBUTING.md)
 
-The included example is also a normal runnable Flutter application. Its source imports only Flutter; web-specific configuration lives in `flutter_dom.json`.
+## Why this approach?
 
-## Run the prototype
+- **Content before engine startup.** Supported text and layout are present in the initial HTML response.
+- **Native document structure.** Real paragraphs and explicitly configured headings; ordinary browser text selection and document inspection.
+- **No JavaScript for static routes.** The static example emits only HTML and CSS.
+- **Preserve complex Flutter regions.** A declared island is compiled by Flutter itself, with its engine cost deferred until activation.
+- **Keep supported Flutter source intact.** Metadata, heading intent and island policy live in a sidecar configuration.
+- **Make limitations visible.** Unsupported code fails the build; inspection reports source signals instead of an invented conversion percentage.
 
-Requirements: Dart 3.8+ and a Flutter SDK on `PATH`. Tested versions and verification results are in [docs/VALIDATION.md](docs/VALIDATION.md). The first Flutter build may download SDK artifacts and dependencies.
+These benefits depend on the supported subset. One explicit filter-list adapter provides native search; general input widgets, anchors, routing and arbitrary data-driven interaction remain roadmap items.
+
+## Quick start
+
+Use Dart 3.11.4 / Flutter 3.41.6 to reproduce the benchmark. The package minimum is Dart 3.8; other SDK combinations are not yet certified. Python 3 is needed only for the preview command below.
 
 ```sh
+git clone https://github.com/ThoreKoritzius/Flutter-Web-Compiler.git
+cd Flutter-Web-Compiler
 dart pub get
-dart run bin/flutter_dom.dart
+
+# Build both targets and start the comparison page.
+dart run tool/showcase.dart
+```
+
+Open [127.0.0.1:8097](http://127.0.0.1:8097). Toggle **Native DOM / Flutter Web**, select text, search the features and try the counter. Both targets use [the same Dart source](examples/showcase/lib/main.dart). Only the active target loads. Switching resets local state; this is not a state-preserving renderer swap.
+
+Direct targets are `/native/` and `/flutter/` on the same server. Use `--port 8098` if needed, or `--no-serve` to build only. The small comparison shell is hand-written HTML; the native target inside it is compiler output. Search uses the documented explicit adapter, not general state transpilation. See [the demo guide](demo/README.md).
+
+For the original minimal counter fixture:
+
+```sh
+dart run bin/flutter_dom.dart build --project examples/catalog --output build/demo
 python3 -m http.server 8097 --bind 127.0.0.1 --directory build/demo
 ```
 
-Open [127.0.0.1:8097](http://127.0.0.1:8097). Text and headings are already HTML. Click **Load Flutter counter** to download Flutter, then use the counter.
-
-To run the original application with ordinary Flutter:
+Build the static-only example:
 
 ```sh
-cd examples/catalog
-flutter pub get
-flutter run -d chrome
+dart run bin/flutter_dom.dart build --project examples/catalog \
+  --config flutter_dom.static.json --dom-only --output build/static
 ```
 
-Build a different supported project:
+The example is also ordinary Flutter source: run `flutter pub get` and `flutter run -d chrome` from `examples/catalog`.
+
+## One CLI
+
+Install from this checkout; it is not published to pub.dev yet:
 
 ```sh
-dart run bin/flutter_dom.dart --project path/to/project --source lib/main.dart --output build/site
+dart pub global activate --source path .
+flutter_dom --help
+flutter_dom inspect --project /path/to/flutter_app --output build/inspection.json
+flutter_dom build --project /path/to/flutter_app --output build/site
 ```
 
-Build the static-only example from the same source file, with **zero JavaScript**:
+The executable must be on your `PATH`, usually from Dart's `.pub-cache/bin`. Alternatively, replace `flutter_dom` with `dart pub global run flutter_dom_compiler:flutter_dom`.
+
+`build` defaults to the current project and `build/dom`. It requires `flutter_dom.json`. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories. Keep private inspection reports outside version control.
+
+This is an independent tool. It does not patch the SDK or add an official `flutter build dom` command. An editor extension can later wrap the same CLI.
+
+## Compared with Flutter Web
+
+| Concern | Flutter Web | This prototype |
+| --- | --- | --- |
+| Existing app compatibility | Broad Flutter APIs, subject to web/plugin constraints | Narrow, explicit subset |
+| Initial public content | App content rendered after startup | Supported content in initial HTML |
+| Static route JavaScript | Flutter application/runtime | None required |
+| Complex graphics and interaction | Core strength | Explicit real Flutter island |
+| Flutter engine cost | Required for the application | Deferred until island activation |
+| Visual consistency | Flutter layout and rendering | Approximate CSS; differences expected |
+| Accessibility | Flutter semantics support | Native structure for supported content; Flutter semantics in islands |
+| State, navigation and packages | Existing Flutter implementation | No general DOM equivalents yet |
+| SEO foundations | Document-heavy sites need additional consideration | HTML and metadata; no ranking guarantee |
+| Maintenance | Supported Flutter toolchain | Additional compiler/adapters and SDK compatibility burden |
+
+Flutter's [web guidance](https://docs.flutter.dev/platform-integration/web) discusses document-oriented scenarios. Flutter Web is not universally slow, inaccessible or unsuitable for the web; it optimizes for a different rendering contract.
+
+### Disadvantages
+
+An activated island still downloads a substantial Flutter bundle. A mixed page can have **higher total cost** than plain Flutter Web, despite a smaller initial document. CSS differs from Flutter's constraint system, and native document behavior can conflict with pixel parity. An unsupported component may require a much larger fallback boundary when it shares state or context.
+
+For authenticated applications, SEO may be irrelevant. Native browser behavior and startup cost are separate motivations. Do not prerender private user data merely to make it indexable.
+
+## Benchmarks
+
+The benchmark builds **the same source widget for each pair**, using release Flutter Web and this compiler. It measures selected initial and post-activation artifacts, with each file separately gzip-compressed at level 9.
+
+<!-- benchmark-table:start -->
+| Workload | Build | Initial KiB | Initial gzip KiB | After activation KiB | After activation gzip KiB |
+| --- | --- | ---: | ---: | ---: | ---: |
+| static | flutter_dom | 2.32 | 1.17 | 2.32 | 1.17 |
+| static | flutter_web | 7328.47 | 2652.64 | 7328.47 | 2652.64 |
+| hybrid | flutter_dom | 5.05 | 2.26 | 7356.02 | 2660.49 |
+| hybrid | flutter_web | 7380.57 | 2667.49 | 7380.57 | 2667.49 |
+<!-- benchmark-table:end -->
+
+**Toy-fixture artifact sizes, not observed transfer, browser latency or SEO scores.** The DOM version uses approximate CSS and system fonts. Flutter supplies broader framework behavior. The hybrid version waits for activation; the Flutter baseline exposes its counter immediately. Alternate renderer variants, HTTP overhead, caches and external fallback fonts are excluded.
 
 ```sh
-dart run bin/flutter_dom.dart --config flutter_dom.static.json --dom-only --output build/static
+dart run tool/benchmark.dart
 ```
 
-The input project needs `flutter_dom.json`. If it contains an island, it also needs normal Flutter web project scaffolding (`web/index.html`). The CLI generates an island entry point under that project's `.dart_tool/flutter_dom/`; it does not rewrite the input Dart files.
+See [methodology and raw results](docs/BENCHMARKS.md). We have not benchmarked FlutterJS or claimed to outperform it.
 
-## Configuration
+## How it works
+
+```text
+Flutter source + explicit web configuration
+                 |
+          Dart AST analysis
+                 |
+       +---------+----------+
+       |                    |
+ supported static UI    explicit island
+       |                    |
+    HTML + CSS         Flutter release build
+       |                    |
+ immediate document    load on activation
+```
+
+The current implementation directly evaluates a restricted static AST subset, plus explicit native adapters. A typed intermediate representation and resolved multi-file analysis are planned, not implemented.
+
+## Source and configuration
+
+Supported layout includes `MaterialApp(home:)`, `Scaffold(body:)`, `SingleChildScrollView`, `Text`, `Row`, `Column`, `Padding`, `Container`, `SizedBox` and `Center`, with restricted arguments. Local stateless widgets can pass static data through named final constructor fields and literal defaults. Builds must return a single expression. See the [compatibility contract](docs/COMPATIBILITY.md).
+
+```dart
+class Label extends StatelessWidget {
+  const Label({super.key, required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Text(title);
+}
+```
 
 ```json
 {
   "root": "App",
-  "title": "My page",
-  "description": "An ordinary HTML description.",
+  "title": "My document",
+  "description": "A normal HTML description.",
   "lang": "en",
   "headings": { "page-title": 1 },
   "islands": {
@@ -66,46 +158,25 @@ The input project needs `flutter_dom.json`. If it contains an island, it also ne
 }
 ```
 
-The `headings` keys match literal Flutter `ValueKey` values on `Text` widgets. Omit `islands` for a static page with no generated JavaScript. Only one island instance is supported for now. It must be a public widget in the same source file, with a zero-required-argument constructor.
+Heading keys match literal `ValueKey` values on `Text`. Omit `islands` for a static build. An island must currently be a public, parameterless widget in the same file; only one instance is supported. The CLI generates its entry point under `.dart_tool/flutter_dom/` without rewriting input Dart files.
 
-## Supported subset
+The showcase additionally declares `"nativeAdapters": { "FeatureSearch": "filter-list" }`. That opt-in maps a known string-list contract to a native input and local filtering. The same widget's Dart implementation runs in the standard Flutter build.
 
-| Input | Output / limits |
-| --- | --- |
-| `MaterialApp(home: ...)` | Compiles home; accepts title and debug banner settings |
-| `Scaffold(body: ...)` | `<main>` |
-| `Text` | Escaped paragraph or explicitly configured heading |
-| `TextStyle` | Literal font size and supported font weights |
-| `Column`, `Row` | CSS flex; common alignments; content-driven sizing |
-| `Padding`, `Container` | Padding, literal dimensions, child |
-| `SizedBox` | Literal dimensions, optional child |
-| `Center` | CSS flex centering |
-| Local stateless composition | No constructor data flow, instance fields or dynamic build logic |
-| Explicit island | Actual Flutter build; isolated state; click to load |
+## Roadmap and related work
 
-Padding supports `EdgeInsets.all` and `EdgeInsets.symmetric`. Text alignment is supported. Unknown named arguments fail rather than disappearing. `ValueKey` is used only for explicit HTML semantics; Flutter identity is not emulated on the static side.
+Next: resolved imports and data flow, native links/forms, one state-management integration, document routes and safe multi-island boundaries. Compatibility will be measured on independent fixtures, not promised as a percentage of arbitrary apps. See [the plan](docs/PLAN.md).
 
-## Deliberate limits
+[Jaspr](https://docs.jaspr.site/) provides a Dart DOM framework and Flutter embedding; it is a candidate output/runtime layer. [FlutterJS](https://github.com/flutterjsdev/flutterjs) documents a broader Flutter-to-JavaScript/runtime approach. Our experiment focuses on the explicit document/real-Flutter boundary. Embedding alone is not a novel feature.
 
-This is syntax-aware compilation, not whole-program type resolution. It reads one file and recognizes unprefixed Flutter constructor names. It assumes those names refer to Flutter APIs; import aliases, shadowed names and imported custom widgets are not supported. Run `flutter analyze` on input projects as well.
+A community proposal may be useful after stronger evidence. Upstream integration is neither assumed nor required. See [the community path and draft discussion](docs/COMMUNITY.md); nothing has been submitted.
 
-There is no DOM state runtime, hydration, automatic island inference, shared provider/context bridge, route discovery, server data fetching, image support or general Material compatibility yet. The example's counter stays entirely in Flutter. Flutter plugins and widgets that need ancestor context may require explicit wrapper adapters; fallback is not universally safe.
-
-Layout is an approximation. CSS intrinsic sizing differs from Flutter constraints. The generated base stylesheet is a prototype presentation theme, not a pixel-preserving reproduction of Material styles. Defaults for rows/columns use web content sizing; explicit `MainAxisSize.max` is rejected.
-
-The first island activation downloads a real Flutter application and engine. It is **not** a lightweight interactive DOM component. Inspect initial and post-activation transfer separately. Static HTML enables indexing, but does not guarantee rankings or solve routing, canonicals, structured data or content quality.
-
-The island bootstrap currently derives an external script from the default generated Flutter loader format. Projects with custom bootstrap files are rejected. Full CSP support and a stable custom-bootstrap integration are follow-up work. Host the output over HTTP, not `file://`.
-
-## Development
+## Development and license
 
 ```sh
 dart analyze
 dart test
 ```
 
-See [the implementation plan](docs/PLAN.md) for the intended architecture and milestone gates. Generated HTML, Flutter bundles and SDK caches are ignored by Git. Dependency lockfiles are committed for reproducibility.
+[Contributing](CONTRIBUTING.md) · [Validation](docs/VALIDATION.md) · [Security](SECURITY.md) · [BSD-3-Clause license](LICENSE)
 
-## Project status
-
-Research prototype. Compatibility is intentionally narrow. No claim of automatic conversion percentages or Flutter behavior parity.
+Independent community experiment. Not affiliated with or endorsed by the Flutter team.

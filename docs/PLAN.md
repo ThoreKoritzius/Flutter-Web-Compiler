@@ -19,6 +19,18 @@ Start with content/detail pages. Do not promise arbitrary app conversion or pixe
 
 Acceptance: visible document content exists without JavaScript; no Flutter resource downloads before activation; counter increments after activation; static compilation fails clearly on unsupported code. Measure HTML/CSS/JS transfer and total island transfer independently.
 
+## Follow-up prototype — generalized tooling and comparison
+
+- [x] `build` and read-only `inspect` commands, with project-relative defaults.
+- [x] Named final constructor fields and static defaults.
+- [x] Explicit native filter-list adapter; no arbitrary state transpilation claim.
+- [x] Shared-source landing-page showcase with independent native and Flutter targets.
+- [x] Repeatable same-source release-build artifact benchmarks, including post-activation cost.
+- [x] Compatibility contract, contribution guidance, BSD-3-Clause licensing and CI configuration.
+- [x] Community discussion outline and upstream readiness gates; not submitted.
+
+The next milestone must establish resolved imports and general data flow. A growing list of handcrafted adapters alone does not prove automatic application conversion. See [ARCHITECTURE.md](ARCHITECTURE.md) for the path to complex applications.
+
 ## Milestone 1 — trustworthy static conversion
 
 1. Resolve symbols across imports with analyzer sessions, rather than recognizing names alone.
