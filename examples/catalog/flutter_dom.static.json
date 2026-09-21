@@ -1,0 +1,6 @@
+{
+  "root": "StaticApp",
+  "title": "Flutter DOM compiler — static build",
+  "description": "A document compiled from Flutter source without any JavaScript or Flutter runtime.",
+  "headings": { "details": 1 }
+}

@@ -1,0 +1,7 @@
+analyzer:
+  exclude:
+    - examples/**
+    - build/**
+  errors:
+    unused_import: error
+    dead_code: error

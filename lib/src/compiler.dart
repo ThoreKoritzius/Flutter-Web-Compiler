@@ -1,0 +1,366 @@
+import 'dart:convert';
+
+import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/analysis/utilities.dart';
+
+class CompileException implements Exception {
+  CompileException(this.message);
+  final String message;
+  @override
+  String toString() => 'Compile error: $message';
+}
+
+class Compilation {
+  Compilation(this.html, this.report, this.island);
+  final String html;
+  final Map<String, Object?> report;
+  final String? island;
+}
+
+class _Call {
+  _Call(this.name, this.positional, this.named, this.line);
+  final String name;
+  final List<Object?> positional;
+  final Map<String, Object?> named;
+  final int line;
+}
+
+/// Deliberately static: never executes the input application.
+class FlutterDomCompiler {
+  Compilation compile(
+    String source,
+    Map<String, dynamic> config, {
+    bool domOnly = false,
+  }) {
+    final result = parseString(content: source, throwIfDiagnostics: false);
+    if (result.errors.isNotEmpty) {
+      throw CompileException(result.errors.first.toString());
+    }
+    final classes = <String, ClassDeclaration>{
+      for (final node in result.unit.declarations.whereType<ClassDeclaration>())
+        node.name.lexeme: node,
+    };
+    final root = config['root'] as String? ?? 'App';
+    final islandConfig = Map<String, dynamic>.from(
+      config['islands'] as Map? ?? {},
+    );
+    final headings = Map<String, dynamic>.from(
+      config['headings'] as Map? ?? {},
+    );
+    final counts = <String, int>{};
+    final stack = <String>[];
+    String? island;
+
+    Never fail(String message, [int? line]) =>
+        throw CompileException('${line == null ? '' : 'Line $line: '}$message');
+
+    Object? value(Expression expression) {
+      final line = result.lineInfo.getLocation(expression.offset).lineNumber;
+      if (expression is SimpleStringLiteral) return expression.value;
+      if (expression is AdjacentStrings) {
+        final parts = expression.strings.map(value).toList();
+        if (parts.every((part) => part is String)) return parts.join();
+      }
+      if (expression is IntegerLiteral) return expression.value;
+      if (expression is DoubleLiteral) return expression.value;
+      if (expression is BooleanLiteral) return expression.value;
+      if (expression is NullLiteral) return null;
+      if (expression is PrefixExpression && expression.operator.lexeme == '-') {
+        final operand = value(expression.operand);
+        if (operand is num) return -operand;
+      }
+      if (expression is ListLiteral) {
+        return expression.elements.map((element) {
+          if (element is! Expression) {
+            fail(
+              'Collection control flow and spreads are not supported.',
+              line,
+            );
+          }
+          return value(element);
+        }).toList();
+      }
+      if (expression is PrefixedIdentifier) return expression.toSource();
+      String? name;
+      ArgumentList? args;
+      if (expression is InstanceCreationExpression) {
+        name = expression.constructorName.toSource();
+        args = expression.argumentList;
+      } else if (expression is MethodInvocation) {
+        name = expression.target == null
+            ? expression.methodName.name
+            : '${expression.target!.toSource()}.${expression.methodName.name}';
+        args = expression.argumentList;
+      }
+      if (name != null && args != null) {
+        final named = <String, Object?>{};
+        final positional = <Object?>[];
+        for (final argument in args.arguments) {
+          if (argument is NamedExpression) {
+            named[argument.name.label.name] = value(argument.expression);
+          } else {
+            positional.add(value(argument));
+          }
+        }
+        return _Call(name, positional, named, line);
+      }
+      fail(
+        'Expected a static literal or supported constructor; found '
+        '`${expression.toSource()}`. Move dynamic UI into an explicit island.',
+        line,
+      );
+    }
+
+    void check(_Call call, Set<String> named, [int positional = 0]) {
+      final unknown = call.named.keys.toSet().difference({...named, 'key'});
+      if (unknown.isNotEmpty || call.positional.length != positional) {
+        fail(
+          '${call.name}: unsupported arguments ${unknown.join(', ')} '
+          '(expected $positional positional).',
+          call.line,
+        );
+      }
+      if (call.named['key'] case final _Call key) {
+        if (key.name != 'ValueKey' ||
+            key.positional.length != 1 ||
+            key.named.isNotEmpty) {
+          fail('Only a literal ValueKey is supported.', call.line);
+        }
+      } else if (call.named['key'] != null) {
+        fail('Only a literal ValueKey is supported.', call.line);
+      }
+    }
+
+    String pixels(Object? number) {
+      if (number is! num || !number.isFinite || number < 0) {
+        fail('Expected a finite non-negative layout number; found $number.');
+      }
+      return '${number}px';
+    }
+
+    String padding(Object? object) {
+      if (object is! _Call) fail('Expected an EdgeInsets constructor.');
+      if (object.name == 'EdgeInsets.all') {
+        check(object, {}, 1);
+        return pixels(object.positional.single);
+      }
+      if (object.name == 'EdgeInsets.symmetric') {
+        check(object, {'horizontal', 'vertical'});
+        return '${pixels(object.named['vertical'] ?? 0)} ${pixels(object.named['horizontal'] ?? 0)}';
+      }
+      fail('Unsupported padding: ${object.name}.', object.line);
+    }
+
+    String textStyle(Object? object) {
+      if (object is! _Call || object.name != 'TextStyle') {
+        fail('Expected a TextStyle constructor.');
+      }
+      check(object, {'fontSize', 'fontWeight'});
+      final css = <String>[];
+      if (object.named.containsKey('fontSize')) {
+        css.add('font-size:${pixels(object.named['fontSize'])}');
+      }
+      if (object.named.containsKey('fontWeight')) {
+        final weight = object.named['fontWeight'];
+        final mapped = {
+          'FontWeight.bold': '700',
+          'FontWeight.normal': '400',
+          for (var i = 1; i <= 9; i++) 'FontWeight.w${i}00': '${i}00',
+        }[weight];
+        if (mapped == null) fail('Unsupported font weight: $weight.');
+        css.add('font-weight:$mapped');
+      }
+      return css.join(';');
+    }
+
+    late String Function(Object?) render;
+    String buildClass(String name) {
+      final node = classes[name];
+      if (node == null)
+        fail(
+          'Unknown widget $name. Imported widgets are not expanded in v0.1.',
+        );
+      if (node.extendsClause?.superclass.toSource() != 'StatelessWidget') {
+        fail(
+          '$name must be a StatelessWidget or an explicitly configured Flutter island.',
+        );
+      }
+      if (node.members.any(
+        (member) => member is FieldDeclaration && !member.isStatic,
+      )) {
+        fail(
+          '$name has instance fields. Constructor data flow is not supported yet.',
+        );
+      }
+      if (stack.contains(name))
+        fail('Recursive widget expansion: ${[...stack, name].join(' → ')}.');
+      final methods = node.members.whereType<MethodDeclaration>().where(
+        (method) => method.name.lexeme == 'build',
+      );
+      if (methods.length != 1) fail('$name needs one build method.');
+      final body = methods.single.body;
+      Expression? expression;
+      if (body is ExpressionFunctionBody) expression = body.expression;
+      if (body is BlockFunctionBody && body.block.statements.length == 1) {
+        final statement = body.block.statements.single;
+        if (statement is ReturnStatement) expression = statement.expression;
+      }
+      if (expression == null)
+        fail('$name.build must contain a single return expression.');
+      stack.add(name);
+      final html = render(value(expression));
+      stack.removeLast();
+      return html;
+    }
+
+    render = (Object? object) {
+      if (object is! _Call)
+        fail('Expected a widget constructor, found $object.');
+      final call = object;
+      final n = call.named;
+      counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
+      if (islandConfig.containsKey(call.name)) {
+        check(call, {});
+        if (domOnly)
+          fail(
+            'DOM-only build forbids Flutter island ${call.name}.',
+            call.line,
+          );
+        if (island != null) fail('v0.1 supports one island instance per page.');
+        if (!classes.containsKey(call.name))
+          fail('Island must be declared in the input file.');
+        island = call.name;
+        final options = Map<String, dynamic>.from(
+          islandConfig[call.name] as Map,
+        );
+        final height = pixels(options['height'] ?? 240);
+        final label = options['label'] as String? ?? 'Load interactive content';
+        return '<section class="island-shell" style="height:$height" aria-label="${_escape(label)}">'
+            '<div id="flutter-island" style="height:$height"></div>'
+            '<div class="island-placeholder"><button id="load-island" type="button">${_escape(label)}</button>'
+            '<p id="island-status" role="status">Flutter loads only when you activate this panel.</p></div>'
+            '</section>';
+      }
+      switch (call.name) {
+        case 'MaterialApp':
+          check(call, {'home', 'debugShowCheckedModeBanner', 'title'});
+          return render(n['home']);
+        case 'Scaffold':
+          check(call, {'body'});
+          return '<main>${render(n['body'])}</main>';
+        case 'Text':
+          check(call, {'style', 'textAlign'}, 1);
+          if (call.positional.single is! String)
+            fail('Text requires a literal string.', call.line);
+          final key = n['key'];
+          final heading = key is _Call ? headings[key.positional.single] : null;
+          if (heading != null &&
+              (heading is! int || heading < 1 || heading > 6)) {
+            fail('Heading level must be an integer from 1 to 6.');
+          }
+          final tag = heading == null ? 'p' : 'h$heading';
+          var style = n['style'] == null ? '' : textStyle(n['style']);
+          if (n['textAlign'] != null) {
+            final align = {
+              'TextAlign.left': 'left',
+              'TextAlign.right': 'right',
+              'TextAlign.center': 'center',
+              'TextAlign.start': 'start',
+              'TextAlign.end': 'end',
+              'TextAlign.justify': 'justify',
+            }[n['textAlign']];
+            if (align == null) fail('Unsupported text alignment.');
+            style += ';text-align:$align';
+          }
+          return '<$tag style="$style">${_escape(call.positional.single as String)}</$tag>';
+        case 'Column':
+        case 'Row':
+          check(call, {
+            'children',
+            'crossAxisAlignment',
+            'mainAxisAlignment',
+            'mainAxisSize',
+          });
+          final children = n['children'] ?? <Object?>[];
+          if (children is! List)
+            fail('${call.name}.children must be a literal list.');
+          final cross = {
+            'CrossAxisAlignment.start': 'flex-start',
+            'CrossAxisAlignment.end': 'flex-end',
+            'CrossAxisAlignment.center': 'center',
+            'CrossAxisAlignment.stretch': 'stretch',
+          }[n['crossAxisAlignment'] ?? 'CrossAxisAlignment.center'];
+          final main = {
+            'MainAxisAlignment.start': 'flex-start',
+            'MainAxisAlignment.end': 'flex-end',
+            'MainAxisAlignment.center': 'center',
+            'MainAxisAlignment.spaceBetween': 'space-between',
+            'MainAxisAlignment.spaceAround': 'space-around',
+            'MainAxisAlignment.spaceEvenly': 'space-evenly',
+          }[n['mainAxisAlignment'] ?? 'MainAxisAlignment.start'];
+          if (cross == null || main == null)
+            fail('Unsupported flex alignment.', call.line);
+          if (n['mainAxisSize'] != null &&
+              n['mainAxisSize'] != 'MainAxisSize.min') {
+            fail('Only explicit MainAxisSize.min is supported.', call.line);
+          }
+          return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
+              'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
+        case 'Padding':
+        case 'Container':
+        case 'SizedBox':
+        case 'Center':
+          check(call, switch (call.name) {
+            'Padding' => {'padding', 'child'},
+            'Container' => {'padding', 'width', 'height', 'child'},
+            'SizedBox' => {'width', 'height', 'child'},
+            _ => {'child'},
+          });
+          final styles = <String>[];
+          if (call.name == 'Padding' && n['padding'] == null)
+            fail('Padding requires padding.');
+          if (n['padding'] != null)
+            styles.add('padding:${padding(n['padding'])}');
+          for (final size in ['width', 'height']) {
+            if (n[size] != null) styles.add('$size:${pixels(n[size])}');
+          }
+          if (call.name == 'Center')
+            styles.add(
+              'display:flex;align-items:center;justify-content:center',
+            );
+          return '<div style="${styles.join(';')}">${n['child'] == null ? '' : render(n['child'])}</div>';
+        default:
+          check(call, {});
+          return buildClass(call.name);
+      }
+    };
+
+    final body = buildClass(root);
+    final title = _escape(config['title'] as String? ?? root);
+    final description = _escape(config['description'] as String? ?? '');
+    final lang = _escape(config['lang'] as String? ?? 'en');
+    final html =
+        '<!doctype html>\n<html lang="$lang"><head>\n'
+        '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<title>$title</title><meta name="description" content="$description">\n'
+        '<link rel="stylesheet" href="styles.css">\n</head><body>\n$body\n'
+        '${island == null ? '' : '<script src="islands.js" defer></script>\n'}'
+        '</body></html>\n';
+    return Compilation(html, {
+      'root': root,
+      'widgets': counts,
+      'island': island,
+      'initialFlutterBytes': 0,
+      'rendering': 'static HTML; approximate CSS layout',
+      'limitations': [
+        'Single source file',
+        'Literal data only',
+        'One explicit island',
+        'No state bridge',
+        'No Flutter layout parity guarantee',
+      ],
+    }, island);
+  }
+}
+
+String _escape(String value) => const HtmlEscape().convert(value);

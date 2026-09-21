@@ -1,0 +1,11 @@
+name: flutter_dom_catalog
+description: Unmodified Flutter UI used as input for the compiler prototype.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  uses-material-design: true

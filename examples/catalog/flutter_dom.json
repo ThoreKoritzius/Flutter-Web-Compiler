@@ -1,0 +1,10 @@
+{
+  "root": "App",
+  "title": "Flutter DOM compiler — hybrid prototype",
+  "description": "A real Flutter source file compiled to static HTML, with an interactive Flutter counter loaded only on demand.",
+  "lang": "en",
+  "headings": { "title": 1, "details": 2 },
+  "islands": {
+    "CounterPanel": { "height": 240, "label": "Load Flutter counter" }
+  }
+}
