@@ -1,0 +1,8 @@
+{
+  "root": "ShowcaseApp",
+  "title": "Flutter DOM Compiler — native target",
+  "description": "Try a document-first Flutter build: native text, an explicit filter-list adapter, and a real Flutter island.",
+  "headings": { "hero": 1, "counter": 2 },
+  "nativeAdapters": { "FeatureSearch": "filter-list" },
+  "islands": { "CounterPanel": { "height": 220, "label": "Load Flutter counter" } }
+}

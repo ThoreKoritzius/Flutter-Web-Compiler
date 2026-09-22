@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-22T05:07:28.270Z",
+  "runs": 3,
+  "methodology": "Lighthouse desktop, simulated throttling, fresh Chrome per run; localhost; counter not activated. Scores are lab diagnostics, not search rankings. FCP measures paint, not interaction readiness.",
+  "artifactHash": "d179f230a5796e4579ec8641c2fc3feb09d969b13030ae64778f3d27ef353c22",
+  "targets": {
+    "native": {
+      "samples": [
+        {
+          "performance": 100,
+          "seo": 100,
+          "fcpMs": 201.88479999999998,
+          "lcpMs": 241.88479999999998,
+          "tbtMs": 0,
+          "transferredBytes": 7740,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        },
+        {
+          "performance": 100,
+          "seo": 100,
+          "fcpMs": 245.8324,
+          "lcpMs": 245.8324,
+          "tbtMs": 0,
+          "transferredBytes": 7740,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        },
+        {
+          "performance": 100,
+          "seo": 100,
+          "fcpMs": 246.54000000000002,
+          "lcpMs": 246.54000000000002,
+          "tbtMs": 0,
+          "transferredBytes": 7740,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        }
+      ],
+      "caveats": [],
+      "ranges": {
+        "performance": {
+          "min": 100,
+          "max": 100
+        },
+        "seo": {
+          "min": 100,
+          "max": 100
+        },
+        "fcpMs": {
+          "min": 201.88479999999998,
+          "max": 246.54000000000002
+        },
+        "lcpMs": {
+          "min": 241.88479999999998,
+          "max": 246.54000000000002
+        },
+        "tbtMs": {
+          "min": 0,
+          "max": 0
+        },
+        "transferredBytes": {
+          "min": 7740,
+          "max": 7740
+        }
+      },
+      "median": {
+        "performance": 100,
+        "seo": 100,
+        "fcpMs": 245.8324,
+        "lcpMs": 245.8324,
+        "tbtMs": 0,
+        "transferredBytes": 7740
+      },
+      "serverHtml": {
+        "h1Count": 1,
+        "searchInputCount": 1
+      }
+    },
+    "flutter": {
+      "samples": [
+        {
+          "performance": 71,
+          "seo": 100,
+          "fcpMs": 247.62650000000002,
+          "lcpMs": 7052.68975,
+          "tbtMs": 5.999999999999545,
+          "transferredBytes": 8194371,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        },
+        {
+          "performance": 71,
+          "seo": 100,
+          "fcpMs": 242.27460000000002,
+          "lcpMs": 7043.911899999999,
+          "tbtMs": 3,
+          "transferredBytes": 8194371,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        },
+        {
+          "performance": 71,
+          "seo": 100,
+          "fcpMs": 242.25310000000002,
+          "lcpMs": 7043.87965,
+          "tbtMs": 3,
+          "transferredBytes": 8194371,
+          "warnings": [],
+          "runtimeError": null,
+          "failedSeo": []
+        }
+      ],
+      "caveats": [
+        "Canvas rendering: Lighthouse may emit NO_LCP internally yet synthesize an LCP estimate. Its LCP and derived performance score are not equivalent to application readiness."
+      ],
+      "ranges": {
+        "performance": {
+          "min": 71,
+          "max": 71
+        },
+        "seo": {
+          "min": 100,
+          "max": 100
+        },
+        "fcpMs": {
+          "min": 242.25310000000002,
+          "max": 247.62650000000002
+        },
+        "lcpMs": {
+          "min": 7043.87965,
+          "max": 7052.68975
+        },
+        "tbtMs": {
+          "min": 3,
+          "max": 5.999999999999545
+        },
+        "transferredBytes": {
+          "min": 8194371,
+          "max": 8194371
+        }
+      },
+      "median": {
+        "performance": 71,
+        "seo": 100,
+        "fcpMs": 242.27460000000002,
+        "lcpMs": 7043.911899999999,
+        "tbtMs": 3,
+        "transferredBytes": 8194371
+      },
+      "serverHtml": {
+        "h1Count": 0,
+        "searchInputCount": 0
+      }
+    }
+  },
+  "lighthouseVersion": "13.5.0",
+  "environment": {
+    "networkUserAgent": "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36",
+    "hostUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "benchmarkIndex": 3967.5,
+    "credits": {
+      "axe-core": "4.13.0"
+    }
+  },
+  "settings": {
+    "output": "json",
+    "maxWaitForFcp": 30000,
+    "maxWaitForLoad": 45000,
+    "pauseAfterFcpMs": 1000,
+    "pauseAfterLoadMs": 1000,
+    "networkQuietThresholdMs": 1000,
+    "cpuQuietThresholdMs": 1000,
+    "formFactor": "desktop",
+    "throttling": {
+      "rttMs": 40,
+      "throughputKbps": 10240,
+      "requestLatencyMs": 0,
+      "downloadThroughputKbps": 0,
+      "uploadThroughputKbps": 0,
+      "cpuSlowdownMultiplier": 1
+    },
+    "throttlingMethod": "simulate",
+    "screenEmulation": {
+      "mobile": false,
+      "width": 1350,
+      "height": 940,
+      "deviceScaleFactor": 1,
+      "disabled": false
+    },
+    "emulatedUserAgent": "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
+    "auditMode": false,
+    "gatherMode": false,
+    "clearStorageTypes": [
+      "file_systems",
+      "shader_cache",
+      "service_workers",
+      "cache_storage"
+    ],
+    "disableStorageReset": false,
+    "debugNavigation": false,
+    "channel": "node",
+    "usePassiveGathering": false,
+    "disableFullPageScreenshot": false,
+    "skipAboutBlank": false,
+    "blankPage": "about:blank",
+    "ignoreStatusCode": false,
+    "locale": "en-US",
+    "blockedUrlPatterns": null,
+    "additionalTraceCategories": null,
+    "extraHeaders": null,
+    "precomputedLanternData": null,
+    "onlyAudits": null,
+    "onlyCategories": [
+      "performance",
+      "seo"
+    ],
+    "skipAudits": null
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "root": "CatalogApp",
+  "title": "Learning catalog",
+  "description": "A synthetic example of static constructor data compiled from ordinary Flutter widgets.",
+  "headings": { "title": 1 }
+}

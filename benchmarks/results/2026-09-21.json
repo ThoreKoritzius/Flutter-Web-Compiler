@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "kind": "selected-build-artifact-sizes-not-browser-timings",
+  "fixture": "examples/catalog/lib/main.dart",
+  "fixtureSha256": "d465ccf187c56af4d9c38a5701833343da49f7bdd1511917e4fc37fd72660d2a",
+  "compilerSha256": "ba0824cced1054172305b60048ceb96a59b905775330b9ac4f8ac014af1ad106",
+  "flutter": "3.41.6",
+  "engine": "425cfb54d01a9472b3e81d9e76fd63a4a44cfbcb",
+  "dart": "3.11.4",
+  "platform": "macos",
+  "renderer": "CanvasKit Chromium, JavaScript release build",
+  "gzip": "Each file independently compressed with GZipCodec(level: 9)",
+  "runs": [
+    {
+      "workload": "static",
+      "target": "flutter_dom",
+      "root": "StaticApp",
+      "initial": {
+        "bytes": 2378,
+        "gzipBytes": 1194,
+        "files": [
+          {
+            "path": "index.html",
+            "bytes": 749,
+            "gzipBytes": 448
+          },
+          {
+            "path": "styles.css",
+            "bytes": 1629,
+            "gzipBytes": 746
+          }
+        ]
+      },
+      "afterActivation": {
+        "bytes": 2378,
+        "gzipBytes": 1194,
+        "files": [
+          {
+            "path": "index.html",
+            "bytes": 749,
+            "gzipBytes": 448
+          },
+          {
+            "path": "styles.css",
+            "bytes": 1629,
+            "gzipBytes": 746
+          }
+        ]
+      }
+    },
+    {
+      "workload": "static",
+      "target": "flutter_web",
+      "root": "StaticApp",
+      "initial": {
+        "bytes": 7504355,
+        "gzipBytes": 2716307,
+        "files": [
+          {
+            "path": "assets/FontManifest.json",
+            "bytes": 82,
+            "gzipBytes": 87
+          },
+          {
+            "path": "assets/fonts/MaterialIcons-Regular.otf",
+            "bytes": 7736,
+            "gzipBytes": 3742
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.js",
+            "bytes": 86496,
+            "gzipBytes": 27579
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.wasm",
+            "bytes": 5686880,
+            "gzipBytes": 2175381
+          },
+          {
+            "path": "flutter_bootstrap.js",
+            "bytes": 9833,
+            "gzipBytes": 3773
+          },
+          {
+            "path": "index.html",
+            "bytes": 253,
+            "gzipBytes": 205
+          },
+          {
+            "path": "main.dart.js",
+            "bytes": 1713075,
+            "gzipBytes": 505540
+          }
+        ]
+      },
+      "afterActivation": {
+        "bytes": 7504355,
+        "gzipBytes": 2716307,
+        "files": [
+          {
+            "path": "assets/FontManifest.json",
+            "bytes": 82,
+            "gzipBytes": 87
+          },
+          {
+            "path": "assets/fonts/MaterialIcons-Regular.otf",
+            "bytes": 7736,
+            "gzipBytes": 3742
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.js",
+            "bytes": 86496,
+            "gzipBytes": 27579
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.wasm",
+            "bytes": 5686880,
+            "gzipBytes": 2175381
+          },
+          {
+            "path": "flutter_bootstrap.js",
+            "bytes": 9833,
+            "gzipBytes": 3773
+          },
+          {
+            "path": "index.html",
+            "bytes": 253,
+            "gzipBytes": 205
+          },
+          {
+            "path": "main.dart.js",
+            "bytes": 1713075,
+            "gzipBytes": 505540
+          }
+        ]
+      }
+    },
+    {
+      "workload": "hybrid",
+      "target": "flutter_dom",
+      "root": "App",
+      "initial": {
+        "bytes": 5175,
+        "gzipBytes": 2317,
+        "files": [
+          {
+            "path": "index.html",
+            "bytes": 1826,
+            "gzipBytes": 840
+          },
+          {
+            "path": "islands.js",
+            "bytes": 1720,
+            "gzipBytes": 731
+          },
+          {
+            "path": "styles.css",
+            "bytes": 1629,
+            "gzipBytes": 746
+          }
+        ]
+      },
+      "afterActivation": {
+        "bytes": 7532560,
+        "gzipBytes": 2724346,
+        "files": [
+          {
+            "path": "flutter/assets/FontManifest.json",
+            "bytes": 82,
+            "gzipBytes": 87
+          },
+          {
+            "path": "flutter/assets/fonts/MaterialIcons-Regular.otf",
+            "bytes": 7736,
+            "gzipBytes": 3742
+          },
+          {
+            "path": "flutter/canvaskit/chromium/canvaskit.js",
+            "bytes": 86496,
+            "gzipBytes": 27579
+          },
+          {
+            "path": "flutter/canvaskit/chromium/canvaskit.wasm",
+            "bytes": 5686880,
+            "gzipBytes": 2175381
+          },
+          {
+            "path": "flutter/island_bootstrap.js",
+            "bytes": 9809,
+            "gzipBytes": 3765
+          },
+          {
+            "path": "flutter/main.dart.js",
+            "bytes": 1736382,
+            "gzipBytes": 511475
+          },
+          {
+            "path": "index.html",
+            "bytes": 1826,
+            "gzipBytes": 840
+          },
+          {
+            "path": "islands.js",
+            "bytes": 1720,
+            "gzipBytes": 731
+          },
+          {
+            "path": "styles.css",
+            "bytes": 1629,
+            "gzipBytes": 746
+          }
+        ]
+      }
+    },
+    {
+      "workload": "hybrid",
+      "target": "flutter_web",
+      "root": "App",
+      "initial": {
+        "bytes": 7557703,
+        "gzipBytes": 2731512,
+        "files": [
+          {
+            "path": "assets/FontManifest.json",
+            "bytes": 82,
+            "gzipBytes": 87
+          },
+          {
+            "path": "assets/fonts/MaterialIcons-Regular.otf",
+            "bytes": 7736,
+            "gzipBytes": 3742
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.js",
+            "bytes": 86496,
+            "gzipBytes": 27579
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.wasm",
+            "bytes": 5686880,
+            "gzipBytes": 2175381
+          },
+          {
+            "path": "flutter_bootstrap.js",
+            "bytes": 9833,
+            "gzipBytes": 3773
+          },
+          {
+            "path": "index.html",
+            "bytes": 253,
+            "gzipBytes": 205
+          },
+          {
+            "path": "main.dart.js",
+            "bytes": 1766423,
+            "gzipBytes": 520745
+          }
+        ]
+      },
+      "afterActivation": {
+        "bytes": 7557703,
+        "gzipBytes": 2731512,
+        "files": [
+          {
+            "path": "assets/FontManifest.json",
+            "bytes": 82,
+            "gzipBytes": 87
+          },
+          {
+            "path": "assets/fonts/MaterialIcons-Regular.otf",
+            "bytes": 7736,
+            "gzipBytes": 3742
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.js",
+            "bytes": 86496,
+            "gzipBytes": 27579
+          },
+          {
+            "path": "canvaskit/chromium/canvaskit.wasm",
+            "bytes": 5686880,
+            "gzipBytes": 2175381
+          },
+          {
+            "path": "flutter_bootstrap.js",
+            "bytes": 9833,
+            "gzipBytes": 3773
+          },
+          {
+            "path": "index.html",
+            "bytes": 253,
+            "gzipBytes": 205
+          },
+          {
+            "path": "main.dart.js",
+            "bytes": 1766423,
+            "gzipBytes": 520745
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Toy fixtures; these are not representative application benchmarks.",
+    "Same source widget per pair; CSS layout and system fonts differ from Flutter rendering.",
+    "Hybrid requires explicit activation; Flutter Web exposes the counter immediately.",
+    "Sizes are selected build artifacts, not observed network bytes, FCP, LCP, TTI or memory.",
+    "Selected local CanvasKit Chromium variant; alternate browser/Wasm variants are excluded.",
+    "Includes declared fonts; excludes HTTP headers, compression negotiation, caches and external fallback fonts.",
+    "Excludes debug maps and unused renderer variants; full deployment directories are larger.",
+    "No SEO score or ranking improvement has been measured."
+  ]
+}

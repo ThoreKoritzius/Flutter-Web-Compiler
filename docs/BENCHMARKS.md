@@ -63,3 +63,12 @@ No `N× faster` or `100/100 SEO` claim is supported by these results. DOM can im
 4. Measure both CanvasKit and supported Wasm configurations rather than presenting a single renderer as all Flutter Web.
 5. Include interaction correctness, accessibility and layout checks alongside size/time results.
 6. Compare FlutterJS or Jaspr only after running the same workloads and documenting any source adaptation.
+
+
+## Separate showcase browser audit
+
+Run the showcase server, then `npm ci --prefix tool/browser && npm run audit --prefix tool/browser`. Node >=22.19 and Chrome are required. Unlike the artifact experiment above, this audits the larger shared-source showcase with search and its deferred counter. The default is three fresh headless Chrome runs per target, desktop viewport, simulated 40 ms RTT / 10,240 Kbps / 1× CPU, localhost HTTP without response compression. Counter activation is excluded. Five or more runs and real devices remain a stronger future validation gate.
+
+[The portable result](../benchmarks/results/showcase-browser.json) includes medians, ranges, all samples, Lighthouse version, browser environment and effective settings. Raw Lighthouse reports stay under ignored `build/browser-audits/`. Results are linked to the compiled artifacts by a SHA-256 hash of their size/content-hash manifest. The demo declines to show stale scores after a changed build.
+
+Both targets have matching description metadata. The audit currently gives both an SEO score of 100: it does not measure search ranking or guarantee indexing. Native HTML contains an H1 and search input before JavaScript. Flutter paints app content after startup. FCP is not readiness and does not distinguish these behaviors adequately. Lighthouse's canvas trace can emit `NO_LCP` yet report a synthesized LCP estimate and a derived performance score; do not interpret these as a reliable application-startup comparison. No N× faster claim follows from this audit.

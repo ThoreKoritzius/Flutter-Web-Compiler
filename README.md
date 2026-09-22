@@ -15,7 +15,7 @@ An experimental Dart CLI that compiles a supported subset of existing Flutter UI
 - **No JavaScript for static routes.** The static example emits only HTML and CSS.
 - **Preserve complex Flutter regions.** A declared island is compiled by Flutter itself, with its engine cost deferred until activation.
 - **Keep supported Flutter source intact.** Metadata, heading intent and island policy live in a sidecar configuration.
-- **Make limitations visible.** Unsupported code fails the build; inspection reports source signals instead of an invented conversion percentage.
+- **Make limitations visible.** Unsupported code fails the build; inspection dry-runs widget entry points and lists concrete blockers.
 
 These benefits depend on the supported subset. One explicit filter-list adapter provides native search; general input widgets, anchors, routing and arbitrary data-driven interaction remain roadmap items.
 
@@ -65,7 +65,7 @@ flutter_dom build --project /path/to/flutter_app --output build/site
 
 The executable must be on your `PATH`, usually from Dart's `.pub-cache/bin`. Alternatively, replace `flutter_dom` with `dart pub global run flutter_dom_compiler:flutter_dom`.
 
-`build` defaults to the current project and `build/dom`. It requires `flutter_dom.json`. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories. Keep private inspection reports outside version control.
+`build` defaults to the current project and `build/dom`. It requires `flutter_dom.json`. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative native compatibility score. Each recognized direct widget subclass is compiled as a parameterless DOM-only root; failures include source locations and reasons. This measures compiler acceptance, not the fraction of an entire application that works. Keep private inspection reports outside version control.
 
 This is an independent tool. It does not patch the SDK or add an official `flutter build dom` command. An editor extension can later wrap the same CLI.
 
@@ -112,6 +112,12 @@ dart run tool/benchmark.dart
 ```
 
 See [methodology and raw results](docs/BENCHMARKS.md). We have not benchmarked FlutterJS or claimed to outperform it.
+
+### Showcase browser audits
+
+The comparison page also displays measured desktop Lighthouse performance/SEO results and server-HTML structure. Run `npm ci --prefix tool/browser` and `npm run audit --prefix tool/browser` with the showcase server running. Requires Node >=22.19 and Chrome. Three fresh-browser runs per target are the default; samples, ranges, settings and limitations are saved in [the audit summary](benchmarks/results/showcase-browser.json).
+
+These are lab diagnostics. Both targets can score 100 for SEO while delivering content differently. Canvas rendering complicates LCP and performance-score comparisons; FCP is not interaction readiness. See [the demo methodology](demo/README.md#measurements).
 
 ## How it works
 
@@ -164,7 +170,7 @@ The showcase additionally declares `"nativeAdapters": { "FeatureSearch": "filter
 
 ## Roadmap and related work
 
-Next: resolved imports and data flow, native links/forms, one state-management integration, document routes and safe multi-island boundaries. Compatibility will be measured on independent fixtures, not promised as a percentage of arbitrary apps. See [the plan](docs/PLAN.md).
+Next: resolved imports and data flow, native links/forms, one state-management integration, document routes and safe multi-island boundaries. Compatibility will be measured on independent fixtures, not promised as a percentage of arbitrary apps. See [the plan](docs/PLAN.md) and [the largest engineering gaps](docs/NEXT_STEPS.md).
 
 [Jaspr](https://docs.jaspr.site/) provides a Dart DOM framework and Flutter embedding; it is a candidate output/runtime layer. [FlutterJS](https://github.com/flutterjsdev/flutterjs) documents a broader Flutter-to-JavaScript/runtime approach. Our experiment focuses on the explicit document/real-Flutter boundary. Embedding alone is not a novel feature.
 

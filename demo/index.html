@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flutter DOM Compiler — one source, two web builds</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="showcase.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="mark">f<span>→</span>d</span> Flutter DOM <strong>Compiler</strong></a>
+    <a class="source" href="https://github.com/ThoreKoritzius/Flutter-Web-Compiler/blob/main/examples/showcase/lib/main.dart" target="_blank" rel="noopener">View the shared Dart source ↗</a>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">THE SAME FLUTTER SOURCE, A DIFFERENT WEB CONTRACT</p>
+      <h1>Flutter source.<br><span class="gradient-text">Web-native delivery.</span></h1>
+      <p class="lead">A real document or Flutter’s rendering engine. Switch builds, search the feature list and try the counter.</p></div>
+      <span class="badge">Experimental · BSD-3-Clause</span>
+    </section>
+    <section class="highlights" aria-label="Measured comparison">
+      <article><span class="eyebrow">INITIAL DOCUMENT BUILD</span><strong id="hero-size">—</strong><p>Native selected artifacts, before the Flutter counter loads.</p></article>
+      <article><span class="eyebrow">FIRST CONTENTFUL PAINT</span><strong id="hero-fcp">Not audited</strong><p>Native median · desktop Lighthouse · local server.</p></article>
+      <article><span class="eyebrow">SEO AUDIT</span><strong id="hero-seo">Not audited</strong><p>Lighthouse checks, not a search ranking or indexing guarantee.</p></article>
+    </section>
+    <div class="section-heading"><div><p class="eyebrow">01 / INTERACTIVE PLAYGROUND</p><h2>One Dart source. Two real builds.</h2></div><span>Switch targets. Explore the tradeoffs.</span></div>
+    <div class="workspace">
+      <section class="preview" aria-label="Build comparison">
+        <div class="toolbar">
+          <div class="switch" role="group" aria-label="Choose build target">
+            <button type="button" data-target="native" aria-pressed="true">Native DOM</button>
+            <button type="button" data-target="flutter" aria-pressed="false">Flutter Web</button>
+          </div>
+          <a id="open-target" href="native/" target="_blank" rel="noopener">Open independently ↗</a>
+        </div>
+        <div class="target-note" id="target-note" role="status">HTML content + an explicit native search adapter. Flutter loads only when the counter is activated.</div>
+        <iframe id="preview" title="Native DOM build preview" src="native/"></iframe>
+      </section>
+      <aside>
+        <section class="guide">
+          <p class="eyebrow">A QUICK TEST DRIVE</p>
+          <h2>Look beyond the pixels.</h2>
+          <ol>
+            <li><strong>Select some text.</strong><span>Try the headline and paragraphs.</span></li>
+            <li><strong>Search for “HTML”.</strong><span>Type, clear and try a query with no matches.</span></li>
+            <li><strong>Run the counter.</strong><span>Native defers a real Flutter island. Standard Flutter starts it immediately.</span></li>
+            <li><strong>Switch the build.</strong><span>Each target is independent. Switching resets its local state.</span></li>
+          </ol>
+        </section>
+        <section class="measurements">
+          <p class="eyebrow">THIS DEMO’S BUILD ARTIFACTS</p>
+          <dl>
+            <div><dt>Native · initial</dt><dd id="native-size">—</dd></div>
+            <div><dt>Native · after counter</dt><dd id="complete-size">—</dd></div>
+            <div><dt>Flutter · initial</dt><dd id="flutter-size">—</dd></div>
+          </dl>
+          <p>Raw selected files. Gzip totals appear on hover. Includes the chosen CanvasKit variant; excludes this comparison shell, HTTP overhead and external fallback fonts. Not a timing benchmark.</p>
+        </section>
+        <section class="limits"><h2>What this proves</h2><p>Static documents can arrive before the Flutter engine. A known widget can have a native adapter. Complex interaction can remain in Flutter.</p><p>Search is an explicit adapter—not arbitrary Dart state transpilation. Layout is approximate. This is not universal app conversion.</p></section>
+      </aside>
+    </div>
+    <section class="audit-section">
+      <div class="section-heading"><div><p class="eyebrow">02 / OPEN MEASUREMENTS</p><h2>Inspect the numbers, not just the headline.</h2></div></div>
+      <p id="audit-status">No browser audit loaded. Run the benchmark command to measure this build.</p>
+      <div class="table-scroll"><table><thead><tr><th>Measurement</th><th>Native DOM</th><th>Flutter Web</th></tr></thead><tbody id="audit-rows"><tr><td>Browser audits</td><td colspan="2">Not measured yet</td></tr></tbody></table></div>
+      <p class="fine-print">Independent target pages; this shell is excluded. The counter is not activated during audits. First paint does not measure interaction readiness; * Canvas content can lack an LCP candidate even when Lighthouse supplies an estimate; interpret Flutter’s LCP and derived performance score cautiously. After activation, the native target also pays for the Flutter engine. Scores may vary between runs and machines.</p>
+      <code>npm ci --prefix tool/browser &amp;&amp; npm run audit --prefix tool/browser</code>
+    </section>
+    <section class="benefits">
+      <article><span class="feature-icon">Aa</span><h2>A real document</h2><p>Headings, paragraphs and search controls exist in the initial HTML. Select text, inspect elements and use browser document tools.</p></article>
+      <article><span class="feature-icon">↯</span><h2>Pay as you interact</h2><p>Static content and native search start without the Flutter engine. Complex UI can load later as an explicit Flutter island.</p></article>
+      <article><span class="feature-icon">⌘</span><h2>Know your boundaries</h2><p>The CLI reports unsupported widgets and expressions with source locations. Native adapters have explicit, testable contracts.</p></article>
+    </section>
+    <section class="roadmap"><p class="eyebrow">EXPERIMENTAL, WITH A CLEAR CONTRACT</p><h2>Document-first today. Broader compatibility next.</h2><p>Current strengths: static content, constructor data, native search and deferred Flutter. Current gaps: multi-file type resolution, reactive state, async data, routing, package integration and exact layout fidelity. A native adapter implements a known behavior; it does not translate arbitrary Dart callbacks.</p><a href="https://github.com/ThoreKoritzius/Flutter-Web-Compiler/blob/main/docs/COMPATIBILITY.md">Explore the compatibility contract ↗</a></section>
+    <footer>Independent community experiment. Not affiliated with the Flutter team. <a href="https://github.com/ThoreKoritzius/Flutter-Web-Compiler">Read the scope and methodology ↗</a></footer>
+  </main>
+  <script src="showcase.js" defer></script>
+</body>
+</html>

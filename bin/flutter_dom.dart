@@ -6,12 +6,15 @@ import 'package:flutter_dom_compiler/flutter_dom_compiler.dart';
 import 'package:path/path.dart' as p;
 
 Future<void> main(List<String> arguments) async {
+  if (arguments.isNotEmpty && arguments.first == 'inspect') {
+    await _inspect(arguments.skip(1).toList());
+    return;
+  }
+  if (arguments.isNotEmpty && arguments.first == 'build') {
+    arguments = arguments.skip(1).toList();
+  }
   final parser = ArgParser()
-    ..addOption(
-      'project',
-      defaultsTo: 'examples/catalog',
-      help: 'Flutter project directory.',
-    )
+    ..addOption('project', defaultsTo: '.', help: 'Flutter project directory.')
     ..addOption(
       'source',
       defaultsTo: 'lib/main.dart',
@@ -24,7 +27,7 @@ Future<void> main(List<String> arguments) async {
     )
     ..addOption(
       'output',
-      defaultsTo: 'build/demo',
+      defaultsTo: 'build/dom',
       help: 'Output relative to current directory.',
     )
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
@@ -33,7 +36,8 @@ Future<void> main(List<String> arguments) async {
     final args = parser.parse(arguments);
     if (args['help'] as bool) {
       stdout.writeln(
-        'dart run bin/flutter_dom.dart [options]\n${parser.usage}',
+        'flutter_dom build [options]\n${parser.usage}\n\n'
+        'flutter_dom inspect --project <path> --output build/inspection.json',
       );
       return;
     }
@@ -75,6 +79,7 @@ Future<void> main(List<String> arguments) async {
           'build',
           'web',
           '--release',
+          '--no-web-resources-cdn',
           '--pwa-strategy=none',
           '--target',
           generated.path,
@@ -114,10 +119,14 @@ Future<void> main(List<String> arguments) async {
     }
     File(p.join(output.path, 'index.html')).writeAsStringSync(compiled.html);
     File(p.join(output.path, 'styles.css')).writeAsStringSync(_styles);
+    if ((compiled.report['nativeAdapterInstances'] as int) > 0) {
+      File(p.join(output.path, 'native.js')).writeAsStringSync(_nativeAdapters);
+    }
     compiled.report['initialFilesBytesUncompressed'] = {
       for (final name in [
         'index.html',
         'styles.css',
+        if ((compiled.report['nativeAdapterInstances'] as int) > 0) 'native.js',
         if (compiled.island != null) 'islands.js',
       ])
         name: File(p.join(output.path, name)).lengthSync(),
@@ -129,6 +138,54 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln(
       'Static HTML ready. Flutter island: ${compiled.island ?? 'none'}.',
     );
+  } catch (error) {
+    stderr.writeln(error);
+    exitCode = 1;
+  }
+}
+
+Future<void> _inspect(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('project', defaultsTo: '.')
+    ..addOption('output', defaultsTo: 'build/inspection.json')
+    ..addFlag('help', abbr: 'h', negatable: false);
+  try {
+    final args = parser.parse(arguments);
+    if (args['help'] as bool) {
+      stdout.writeln('flutter_dom inspect [options]\n${parser.usage}');
+      return;
+    }
+    if (args.rest.isNotEmpty)
+      throw ArgumentError('Unexpected arguments: ${args.rest}');
+    final inspector = ProjectInspector();
+    final report = inspector.inspect(args['project'] as String);
+    final output = File(args['output'] as String);
+    if (p.extension(output.path) != '.json')
+      throw ArgumentError('Inspection output must end in .json.');
+    output.parent.createSync(recursive: true);
+    output.writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(report),
+    );
+    File(
+      p.setExtension(output.path, '.md'),
+    ).writeAsStringSync(inspector.markdown(report));
+    stdout.writeln(
+      'Inspected ${report['dartFiles']} Dart files; ${report['parserDiagnostics']} parser diagnostics.',
+    );
+    final coverage = report['compatibility'] as Map<String, Object?>;
+    final score = coverage['percent'] as num?;
+    stdout.writeln(
+      'Native entry compatibility: ${score?.toStringAsFixed(1) ?? 'N/A'}'
+      '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
+    );
+    stdout.writeln(coverage['definition']);
+    for (final entry in coverage['entries'] as List) {
+      if (entry['status'] == 'blocked')
+        stdout.writeln(
+          '  ${entry['file']}:${entry['line']} ${entry['widget']}: ${entry['blocker']}',
+        );
+    }
+    stdout.writeln('Full report: ${output.path}');
   } catch (error) {
     stderr.writeln(error);
     exitCode = 1;
@@ -177,6 +234,24 @@ button.addEventListener('click', async () => {
 });
 ''';
 
+const _nativeAdapters = r'''
+// Explicit filter-list adapter. This does not transpile arbitrary Dart callbacks.
+for (const region of document.querySelectorAll('[data-filter-list]')) {
+  const input = region.querySelector('input');
+  const rows = [...region.querySelectorAll('li')];
+  const status = region.querySelector('[role="status"]');
+  input.addEventListener('input', () => {
+    const query = input.value.trim().toLowerCase();
+    let visible = 0;
+    for (const row of rows) {
+      row.hidden = !row.textContent.toLowerCase().includes(query);
+      if (!row.hidden) visible++;
+    }
+    status.textContent = `${visible} of ${rows.length} features`;
+  });
+}
+''';
+
 const _styles = '''
 * { box-sizing: border-box; }
 body { margin: 0; background: #f4f6f9; color: #182b42;
@@ -193,5 +268,13 @@ button { font: inherit; border: 0; border-radius: 8px; padding: 12px 20px;
   background: #165dcc; color: white; cursor: pointer; }
 button:focus-visible { outline: 3px solid #142e54; outline-offset: 4px; }
 button:disabled { opacity: .65; cursor: wait; }
+.dom-filter { margin: 0; }
+.dom-filter label { display:block; font-weight:600; margin-bottom:10px; }
+.dom-filter input { width:100%; font:inherit; padding:14px 16px; border:1px solid #bccbd9;
+  border-radius:10px; background:#fff; color:#182b42; }
+.dom-filter input:focus { outline:3px solid #c5ddff; border-color:#165dcc; }
+.filter-status { font-size:13px; color:#51647b; padding:10px 0; }
+.dom-filter ul { list-style:none; padding:0; margin:0; }
+.dom-filter li { padding:12px 16px; border:1px solid #dbe2ea; border-radius:8px; margin-bottom:8px; }
 @media (max-width: 600px) { main { margin: 12px; } }
 ''';

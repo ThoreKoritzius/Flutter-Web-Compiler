@@ -48,7 +48,12 @@ class FlutterDomCompiler {
       config['headings'] as Map? ?? {},
     );
     final counts = <String, int>{};
+    final nativeAdapters = Map<String, dynamic>.from(
+      config['nativeAdapters'] as Map? ?? {},
+    );
+    var adapterCount = 0;
     final stack = <String>[];
+    var scope = <String, Object?>{};
     String? island;
 
     Never fail(String message, [int? line]) =>
@@ -61,10 +66,39 @@ class FlutterDomCompiler {
         final parts = expression.strings.map(value).toList();
         if (parts.every((part) => part is String)) return parts.join();
       }
+      if (expression is ParenthesizedExpression)
+        return value(expression.expression);
+      if (expression is ConditionalExpression) {
+        final condition = value(expression.condition);
+        if (condition is! bool)
+          fail('Static condition must be a boolean.', line);
+        return value(
+          condition ? expression.thenExpression : expression.elseExpression,
+        );
+      }
+      if (expression is StringInterpolation) {
+        return expression.elements.map((element) {
+          if (element is InterpolationString) return element.value;
+          final part = value((element as InterpolationExpression).expression);
+          if (part == null || part is String || part is num || part is bool) {
+            return part.toString();
+          }
+          fail('Only static primitive values may be interpolated.', line);
+        }).join();
+      }
       if (expression is IntegerLiteral) return expression.value;
       if (expression is DoubleLiteral) return expression.value;
       if (expression is BooleanLiteral) return expression.value;
       if (expression is NullLiteral) return null;
+      if (expression is SimpleIdentifier &&
+          scope.containsKey(expression.name)) {
+        return scope[expression.name];
+      }
+      if (expression is PropertyAccess &&
+          expression.target is ThisExpression &&
+          scope.containsKey(expression.propertyName.name)) {
+        return scope[expression.propertyName.name];
+      }
       if (expression is PrefixExpression && expression.operator.lexeme == '-') {
         final operand = value(expression.operand);
         if (operand is num) return -operand;
@@ -174,7 +208,7 @@ class FlutterDomCompiler {
     }
 
     late String Function(Object?) render;
-    String buildClass(String name) {
+    String buildClass(String name, [_Call? invocation]) {
       final node = classes[name];
       if (node == null)
         fail(
@@ -185,11 +219,87 @@ class FlutterDomCompiler {
           '$name must be a StatelessWidget or an explicitly configured Flutter island.',
         );
       }
-      if (node.members.any(
-        (member) => member is FieldDeclaration && !member.isStatic,
-      )) {
+      final fields = node.members
+          .whereType<FieldDeclaration>()
+          .where((field) => !field.isStatic)
+          .toList();
+      for (final field in fields) {
+        if (!field.fields.isFinal ||
+            field.fields.variables.any((v) => v.initializer != null)) {
+          fail(
+            '$name only supports final fields initialized by constructor parameters.',
+          );
+        }
+      }
+      final constructors = node.members
+          .whereType<ConstructorDeclaration>()
+          .toList();
+      if (constructors.length > 1)
+        fail('$name supports only one unnamed constructor.');
+      final bindings = <String, Object?>{};
+      final call =
+          invocation ??
+          _Call(
+            name,
+            [],
+            {},
+            result.lineInfo.getLocation(node.offset).lineNumber,
+          );
+      if (constructors.isEmpty) {
+        check(call, {});
+      } else {
+        final constructor = constructors.single;
+        if (constructor.name != null ||
+            constructor.factoryKeyword != null ||
+            constructor.initializers.isNotEmpty ||
+            constructor.body is! EmptyFunctionBody ||
+            constructor.redirectedConstructor != null) {
+          fail(
+            '$name needs an unnamed constructor without a body or initializer list.',
+          );
+        }
+        final allowed = <String>{};
+        final previous = scope;
+        scope = {};
+        try {
+          for (final wrapped in constructor.parameters.parameters) {
+            final parameter = wrapped is DefaultFormalParameter
+                ? wrapped.parameter
+                : wrapped;
+            if (parameter is SuperFormalParameter &&
+                parameter.name.lexeme == 'key')
+              continue;
+            if (parameter is! FieldFormalParameter || !wrapped.isNamed) {
+              fail(
+                '$name supports only named this.field parameters and super.key.',
+              );
+            }
+            final field = parameter.name.lexeme;
+            allowed.add(field);
+            if (call.named.containsKey(field)) {
+              bindings[field] = call.named[field];
+            } else if (wrapped.isRequiredNamed) {
+              fail('$name is missing required argument $field.', call.line);
+            } else {
+              final defaultValue = wrapped is DefaultFormalParameter
+                  ? wrapped.defaultValue
+                  : null;
+              bindings[field] = defaultValue == null
+                  ? null
+                  : value(defaultValue);
+            }
+          }
+        } finally {
+          scope = previous;
+        }
+        check(call, allowed);
+      }
+      final declared = fields
+          .expand((field) => field.fields.variables.map((v) => v.name.lexeme))
+          .toSet();
+      if (declared.difference(bindings.keys.toSet()).isNotEmpty) {
         fail(
-          '$name has instance fields. Constructor data flow is not supported yet.',
+          '$name has fields not initialized by a supported constructor parameter.',
         );
       }
       if (stack.contains(name))
@@ -208,9 +318,14 @@ class FlutterDomCompiler {
       if (expression == null)
         fail('$name.build must contain a single return expression.');
       stack.add(name);
-      final html = render(value(expression));
-      stack.removeLast();
-      return html;
+      final previous = scope;
+      scope = bindings;
+      try {
+        return render(value(expression));
+      } finally {
+        scope = previous;
+        stack.removeLast();
+      }
     }
 
     render = (Object? object) {
@@ -219,6 +334,32 @@ class FlutterDomCompiler {
       final call = object;
       final n = call.named;
       counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
+      if (nativeAdapters.containsKey(call.name)) {
+        if (nativeAdapters[call.name] != 'filter-list')
+          fail('Unknown native adapter for ${call.name}.');
+        if (!classes.containsKey(call.name))
+          fail('Adapter widget must exist in the source file.');
+        check(call, {'items', 'label', 'hintText'});
+        final items = n['items'];
+        if (items is! List || items.any((item) => item is! String)) {
+          fail(
+            'filter-list requires a static List<String> items argument.',
+            call.line,
+          );
+        }
+        final label = n['label'] ?? 'Search items';
+        final hint = n['hintText'] ?? 'Type to filter';
+        if (label is! String || hint is! String)
+          fail('filter-list labels must be strings.');
+        final id = 'dom-filter-${adapterCount++}';
+        return '<section class="dom-filter" data-filter-list>'
+            '<label for="$id">${_escape(label)}</label>'
+            '<input id="$id" type="search" placeholder="${_escape(hint)}" '
+            'aria-controls="$id-results" autocomplete="off">'
+            '<p class="filter-status" role="status">${items.length} of ${items.length} features</p>'
+            '<ul id="$id-results">${items.map((item) => '<li>${_escape(item as String)}</li>').join()}</ul>'
+            '</section>';
+      }
       if (islandConfig.containsKey(call.name)) {
         check(call, {});
         if (domOnly)
@@ -248,6 +389,9 @@ class FlutterDomCompiler {
         case 'Scaffold':
           check(call, {'body'});
           return '<main>${render(n['body'])}</main>';
+        case 'SingleChildScrollView':
+          check(call, {'child'});
+          return '<div class="dom-scroll">${render(n['child'])}</div>';
         case 'Text':
           check(call, {'style', 'textAlign'}, 1);
           if (call.positional.single is! String)
@@ -330,8 +474,7 @@ class FlutterDomCompiler {
             );
           return '<div style="${styles.join(';')}">${n['child'] == null ? '' : render(n['child'])}</div>';
         default:
-          check(call, {});
-          return buildClass(call.name);
+          return buildClass(call.name, call);
       }
     };
 
@@ -344,17 +487,19 @@ class FlutterDomCompiler {
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<title>$title</title><meta name="description" content="$description">\n'
         '<link rel="stylesheet" href="styles.css">\n</head><body>\n$body\n'
+        '${adapterCount == 0 ? '' : '<script src="native.js" defer></script>\n'}'
         '${island == null ? '' : '<script src="islands.js" defer></script>\n'}'
         '</body></html>\n';
     return Compilation(html, {
       'root': root,
       'widgets': counts,
       'island': island,
+      'nativeAdapterInstances': adapterCount,
       'initialFlutterBytes': 0,
       'rendering': 'static HTML; approximate CSS layout',
       'limitations': [
         'Single source file',
-        'Literal data only',
+        'Static data and named constructor fields only',
         'One explicit island',
         'No state bridge',
         'No Flutter layout parity guarantee',

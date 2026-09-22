@@ -12,6 +12,9 @@ void main() {
       final result = await Process.run(Platform.resolvedExecutable, [
         'run',
         'bin/flutter_dom.dart',
+        'build',
+        '--project',
+        'examples/catalog',
         '--config',
         'flutter_dom.static.json',
         '--dom-only',
@@ -40,6 +43,9 @@ void main() {
     final result = await Process.run(Platform.resolvedExecutable, [
       'run',
       'bin/flutter_dom.dart',
+      'build',
+      '--project',
+      'examples/catalog',
       '--dom-only',
       '--output',
       output,

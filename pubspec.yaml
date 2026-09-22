@@ -2,12 +2,15 @@ name: flutter_dom_compiler
 description: Experimental compiler for static Flutter widgets and lazy Flutter web islands.
 version: 0.1.0
 publish_to: none
+repository: https://github.com/ThoreKoritzius/Flutter-Web-Compiler
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
   analyzer: ^7.5.6
   args: ^2.7.0
+  crypto: ^3.0.7
   path: ^1.9.1
+  yaml: ^3.1.3
 dev_dependencies:
   test: ^1.25.15
 executables:

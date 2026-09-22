@@ -11,7 +11,7 @@ This document describes implemented behavior. The roadmap is not part of the com
 - Named `this.field` parameters bound to final instance fields, with required arguments or literal defaults. `super.key` is allowed.
 - Static data is resolved per widget instance; child widgets can be passed through constructor fields too.
 - No named/factory/redirecting constructors, constructor bodies, initializer lists, positional field arguments or mutable fields.
-- No imported custom widgets, aliases, complete symbol/type resolution, runtime getters, collection control flow, async builders, API data loading or string interpolation.
+- No imported custom widgets, aliases, complete symbol/type resolution, runtime getters, collection control flow, async builders or API data loading.
 
 The parser recognizes unprefixed constructor names syntactically. This assumes they refer to the expected Flutter APIs; shadowed names are not resolved. Input should also pass `flutter analyze`. Parsing is not evidence of semantic compatibility.
 
@@ -55,3 +55,11 @@ The page loads an external bootstrap only after activation. The compiler derives
 `inspect` scans non-generated Dart files under `lib/`, all conditional branches included. It reports class bases, constructor-like call names, dependency names, parser diagnostics and review signals. It excludes dependencies and symlinks and does not execute or modify the application.
 
 It does **not** establish reachability, package compatibility, rendered widget counts, safe island cuts or a DOM conversion percentage. Private reports should remain in ignored output directories.
+
+### Conservative compatibility score
+
+The CLI also dry-runs every recognized direct widget subclass as a parameterless, DOM-only root. The score is accepted entry points divided by tested entry points; zero candidates yields N/A. Reports list each widget, file, declaration line and its first blocking compiler diagnostic. This exercises the real compiler, including arguments and expressions, instead of counting familiar widget names.
+
+Required constructor arguments, imported definitions, stateful widgets and unresolved context are conservatively blocked. Adapters and islands are disabled for this measurement. A reusable widget may therefore fail in isolation while compiling when called with static data from a supported parent. Indirect subclasses and aliased types are outside the denominator. This score measures compiler acceptance, not verified behavior or a percentage of the whole application. Run Flutter analysis separately.
+
+Static primitive string interpolation and boolean conditional expressions are now supported, including constructor-bound values. Only the selected static branch is compiled. Runtime conditions remain unsupported.
