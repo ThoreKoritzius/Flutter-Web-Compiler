@@ -36,4 +36,5 @@ jobs:
       - run: flutter analyze
         working-directory: examples/catalog
       - run: dart run bin/flutter_dom.dart build --project examples/catalog --output build/demo
+      - run: dart run tool/check_health_geometry.dart
       - run: dart run tool/showcase.dart --no-serve

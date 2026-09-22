@@ -1,5 +1,5 @@
 {
   "root": "HealthApp", "title": "Health overview · Demo", "description": "A native health dashboard with synthetic seven-day data.",
   "theme": "dark", "headings": {"title": 1},
-  "nativeAdapters": {"MetricChart": "metric-chart", "MetricGrid": "responsive-grid"}
+  "nativeAdapters": {"MetricChart": {"type": "paint-chart", "painter": "_ChartPainter"}, "MetricGrid": "responsive-grid"}
 }

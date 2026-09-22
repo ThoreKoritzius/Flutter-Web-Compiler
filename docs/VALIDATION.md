@@ -5,7 +5,7 @@ Verified locally on 2026-09-22 with Flutter 3.41.6, Dart 3.11.4, macOS and the C
 ## Automated checks
 
 - `dart analyze`: no issues.
-- `dart test`: 29 passing tests, including CLI integration tests.
+- `dart test`: 34 passing tests, including CLI integration tests.
 - The catalog and shared-source showcase compile through real release Flutter builds.
 - Static builds emit HTML/CSS with no scripts or Flutter directory into a fresh output directory.
 - Strict DOM-only mode rejects configured Flutter islands before creating output.
@@ -38,3 +38,6 @@ The revised demo was visually checked at 1440 px desktop and 390 px phone widths
 
 
 The final renderer audit uses a real desktop user-agent with GPU support enabled. Recorded requests confirm CanvasKit for the JavaScript build and SkWasm plus `main.dart.wasm` for the Wasm build. Median Lighthouse performance scores are 100 / 70 / 73 (native / CanvasKit / Wasm); SEO is 100 for all three. Canvas LCP caveats still apply. The current illustration is the supplied refinement and is included in all size/transfer measurements.
+
+
+The health demo's restricted painter compiler passes `dart run tool/check_health_geometry.dart`: actual Flutter Canvas drawing commands agree with compiled SVG rectangle coordinates, path bounds/length, stroke width and scale for bar and line fixtures (0.001 tolerance). Regression tests verify source geometry changes propagate and unsupported drawing calls fail. This does not establish arbitrary painter coverage or pixel-perfect layout parity.

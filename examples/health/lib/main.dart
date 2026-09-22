@@ -128,17 +128,36 @@ class MetricChart extends StatelessWidget {
           display,
           style: const TextStyle(fontSize: 28, color: Colors.white),
         ),
+        const Text(
+          '7-day sample · mock data',
+          style: TextStyle(color: Colors.white54, fontSize: 11),
+        ),
         const SizedBox(height: 16),
         SizedBox(
           height: 110,
           width: double.infinity,
-          child: CustomPaint(
-            painter: _ChartPainter(
-              values,
-              Color(int.parse(color.replaceFirst('#', 'ff'), radix: 16)),
-              kind,
+          child: ChartInteraction(
+            values: values,
+            child: CustomPaint(
+              painter: _ChartPainter(
+                values,
+                Color(int.parse(color.replaceFirst('#', 'ff'), radix: 16)),
+                kind,
+              ),
             ),
           ),
+        ),
+        ExpansionTile(
+          title: const Text('Daily values', style: TextStyle(fontSize: 12)),
+          children: [
+            for (var i = 0; i < values.length; i++)
+              Padding(
+                padding: const EdgeInsets.all(6),
+                child: SelectableText(
+                  'Day ${i + 1}: ${sampleValue(values[i])}',
+                ),
+              ),
+          ],
         ),
       ],
     ),
@@ -152,15 +171,16 @@ class _ChartPainter extends CustomPainter {
   final String kind;
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / 320, size.height / 110);
     final max = values.fold<double>(1, (a, b) => a > b ? a : b);
-    final step = size.width / values.length;
+    final step = 320 / values.length;
     final paint = Paint()..color = color;
     final path = Path();
     for (var i = 0; i < values.length; i++) {
-      final y = size.height * (1 - values[i] / max * .88);
+      final y = 110 * (1 - values[i] / max * .88);
       if (kind == 'bar') {
         canvas.drawRect(
-          Rect.fromLTWH(i * step + 2, y, step - 4, size.height - y),
+          Rect.fromLTWH(i * step + 2, y, step - 4, 110 - y),
           paint,
         );
       } else if (i == 0) {
@@ -181,3 +201,69 @@ class _ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ChartPainter oldDelegate) => true;
 }
+
+// Shared interaction contract: each evenly spaced sample exposes its value on
+// pointer hover and keyboard focus. The DOM adapter supplies browser elements.
+class ChartInteraction extends StatefulWidget {
+  const ChartInteraction({
+    super.key,
+    required this.values,
+    required this.child,
+  });
+  final List<double> values;
+  final Widget child;
+  @override
+  State<ChartInteraction> createState() => _ChartInteractionState();
+}
+
+class _ChartInteractionState extends State<ChartInteraction> {
+  int? active;
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Positioned.fill(child: widget.child),
+      Positioned.fill(
+        child: Row(
+          children: [
+            for (var i = 0; i < widget.values.length; i++)
+              Expanded(
+                child: Focus(
+                  onFocusChange: (focused) =>
+                      setState(() => active = focused ? i : null),
+                  child: MouseRegion(
+                    onEnter: (_) => setState(() => active = i),
+                    onExit: (_) => setState(() => active = null),
+                    child: Semantics(
+                      label: 'Day ${i + 1}: ${sampleValue(widget.values[i])}',
+                      child: ColoredBox(
+                        color: active == i
+                            ? Colors.white.withValues(alpha: .12)
+                            : Colors.transparent,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      if (active != null)
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Text(
+              'Day ${active! + 1}: ${sampleValue(widget.values[active!])}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+String sampleValue(double value) =>
+    value == value.roundToDouble() ? '${value.toInt()}' : '$value';

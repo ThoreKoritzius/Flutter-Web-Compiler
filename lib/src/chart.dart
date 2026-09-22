@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 /// Static native chart contract. No arbitrary CustomPainter conversion.
-String nativeChart(Map<String, Object?> options) {
+String nativeChart(Map<String, Object?> options, {String? geometry}) {
   String escape(Object? value) => const HtmlEscape().convert('$value');
   final values = options['values'];
   final label = options['label'];
@@ -40,8 +40,10 @@ String nativeChart(Map<String, Object?> options) {
     );
   return '<article class="metric-card"><p class="metric-label"><span style="background:$color"></span>${escape(label)}</p>'
       '<h2>${escape(display)}</h2><p class="metric-period">7-day sample · mock data</p>'
-      '<svg viewBox="0 0 320 108" preserveAspectRatio="none" role="img" aria-label="${escape(label)}: ${escape(data.join(', '))}">'
-      '<path d="M0 100H320 M0 55H320 M0 12H320" stroke="currentColor" opacity=".08"/>$shapes</svg>'
+      '<svg viewBox="0 0 320 110" preserveAspectRatio="none" role="group" aria-label="${escape(label)}: ${escape(data.join(', '))}">'
+      '${geometry ?? shapes.toString()}'
+      '${[for (var i = 0; i < data.length; i++) '<g class="chart-hit" tabindex="0" role="img" aria-label="Day ${i + 1}: ${escape(data[i])}"><rect x="${i * step}" y="0" width="$step" height="110" fill="white"/><title>Day ${i + 1}: ${escape(data[i])}</title><text x="160" y="10" text-anchor="middle">Day ${i + 1}: ${escape(data[i])}</text></g>'].join()}'
+      '</svg>'
       '<details><summary>Daily values</summary><table><thead><tr><th>Day</th><th>${escape(label)}</th></tr></thead><tbody>'
       '${[for (var i = 0; i < data.length; i++) '<tr><td>${i + 1}</td><td>${data[i]}</td></tr>'].join()}'
       '</tbody></table></details></article>';

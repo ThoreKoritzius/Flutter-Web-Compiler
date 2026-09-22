@@ -81,3 +81,10 @@ The build summary counts visited rendering boundaries; a native adapter counts a
 `responsive-grid` accepts static `children` and emits a CSS grid (four/two/one columns). `metric-chart` accepts `label`, `display`, `values` (1–60 finite nonnegative numbers), optional six-digit hex `color` and `kind` (`bar` or `line`). It emits native SVG with accessible data and a browser-native expandable table; no script is required. The sidecar can choose `theme: dark`. These are explicit adapters, not arbitrary chart-library or CustomPainter translation. See the synthetic [health fixture](../examples/health/README.md).
 
 `MaterialApp(theme: ThemeData.dark())` selects the approximate dark DOM presentation; custom ThemeData arguments are rejected. This is not general Material theme translation.
+
+
+### Restricted painter compilation
+
+Configure `"MetricChart": {"type": "paint-chart", "painter": "_ChartPainter"}` to derive geometry from a CustomPainter class in the same source file. The adapter binds static `values`, `color` and `kind` fields and accepts the metric-chart contract above. Supported drawing statements are interpreted at build time with a bounded operation budget; unsupported syntax and Canvas operations fail explicitly. No application Dart is executed.
+
+The initial subset supports numeric arithmetic/comparisons, conditions, simple for loops, list indexing/fold, Paint color/style/strokeWidth, Rect.fromLTWH, Path.moveTo/lineTo, Canvas.scale/drawRect/drawPath. It does not resolve imported painters, arbitrary method calls, shaders, text painting or general state. The chart wrapper, hover/focus targets and daily-values disclosure still use an explicit adapter; the compiler does not infer these from arbitrary widget implementations. See the [health fixture and geometry check](../examples/health/README.md).

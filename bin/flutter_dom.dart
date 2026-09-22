@@ -343,6 +343,12 @@ th { font-size:11px; color:#68726c; text-transform:uppercase; letter-spacing:.06
 .responsive-grid .metric-card svg { height:90px; }
 .metric-card details { font-size:11px; color:#949aac; margin-top:10px; }
 .metric-card summary { cursor:pointer; }
+.chart-hit { outline:none; }
+.chart-hit rect { opacity:0; }
+.chart-hit text { opacity:0; fill:#fff; font-size:10px; pointer-events:none; }
+.chart-hit:hover rect,.chart-hit:focus rect { opacity:.12; }
+.chart-hit:hover text,.chart-hit:focus text { opacity:1; }
+.chart-hit:focus rect { stroke:#aabafa; stroke-width:1; }
 .theme-dark { background:#101116; color:#ebedf7; }
 .theme-dark main { max-width:1320px; background:transparent; }
 .theme-dark h1 { font-size:34px !important; }

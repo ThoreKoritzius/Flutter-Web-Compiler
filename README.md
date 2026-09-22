@@ -198,4 +198,4 @@ Independent community experiment. Not affiliated with or endorsed by the Flutter
 
 ## Native health demo
 
-A second [synthetic-data dashboard](examples/health/README.md) demonstrates responsive metric cards, native SVG charts and expandable data tables with no Flutter runtime or JavaScript. Build both native and Flutter targets with `dart run tool/health.dart`, then open `/health/` on the showcase server. Arbitrary chart libraries are not supported; these are explicit reusable adapters.
+A second [synthetic-data dashboard](examples/health/README.md) demonstrates responsive metric cards, native SVG charts and expandable data tables with no Flutter runtime or JavaScript. Build both native and Flutter targets with `dart run tool/health.dart`, then open `/health/` on the showcase server. Chart geometry is compiled from a restricted subset of the shared Dart `paint()` method; hover, keyboard focus and daily values are available in both targets. Widget and interaction adapters remain explicit; arbitrary chart libraries and state logic are not supported.

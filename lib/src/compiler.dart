@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'chart.dart';
+import 'painter.dart';
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
@@ -348,6 +349,27 @@ class FlutterDomCompiler {
             fail('responsive-grid requires static children.');
           adapterCount++;
           return '<div class="responsive-grid">${(n['children'] as List).map(render).join()}</div>';
+        }
+        final adapter = nativeAdapters[call.name];
+        if (adapter is Map && adapter['type'] == 'paint-chart') {
+          check(call, {'label', 'display', 'values', 'color', 'kind'});
+          final painter = classes[adapter['painter']];
+          if (painter == null ||
+              painter.extendsClause?.superclass.toSource() != 'CustomPainter')
+            fail('paint-chart requires a local CustomPainter class.');
+          try {
+            // The surrounding widget/interaction contract remains explicit.
+            final geometry = SvgPainter().compile(painter, {
+              'values': n['values'],
+              'color': n['color'] ?? '#8b9dff',
+              'kind': n['kind'] ?? 'bar',
+            });
+            final html = nativeChart(n, geometry: geometry);
+            adapterCount++;
+            return html;
+          } on ArgumentError catch (error) {
+            fail('${error.message}', call.line);
+          }
         }
         if (nativeAdapters[call.name] == 'metric-chart') {
           check(call, {'label', 'display', 'values', 'color', 'kind'});

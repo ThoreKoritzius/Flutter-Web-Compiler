@@ -11,11 +11,20 @@ dart run tool/showcase.dart --no-build
 
 Open http://127.0.0.1:8097/health/ and switch Native SVG / Flutter CanvasKit. Direct targets are `/health/native/` and `/health/flutter/`. Both compile the same Dart file and literal mock values. The full showcase build also includes this demo.
 
-`MetricGrid` and `MetricChart` are explicit native adapter contracts. The Flutter implementations are supplied in the same source; arbitrary CustomPainter or third-party chart packages are not converted. Native charts contain accessible labels and expandable data tables, with no JavaScript or Flutter engine. This first version has fixed mock data; live data, range switching and chart gestures are outside its scope. Values use a zero-based scale.
+## What is compiled
 
+Both targets use the same Dart file, mock values and `_ChartPainter.paint()` method. The `paint-chart` adapter interprets the supported Dart drawing statements at build time and emits SVG rectangles and paths. Changing supported painter geometry changes the SVG; unsupported operations fail compilation.
 
-## What is and is not compiled
+The supported subset includes arithmetic, bounded loops, conditions, list indexing/fold, `Paint`, `Rect.fromLTWH`, `Path.moveTo/lineTo`, `Canvas.scale`, `drawRect` and `drawPath`. The shared painter uses a normalized 320 × 110 coordinate space. This is a deliberately restricted interpreter, not general Dart execution or arbitrary chart-library support.
 
-The native output contains real SVG geometry and HTML tables. It has no Flutter canvas, screenshot or engine. However, the compiler uses a handwritten adapter for the named chart contract; it does not derive geometry from `_ChartPainter.paint`. Flutter uses the supplied CustomPainter. This is a useful backend adapter, not proof of general chart conversion.
+`MetricGrid`, the chart card and its interaction layer remain explicit adapter contracts. Hover and keyboard focus reveal daily values in both targets; both also provide expandable daily values. The DOM implementation uses SVG focus targets, CSS and HTML details/table elements, with no JavaScript or Flutter engine. Flutter uses Focus, MouseRegion and ExpansionTile. Arbitrary state-management logic is not translated, and CSS layout is approximate.
 
-A stronger next milestone is a shared drawing intermediate representation (rectangles, paths, text and transforms) with Flutter and SVG backends, or a deliberately restricted translator for supported Canvas operations. Both need parity tests for geometry, scales and labels. Unsupported shaders, blending, fonts and gestures must remain explicit blockers or Flutter islands. Live data additionally needs state and event integration.
+All data is fixed and synthetic. Live data, range switching, gestures, shaders and arbitrary painters are outside this demo's scope. Values use a zero-based scale.
+
+## Geometry validation
+
+```sh
+dart run tool/check_health_geometry.dart
+```
+
+This records drawing commands from the actual Flutter painter and compares rectangle coordinates, path bounds/length, stroke width and scale against compiled SVG for bar and line fixtures (tolerance 0.001). It verifies those geometry cases, not pixel-perfect rendering across browsers or complete widget equivalence.
