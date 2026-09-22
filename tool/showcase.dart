@@ -43,16 +43,7 @@ Future<void> main(List<String> arguments) async {
     }
 
     if (args['build'] as bool) {
-      await run(Platform.resolvedExecutable, [
-        'run',
-        'bin/flutter_dom.dart',
-        'build',
-        '--project',
-        p.join(root, 'examples/health'),
-        '--dom-only',
-        '--output',
-        p.join(output, 'health'),
-      ], root);
+      await run(Platform.resolvedExecutable, ['run', 'tool/health.dart'], root);
       await run(Platform.resolvedExecutable, [
         'run',
         'bin/flutter_dom.dart',

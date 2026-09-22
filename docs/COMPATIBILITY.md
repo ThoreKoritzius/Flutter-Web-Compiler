@@ -79,3 +79,5 @@ The build summary counts visited rendering boundaries; a native adapter counts a
 ### Static chart and grid adapters
 
 `responsive-grid` accepts static `children` and emits a CSS grid (four/two/one columns). `metric-chart` accepts `label`, `display`, `values` (1–60 finite nonnegative numbers), optional six-digit hex `color` and `kind` (`bar` or `line`). It emits native SVG with accessible data and a browser-native expandable table; no script is required. The sidecar can choose `theme: dark`. These are explicit adapters, not arbitrary chart-library or CustomPainter translation. See the synthetic [health fixture](../examples/health/README.md).
+
+`MaterialApp(theme: ThemeData.dark())` selects the approximate dark DOM presentation; custom ThemeData arguments are rejected. This is not general Material theme translation.

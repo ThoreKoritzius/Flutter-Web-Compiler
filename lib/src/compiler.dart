@@ -56,6 +56,7 @@ class FlutterDomCompiler {
     final assets = <String>{};
     var adapterCount = 0;
     var filterCount = 0;
+    var darkTheme = false;
     final stack = <String>[];
     var scope = <String, Object?>{};
     String? island;
@@ -351,7 +352,7 @@ class FlutterDomCompiler {
         if (nativeAdapters[call.name] == 'metric-chart') {
           check(call, {'label', 'display', 'values', 'color', 'kind'});
           try {
-            final theme = config['theme'] ?? 'light';
+            final theme = config['theme'] ?? (darkTheme ? 'dark' : 'light');
             if (!['light', 'dark'].contains(theme))
               fail('Theme must be light or dark.');
             final html = nativeChart(n);
@@ -411,7 +412,14 @@ class FlutterDomCompiler {
       }
       switch (call.name) {
         case 'MaterialApp':
-          check(call, {'home', 'debugShowCheckedModeBanner', 'title'});
+          check(call, {'home', 'debugShowCheckedModeBanner', 'title', 'theme'});
+          if (n['theme'] != null) {
+            final theme = n['theme'];
+            if (theme is! _Call || theme.name != 'ThemeData.dark')
+              fail('Only ThemeData.dark() is supported.');
+            check(theme, {});
+            darkTheme = true;
+          }
           return render(n['home']);
         case 'Scaffold':
           check(call, {'body'});
@@ -563,7 +571,7 @@ class FlutterDomCompiler {
     final title = _escape(config['title'] as String? ?? root);
     final description = _escape(config['description'] as String? ?? '');
     final lang = _escape(config['lang'] as String? ?? 'en');
-    final theme = config['theme'] ?? 'light';
+    final theme = config['theme'] ?? (darkTheme ? 'dark' : 'light');
     if (!['light', 'dark'].contains(theme))
       fail('Theme must be light or dark.');
     final html =

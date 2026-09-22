@@ -5,7 +5,8 @@ void main() => runApp(const HealthApp());
 class HealthApp extends StatelessWidget {
   const HealthApp({super.key});
   @override
-  Widget build(BuildContext context) => const MaterialApp(
+  Widget build(BuildContext context) => MaterialApp(
+    theme: ThemeData.dark(),
     debugShowCheckedModeBanner: false,
     home: Scaffold(
       body: SingleChildScrollView(
@@ -63,7 +64,7 @@ class HealthApp extends StatelessWidget {
               ),
               SizedBox(height: 20),
               Text(
-                'Mock data only. Charts use native SVG; daily values are available below each chart.',
+                'Mock data only. Seven daily samples per chart.',
                 style: TextStyle(fontSize: 12),
               ),
             ],
