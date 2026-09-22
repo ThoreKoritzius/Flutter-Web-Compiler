@@ -75,3 +75,7 @@ Static `DataTable`, `DataColumn(label:)`, `DataRow(cells:)` and `DataCell(child)
 `flutter_dom build` (also `flutter_dom build web`) uses the current directory and `lib/main.dart`. Without a sidecar it infers a single direct `runApp(MyApp())` root; ambiguous startup, conditional startup and extra initialization statements require explicit configuration. Startup logic is never executed or translated. A sidecar is still needed for island/adapter/heading intent. This is project-oriented invocation, not resolved multi-file app compilation.
 
 The build summary counts visited rendering boundaries; a native adapter counts as native, a Flutter island as fallback, and traversal stops at both. Its percentage describes the selected compiled tree only. `inspect` uses the separate, stricter independent-root metric. Neither measures application-wide behavioral compatibility.
+
+### Static chart and grid adapters
+
+`responsive-grid` accepts static `children` and emits a CSS grid (four/two/one columns). `metric-chart` accepts `label`, `display`, `values` (1–60 finite nonnegative numbers), optional six-digit hex `color` and `kind` (`bar` or `line`). It emits native SVG with accessible data and a browser-native expandable table; no script is required. The sidecar can choose `theme: dark`. These are explicit adapters, not arbitrary chart-library or CustomPainter translation. See the synthetic [health fixture](../examples/health/README.md).

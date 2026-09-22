@@ -195,3 +195,7 @@ dart test
 [Contributing](CONTRIBUTING.md) · [Validation](docs/VALIDATION.md) · [Security](SECURITY.md) · [BSD-3-Clause license](LICENSE)
 
 Independent community experiment. Not affiliated with or endorsed by the Flutter team.
+
+## Native health demo
+
+A second [synthetic-data dashboard](examples/health/README.md) demonstrates responsive metric cards, native SVG charts and expandable data tables with no Flutter runtime or JavaScript. Build with `dart run bin/flutter_dom.dart build --project examples/health --dom-only --output build/showcase/health`, then open `/health/` on the showcase server. Arbitrary chart libraries are not supported; these are explicit reusable adapters.

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'chart.dart';
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
@@ -54,6 +55,7 @@ class FlutterDomCompiler {
     );
     final assets = <String>{};
     var adapterCount = 0;
+    var filterCount = 0;
     final stack = <String>[];
     var scope = <String, Object?>{};
     String? island;
@@ -337,6 +339,28 @@ class FlutterDomCompiler {
       final n = call.named;
       counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
       if (nativeAdapters.containsKey(call.name)) {
+        if (!classes.containsKey(call.name))
+          fail('Adapter widget must exist in the source file.');
+        if (nativeAdapters[call.name] == 'responsive-grid') {
+          check(call, {'children'});
+          if (n['children'] is! List)
+            fail('responsive-grid requires static children.');
+          adapterCount++;
+          return '<div class="responsive-grid">${(n['children'] as List).map(render).join()}</div>';
+        }
+        if (nativeAdapters[call.name] == 'metric-chart') {
+          check(call, {'label', 'display', 'values', 'color', 'kind'});
+          try {
+            final theme = config['theme'] ?? 'light';
+            if (!['light', 'dark'].contains(theme))
+              fail('Theme must be light or dark.');
+            final html = nativeChart(n);
+            adapterCount++;
+            return html;
+          } on ArgumentError catch (error) {
+            fail('${error.message}', call.line);
+          }
+        }
         if (nativeAdapters[call.name] != 'filter-list')
           fail('Unknown native adapter for ${call.name}.');
         if (!classes.containsKey(call.name))
@@ -353,7 +377,8 @@ class FlutterDomCompiler {
         final hint = n['hintText'] ?? 'Type to filter';
         if (label is! String || hint is! String)
           fail('filter-list labels must be strings.');
-        final id = 'dom-filter-${adapterCount++}';
+        final id = 'dom-filter-${filterCount++}';
+        adapterCount++;
         return '<section class="dom-filter" data-filter-list>'
             '<label for="$id">${_escape(label)}</label>'
             '<input id="$id" type="search" placeholder="${_escape(hint)}" '
@@ -538,12 +563,15 @@ class FlutterDomCompiler {
     final title = _escape(config['title'] as String? ?? root);
     final description = _escape(config['description'] as String? ?? '');
     final lang = _escape(config['lang'] as String? ?? 'en');
+    final theme = config['theme'] ?? 'light';
+    if (!['light', 'dark'].contains(theme))
+      fail('Theme must be light or dark.');
     final html =
         '<!doctype html>\n<html lang="$lang"><head>\n'
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<title>$title</title><meta name="description" content="$description">\n'
-        '<link rel="stylesheet" href="styles.css">\n</head><body>\n$body\n'
-        '${adapterCount == 0 ? '' : '<script src="native.js" defer></script>\n'}'
+        '<link rel="stylesheet" href="styles.css">\n</head><body class="theme-$theme">\n$body\n'
+        '${filterCount == 0 ? '' : '<script src="native.js" defer></script>\n'}'
         '${island == null ? '' : '<script src="islands.js" defer></script>\n'}'
         '</body></html>\n';
     return Compilation(html, {
@@ -552,6 +580,7 @@ class FlutterDomCompiler {
       'widgets': counts,
       'island': island,
       'nativeAdapterInstances': adapterCount,
+      'nativeFilterInstances': filterCount,
       'initialFlutterBytes': 0,
       'rendering': 'static HTML; approximate CSS layout',
       'limitations': [

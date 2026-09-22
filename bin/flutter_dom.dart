@@ -148,7 +148,7 @@ Future<void> main(List<String> arguments) async {
     }
     File(p.join(output.path, 'index.html')).writeAsStringSync(compiled.html);
     File(p.join(output.path, 'styles.css')).writeAsStringSync(_styles);
-    if ((compiled.report['nativeAdapterInstances'] as int) > 0) {
+    if ((compiled.report['nativeFilterInstances'] as int) > 0) {
       File(p.join(output.path, 'native.js')).writeAsStringSync(_nativeAdapters);
     }
     compiled.report['initialFilesBytesUncompressed'] = {
@@ -156,7 +156,7 @@ Future<void> main(List<String> arguments) async {
         'index.html',
         'styles.css',
         ...compiled.report['assets'] as List<String>,
-        if ((compiled.report['nativeAdapterInstances'] as int) > 0) 'native.js',
+        if ((compiled.report['nativeFilterInstances'] as int) > 0) 'native.js',
         if (compiled.island != null) 'islands.js',
       ])
         name: File(p.join(output.path, name)).lengthSync(),
@@ -333,6 +333,22 @@ h2 { letter-spacing:-.025em; }
 table { border-collapse:collapse; width:100%; text-align:left; font-size:13px; }
 th,td { padding:16px 18px; border-bottom:1px solid #e7e7e2; white-space:nowrap; }
 th { font-size:11px; color:#68726c; text-transform:uppercase; letter-spacing:.06em; }
+.responsive-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+.metric-card { background:#23252d; border:1px solid #353842; border-radius:18px; padding:20px; min-width:0; }
+.metric-label { display:flex; align-items:center; gap:9px; color:#b5bacb; font-size:13px; }
+.metric-label span { width:8px; height:8px; border-radius:50%; }
+.metric-card h2 { margin:12px 0 2px; font-size:28px; }
+.metric-period { font-size:11px; color:#949aac; }
+.metric-card svg { display:block; width:100%; height:200px; margin-top:18px; }
+.responsive-grid .metric-card svg { height:90px; }
+.metric-card details { font-size:11px; color:#949aac; margin-top:10px; }
+.metric-card summary { cursor:pointer; }
+.theme-dark { background:#101116; color:#ebedf7; }
+.theme-dark main { max-width:1320px; background:transparent; }
+.theme-dark h1 { font-size:34px !important; }
+.theme-dark th,.theme-dark td { border-color:#353842; }
+@media(max-width:1050px) { .responsive-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:560px) { .responsive-grid { grid-template-columns:minmax(0,1fr); } }
 @media (max-width: 600px) { main { margin: 0; } h1 { font-size:32px !important; } }
 
 ''';
