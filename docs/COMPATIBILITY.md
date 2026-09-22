@@ -63,3 +63,15 @@ The CLI also dry-runs every recognized direct widget subclass as a parameterless
 Required constructor arguments, imported definitions, stateful widgets and unresolved context are conservatively blocked. Adapters and islands are disabled for this measurement. A reusable widget may therefore fail in isolation while compiling when called with static data from a supported parent. Indirect subclasses and aliased types are outside the denominator. This score measures compiler acceptance, not verified behavior or a percentage of the whole application. Run Flutter analysis separately.
 
 Static primitive string interpolation and boolean conditional expressions are now supported, including constructor-bound values. Only the selected static branch is compiled. Runtime conditions remain unsupported.
+
+### Images and tables
+
+`Image.asset` supports a project-relative local path, static width/height, `BoxFit.cover`/`contain`/`fill` and a static `semanticLabel` (HTML alt text). The CLI copies referenced files, rejecting traversal and symlinks escaping the input project. Asset variants, bundles, animated formats and error/loading builders are not implemented. Referenced assets must also be declared in the Flutter pubspec for the Flutter targets.
+
+Static `DataTable`, `DataColumn(label:)`, `DataRow(cells:)` and `DataCell(child)` emit a semantic HTML table with column headers and horizontal overflow. Sorting, selection, callbacks and custom table themes are unsupported. `SingleChildScrollView(scrollDirection: Axis.horizontal)` maps to horizontal browser overflow.
+
+### Entry discovery and build counts
+
+`flutter_dom build` (also `flutter_dom build web`) uses the current directory and `lib/main.dart`. Without a sidecar it infers a single direct `runApp(MyApp())` root; ambiguous startup, conditional startup and extra initialization statements require explicit configuration. Startup logic is never executed or translated. A sidecar is still needed for island/adapter/heading intent. This is project-oriented invocation, not resolved multi-file app compilation.
+
+The build summary counts visited rendering boundaries; a native adapter counts as native, a Flutter island as fallback, and traversal stops at both. Its percentage describes the selected compiled tree only. `inspect` uses the separate, stricter independent-root metric. Neither measures application-wide behavioral compatibility.

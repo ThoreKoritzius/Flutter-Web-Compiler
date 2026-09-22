@@ -8,6 +8,7 @@ Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('port', defaultsTo: '8097')
     ..addFlag('serve', defaultsTo: true)
+    ..addFlag('build', defaultsTo: true)
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
     final args = parser.parse(arguments);
@@ -41,65 +42,90 @@ Future<void> main(List<String> arguments) async {
         throw StateError('Showcase build failed.');
     }
 
-    await run(Platform.resolvedExecutable, [
-      'run',
-      'bin/flutter_dom.dart',
-      'build',
-      '--project',
-      project,
-      '--output',
-      p.join(output, 'native'),
-    ], root);
-    await run('flutter', [
-      'build',
-      'web',
-      '--release',
-      '--no-web-resources-cdn',
-      '--pwa-strategy=none',
-      '--base-href',
-      '/flutter/',
-      '--output',
-      p.join(output, 'flutter'),
-    ], project);
-    for (final file in ['index.html', 'showcase.css', 'showcase.js']) {
-      File(p.join(root, 'demo', file)).copySync(p.join(output, file));
+    if (args['build'] as bool) {
+      await run(Platform.resolvedExecutable, [
+        'run',
+        'bin/flutter_dom.dart',
+        'build',
+        '--project',
+        project,
+        '--output',
+        p.join(output, 'native'),
+      ], root);
+      await run('flutter', [
+        'build',
+        'web',
+        '--release',
+        '--no-web-resources-cdn',
+        '--no-wasm-dry-run',
+        '--pwa-strategy=none',
+        '--base-href',
+        '/flutter/',
+        '--output',
+        p.join(output, 'flutter'),
+      ], project);
+      await run('flutter', [
+        'build',
+        'web',
+        '--release',
+        '--wasm',
+        '--pwa-strategy=none',
+        '--no-web-resources-cdn',
+        '--base-href',
+        '/wasm/',
+        '--output',
+        p.join(output, 'wasm'),
+      ], project);
+      for (final file in ['index.html', 'showcase.css', 'showcase.js']) {
+        File(p.join(root, 'demo', file)).copySync(p.join(output, file));
+      }
+      final nativeRoot = p.join(output, 'native');
+      final nativeInitial = [
+        'index.html',
+        'styles.css',
+        'native.js',
+        'islands.js',
+        'assets/architecture.jpg',
+      ];
+      final nativeComplete = [
+        ...nativeInitial,
+        ...flutterArtifacts(
+          p.join(nativeRoot, 'flutter'),
+          includeHtml: false,
+          bootstrap: 'island_bootstrap.js',
+        ).map((name) => 'flutter/$name'),
+        'flutter/assets/assets/architecture.jpg',
+      ];
+      File(p.join(output, 'metrics.json')).writeAsStringSync(
+        jsonEncode({
+          'kind': 'selected-build-artifact-sizes',
+          'wasmDeployment': measureArtifacts(
+            p.join(output, 'wasm'),
+            Directory(p.join(output, 'wasm'))
+                .listSync(recursive: true)
+                .whereType<File>()
+                .map((f) => p.relative(f.path, from: p.join(output, 'wasm')))
+                .toList(),
+          ),
+          'nativeInitial': measureArtifacts(nativeRoot, nativeInitial),
+          'nativeComplete': measureArtifacts(nativeRoot, nativeComplete),
+          'flutterInitial': measureArtifacts(p.join(output, 'flutter'), [
+            ...flutterArtifacts(p.join(output, 'flutter')),
+            'assets/assets/architecture.jpg',
+          ]),
+        }),
+      );
+      final savedAudit = File(
+        p.join(root, 'benchmarks/results/showcase-browser.json'),
+      );
+      if (savedAudit.existsSync())
+        savedAudit.copySync(p.join(output, 'audits.json'));
+      stdout.writeln('\nBuilt showcase: $output');
     }
-    final nativeRoot = p.join(output, 'native');
-    final nativeInitial = [
-      'index.html',
-      'styles.css',
-      'native.js',
-      'islands.js',
-    ];
-    final nativeComplete = [
-      ...nativeInitial,
-      ...flutterArtifacts(
-        p.join(nativeRoot, 'flutter'),
-        includeHtml: false,
-        bootstrap: 'island_bootstrap.js',
-      ).map((name) => 'flutter/$name'),
-    ];
-    File(p.join(output, 'metrics.json')).writeAsStringSync(
-      jsonEncode({
-        'kind': 'selected-build-artifact-sizes',
-        'nativeInitial': measureArtifacts(nativeRoot, nativeInitial),
-        'nativeComplete': measureArtifacts(nativeRoot, nativeComplete),
-        'flutterInitial': measureArtifacts(
-          p.join(output, 'flutter'),
-          flutterArtifacts(p.join(output, 'flutter')),
-        ),
-      }),
-    );
-    final savedAudit = File(
-      p.join(root, 'benchmarks/results/showcase-browser.json'),
-    );
-    if (savedAudit.existsSync())
-      savedAudit.copySync(p.join(output, 'audits.json'));
-    stdout.writeln('\nBuilt paired showcase: $output');
     if (!(args['serve'] as bool)) return;
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     stdout.writeln(
-      'Showcase: http://127.0.0.1:$port/\nTargets: /native/ and /flutter/\nCtrl+C to stop.',
+      'Showcase: http://127.0.0.1:$port/\nTargets: /native/, /flutter/ and /wasm/\nCtrl+C to stop.',
     );
     await for (final request in server) {
       final requested = p.normalize(
@@ -126,6 +152,8 @@ Future<void> main(List<String> arguments) async {
         '.js': 'text/javascript; charset=utf-8',
         '.json': 'application/json',
         '.wasm': 'application/wasm',
+        '.mjs': 'text/javascript',
+        '.jpg': 'image/jpeg',
       }[p.extension(file.path)];
       request.response.headers.set(
         'Content-Type',

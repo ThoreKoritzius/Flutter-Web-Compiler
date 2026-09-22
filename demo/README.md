@@ -48,3 +48,11 @@ npm run audit --prefix tool/browser -- http://127.0.0.1:8097/ 5
 The script opens a fresh headless Chrome for each run and audits each independent target. It saves raw Lighthouse reports under ignored `build/browser-audits/` and a portable summary in `benchmarks/results/showcase-browser.json`. Reload the comparison page after running. Recorded results are displayed only when their hash matches current artifact metadata, including content hashes. A new build without matching results shows “not audited”.
 
 The summary includes all samples, medians, ranges, settings, Chrome environment, Lighthouse version and caveats. Both targets have equivalent description metadata. A perfect Lighthouse SEO score does not establish indexability or ranking. Flutter's canvas can produce no LCP candidate while Lighthouse supplies an estimate; its LCP and derived performance score need special caution. FCP is not application readiness. This desktop, simulated-throttling, localhost run does not measure real mobile networks or island activation latency.
+
+## Current three-target fixture
+
+The showcase now includes a third `--wasm` release build at `/wasm/`. The global switch selects native DOM, Dart JavaScript/CanvasKit, or the Wasm build. All share the same Dart source and generated illustration. The native target itself demonstrates image assets and semantic data tables as well as search and a deferred island. The illustration is a user-supplied refinement of generated artwork, compressed as JPEG; its bytes count toward both targets' metrics.
+
+Browser audits run all three targets and record requested renderer resources to show whether SkWasm or CanvasKit was actually loaded. The local server does not enable cross-origin isolation: multithreaded SkWasm is not covered. Other browsers, devices, forced fallbacks and third-party DOM frameworks are not covered. Wasm deployment size includes alternate fallback artifacts and must not be presented as initial transfer; the browser audit reports observed page weight separately.
+
+`dart run tool/showcase.dart --no-build` serves an existing build without rebuilding. Building without `--no-build` refreshes all three targets and their content-hash manifest.

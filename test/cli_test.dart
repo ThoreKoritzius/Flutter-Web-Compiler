@@ -36,6 +36,32 @@ void main() {
     },
   );
 
+  test('build web discovers a root without sidecar configuration', () async {
+    final directory = Directory.systemTemp.createTempSync('dom-project-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    Directory(p.join(directory.path, 'lib')).createSync();
+    File(p.join(directory.path, 'lib/main.dart')).writeAsStringSync(
+      '''void main() => runApp(const Landing());
+class Landing extends StatelessWidget { Widget build(BuildContext c) => Text('Hello'); }''',
+    );
+    final result = await Process.run(Platform.resolvedExecutable, [
+      'run',
+      'bin/flutter_dom.dart',
+      'build',
+      'web',
+      '--project',
+      directory.path,
+      '--output',
+      p.join(directory.path, 'build/dom'),
+    ]);
+    expect(result.exitCode, 0, reason: '${result.stdout} ${result.stderr}');
+    expect(result.stdout, contains('Native boundaries'));
+    expect(
+      File(p.join(directory.path, 'build/dom/index.html')).readAsStringSync(),
+      contains('Hello'),
+    );
+  });
+
   test('DOM-only CLI fails before creating output for a hybrid page', () async {
     final directory = Directory.systemTemp.createTempSync('flutter-dom-cli-');
     addTearDown(() => directory.deleteSync(recursive: true));

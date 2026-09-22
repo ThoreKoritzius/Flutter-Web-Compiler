@@ -6,7 +6,7 @@ class ShowcaseApp extends StatelessWidget {
   const ShowcaseApp({super.key});
 
   @override
-  Widget build(BuildContext context) => const MaterialApp(
+  Widget build(BuildContext context) => MaterialApp(
     title: 'Flutter DOM Compiler — Flutter target',
     debugShowCheckedModeBanner: false,
     home: Scaffold(
@@ -17,50 +17,91 @@ class ShowcaseApp extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'ONE SOURCE / TWO WEB BUILDS',
+                'FLUTTER DOM / EXPERIMENTAL',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 16),
               Text(
-                'Flutter source.\nA native web document.',
+                'Flutter, with a lighter footprint.',
                 key: ValueKey('hero'),
                 style: TextStyle(fontSize: 38, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 16),
-              Text(
-                'Explore a document-first build of this Flutter page. '
-                'Select text, search the feature list, then try the same source through Flutter Web.',
-              ),
+              Text('Real HTML. Native inputs. Flutter where you need it.'),
               SizedBox(height: 28),
+              Image.asset(
+                'assets/architecture.jpg',
+                height: 260,
+                fit: BoxFit.cover,
+                semanticLabel: 'Translucent layers joined by a blue ribbon',
+              ),
+              SizedBox(height: 32),
               FeatureSearch(
-                label: 'Explore the approach',
-                hintText: 'Search features, e.g. HTML or Flutter',
+                label: 'Capabilities',
+                hintText: 'Search capabilities',
                 items: [
                   'Native HTML — content in the first document response',
-                  'Static routes — no JavaScript required for plain content',
+                  'Static content — no JavaScript required for plain content',
                   'Explicit DOM adapters — native search and local filtering',
                   'Flutter islands — keep complex interactions in Flutter',
                   'One source — compare two independent build targets',
                   'Clear limits — narrow compatibility, approximate layout',
                 ],
               ),
-              SizedBox(height: 28),
+              SizedBox(height: 32),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: [
+                    DataColumn(label: Text('Capability')),
+                    DataColumn(label: Text('Native DOM')),
+                    DataColumn(label: Text('Flutter Web')),
+                  ],
+                  rows: [
+                    DataRow(
+                      cells: [
+                        DataCell(Text('Initial content')),
+                        DataCell(Text('HTML')),
+                        DataCell(Text('Engine rendered')),
+                      ],
+                    ),
+                    DataRow(
+                      cells: [
+                        DataCell(Text('Search')),
+                        DataCell(Text('Native adapter')),
+                        DataCell(Text('Dart widget')),
+                      ],
+                    ),
+                    DataRow(
+                      cells: [
+                        DataCell(Text('Complex state')),
+                        DataCell(Text('Flutter island')),
+                        DataCell(Text('Built in')),
+                      ],
+                    ),
+                    DataRow(
+                      cells: [
+                        DataCell(Text('Layout')),
+                        DataCell(Text('CSS approximation')),
+                        DataCell(Text('Flutter fidelity')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 32),
               Text(
-                'Keep Flutter where it helps.',
+                'A native document. A real Flutter island.',
                 key: ValueKey('counter'),
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 12),
-              Text(
-                'This counter is real Flutter in both builds. The native target '
-                'defers it until activation; Flutter Web starts it immediately.',
-              ),
+              Text('The engine loads on demand. State stays in Flutter.'),
               SizedBox(height: 20),
               SizedBox(height: 220, child: CounterPanel()),
               SizedBox(height: 24),
               Text(
-                'Research prototype. Search uses an explicit filter-list adapter; '
-                'arbitrary StatefulWidget conversion and shared state are not implemented.',
+                'Experimental subset · explicit search adapter · no shared state bridge',
                 style: TextStyle(fontSize: 12),
               ),
             ],

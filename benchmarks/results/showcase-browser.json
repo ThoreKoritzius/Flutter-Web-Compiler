@@ -1,43 +1,46 @@
 {
   "schemaVersion": 1,
-  "date": "2026-09-22T05:07:28.270Z",
+  "date": "2026-09-22T09:59:57.300Z",
   "runs": 3,
   "methodology": "Lighthouse desktop, simulated throttling, fresh Chrome per run; localhost; counter not activated. Scores are lab diagnostics, not search rankings. FCP measures paint, not interaction readiness.",
-  "artifactHash": "d179f230a5796e4579ec8641c2fc3feb09d969b13030ae64778f3d27ef353c22",
+  "artifactHash": "83f882b3d94e02814b0e3eb31af7f1b5bebec1279a8264d1f3309459cb0a878f",
   "targets": {
     "native": {
       "samples": [
         {
           "performance": 100,
           "seo": 100,
-          "fcpMs": 201.88479999999998,
-          "lcpMs": 241.88479999999998,
+          "fcpMs": 206.04880000000003,
+          "lcpMs": 446.0488,
           "tbtMs": 0,
-          "transferredBytes": 7740,
+          "transferredBytes": 171346,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [],
           "failedSeo": []
         },
         {
           "performance": 100,
           "seo": 100,
-          "fcpMs": 245.8324,
-          "lcpMs": 245.8324,
+          "fcpMs": 207.1057,
+          "lcpMs": 447.1057,
           "tbtMs": 0,
-          "transferredBytes": 7740,
+          "transferredBytes": 171346,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [],
           "failedSeo": []
         },
         {
           "performance": 100,
           "seo": 100,
-          "fcpMs": 246.54000000000002,
-          "lcpMs": 246.54000000000002,
+          "fcpMs": 245.6683,
+          "lcpMs": 442.6683,
           "tbtMs": 0,
-          "transferredBytes": 7740,
+          "transferredBytes": 171346,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [],
           "failedSeo": []
         }
       ],
@@ -52,29 +55,29 @@
           "max": 100
         },
         "fcpMs": {
-          "min": 201.88479999999998,
-          "max": 246.54000000000002
+          "min": 206.04880000000003,
+          "max": 245.6683
         },
         "lcpMs": {
-          "min": 241.88479999999998,
-          "max": 246.54000000000002
+          "min": 442.6683,
+          "max": 447.1057
         },
         "tbtMs": {
           "min": 0,
           "max": 0
         },
         "transferredBytes": {
-          "min": 7740,
-          "max": 7740
+          "min": 171346,
+          "max": 171346
         }
       },
       "median": {
         "performance": 100,
         "seo": 100,
-        "fcpMs": 245.8324,
-        "lcpMs": 245.8324,
+        "fcpMs": 207.1057,
+        "lcpMs": 446.0488,
         "tbtMs": 0,
-        "transferredBytes": 7740
+        "transferredBytes": 171346
       },
       "serverHtml": {
         "h1Count": 1,
@@ -84,36 +87,48 @@
     "flutter": {
       "samples": [
         {
-          "performance": 71,
+          "performance": 70,
           "seo": 100,
-          "fcpMs": 247.62650000000002,
-          "lcpMs": 7052.68975,
-          "tbtMs": 5.999999999999545,
-          "transferredBytes": 8194371,
+          "fcpMs": 252.18380000000002,
+          "lcpMs": 7263.5257,
+          "tbtMs": 50,
+          "transferredBytes": 8457689,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [
+            "/flutter/canvaskit/chromium/canvaskit.wasm",
+            "/flutter/canvaskit/chromium/canvaskit.js"
+          ],
           "failedSeo": []
         },
         {
-          "performance": 71,
+          "performance": 70,
           "seo": 100,
-          "fcpMs": 242.27460000000002,
-          "lcpMs": 7043.911899999999,
-          "tbtMs": 3,
-          "transferredBytes": 8194371,
+          "fcpMs": 244.1239,
+          "lcpMs": 7247.43585,
+          "tbtMs": 13,
+          "transferredBytes": 8457689,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [
+            "/flutter/canvaskit/chromium/canvaskit.wasm",
+            "/flutter/canvaskit/chromium/canvaskit.js"
+          ],
           "failedSeo": []
         },
         {
-          "performance": 71,
+          "performance": 70,
           "seo": 100,
-          "fcpMs": 242.25310000000002,
-          "lcpMs": 7043.87965,
-          "tbtMs": 3,
-          "transferredBytes": 8194371,
+          "fcpMs": 245.66000000000003,
+          "lcpMs": 7250.49,
+          "tbtMs": 14,
+          "transferredBytes": 8457689,
           "warnings": [],
           "runtimeError": null,
+          "rendererResources": [
+            "/flutter/canvaskit/chromium/canvaskit.wasm",
+            "/flutter/canvaskit/chromium/canvaskit.js"
+          ],
           "failedSeo": []
         }
       ],
@@ -122,37 +137,130 @@
       ],
       "ranges": {
         "performance": {
-          "min": 71,
-          "max": 71
+          "min": 70,
+          "max": 70
         },
         "seo": {
           "min": 100,
           "max": 100
         },
         "fcpMs": {
-          "min": 242.25310000000002,
-          "max": 247.62650000000002
+          "min": 244.1239,
+          "max": 252.18380000000002
         },
         "lcpMs": {
-          "min": 7043.87965,
-          "max": 7052.68975
+          "min": 7247.43585,
+          "max": 7263.5257
         },
         "tbtMs": {
-          "min": 3,
-          "max": 5.999999999999545
+          "min": 13,
+          "max": 50
         },
         "transferredBytes": {
-          "min": 8194371,
-          "max": 8194371
+          "min": 8457689,
+          "max": 8457689
         }
       },
       "median": {
-        "performance": 71,
+        "performance": 70,
         "seo": 100,
-        "fcpMs": 242.27460000000002,
-        "lcpMs": 7043.911899999999,
-        "tbtMs": 3,
-        "transferredBytes": 8194371
+        "fcpMs": 245.66000000000003,
+        "lcpMs": 7250.49,
+        "tbtMs": 14,
+        "transferredBytes": 8457689
+      },
+      "serverHtml": {
+        "h1Count": 0,
+        "searchInputCount": 0
+      }
+    },
+    "wasm": {
+      "samples": [
+        {
+          "performance": 73,
+          "seo": 100,
+          "fcpMs": 244.3999,
+          "lcpMs": 5167.8498500000005,
+          "tbtMs": 0,
+          "transferredBytes": 5872016,
+          "warnings": [],
+          "runtimeError": null,
+          "rendererResources": [
+            "/wasm/canvaskit/skwasm.wasm",
+            "/wasm/canvaskit/skwasm.js",
+            "/wasm/main.dart.wasm"
+          ],
+          "failedSeo": []
+        },
+        {
+          "performance": 73,
+          "seo": 100,
+          "fcpMs": 244.93040000000002,
+          "lcpMs": 5168.1456,
+          "tbtMs": 0,
+          "transferredBytes": 5872016,
+          "warnings": [],
+          "runtimeError": null,
+          "rendererResources": [
+            "/wasm/canvaskit/skwasm.wasm",
+            "/wasm/canvaskit/skwasm.js",
+            "/wasm/main.dart.wasm"
+          ],
+          "failedSeo": []
+        },
+        {
+          "performance": 73,
+          "seo": 100,
+          "fcpMs": 244.33929999999998,
+          "lcpMs": 5168.0089499999995,
+          "tbtMs": 0,
+          "transferredBytes": 5872016,
+          "warnings": [],
+          "runtimeError": null,
+          "rendererResources": [
+            "/wasm/canvaskit/skwasm.wasm",
+            "/wasm/canvaskit/skwasm.js",
+            "/wasm/main.dart.wasm"
+          ],
+          "failedSeo": []
+        }
+      ],
+      "caveats": [
+        "Canvas rendering: Lighthouse may emit NO_LCP internally yet synthesize an LCP estimate. Its LCP and derived performance score are not equivalent to application readiness."
+      ],
+      "ranges": {
+        "performance": {
+          "min": 73,
+          "max": 73
+        },
+        "seo": {
+          "min": 100,
+          "max": 100
+        },
+        "fcpMs": {
+          "min": 244.33929999999998,
+          "max": 244.93040000000002
+        },
+        "lcpMs": {
+          "min": 5167.8498500000005,
+          "max": 5168.1456
+        },
+        "tbtMs": {
+          "min": 0,
+          "max": 0
+        },
+        "transferredBytes": {
+          "min": 5872016,
+          "max": 5872016
+        }
+      },
+      "median": {
+        "performance": 73,
+        "seo": 100,
+        "fcpMs": 244.3999,
+        "lcpMs": 5168.0089499999995,
+        "tbtMs": 0,
+        "transferredBytes": 5872016
       },
       "serverHtml": {
         "h1Count": 0,
@@ -162,9 +270,9 @@
   },
   "lighthouseVersion": "13.5.0",
   "environment": {
-    "networkUserAgent": "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36",
+    "networkUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
     "hostUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
-    "benchmarkIndex": 3967.5,
+    "benchmarkIndex": 4015.5,
     "credits": {
       "axe-core": "4.13.0"
     }
@@ -194,7 +302,7 @@
       "deviceScaleFactor": 1,
       "disabled": false
     },
-    "emulatedUserAgent": "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
+    "emulatedUserAgent": false,
     "auditMode": false,
     "gatherMode": false,
     "clearStorageTypes": [
@@ -222,5 +330,9 @@
       "seo"
     ],
     "skipAudits": null
-  }
+  },
+  "chromeFlags": [
+    "--headless",
+    "--no-first-run"
+  ]
 }

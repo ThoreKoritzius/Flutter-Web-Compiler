@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 
 class CompileException implements Exception {
@@ -40,7 +41,7 @@ class FlutterDomCompiler {
       for (final node in result.unit.declarations.whereType<ClassDeclaration>())
         node.name.lexeme: node,
     };
-    final root = config['root'] as String? ?? 'App';
+    final root = config['root'] as String? ?? discoverRoot(source);
     final islandConfig = Map<String, dynamic>.from(
       config['islands'] as Map? ?? {},
     );
@@ -51,6 +52,7 @@ class FlutterDomCompiler {
     final nativeAdapters = Map<String, dynamic>.from(
       config['nativeAdapters'] as Map? ?? {},
     );
+    final assets = <String>{};
     var adapterCount = 0;
     final stack = <String>[];
     var scope = <String, Object?>{};
@@ -390,8 +392,62 @@ class FlutterDomCompiler {
           check(call, {'body'});
           return '<main>${render(n['body'])}</main>';
         case 'SingleChildScrollView':
-          check(call, {'child'});
-          return '<div class="dom-scroll">${render(n['child'])}</div>';
+          check(call, {'child', 'scrollDirection'});
+          final direction = n['scrollDirection'] ?? 'Axis.vertical';
+          if (direction != 'Axis.vertical' && direction != 'Axis.horizontal')
+            fail('Unsupported scroll direction.');
+          return '<div class="dom-scroll" style="${direction == 'Axis.horizontal' ? 'overflow-x:auto;max-width:100%' : ''}">${render(n['child'])}</div>';
+        case 'Image.asset':
+          check(call, {'width', 'height', 'fit', 'semanticLabel'}, 1);
+          final asset = call.positional.single;
+          if (asset is! String ||
+              !RegExp(r'^[a-zA-Z0-9_./-]+$').hasMatch(asset) ||
+              asset.startsWith('/') ||
+              asset.split('/').contains('..')) {
+            fail(
+              'Image.asset requires a safe project-relative asset path.',
+              call.line,
+            );
+          }
+          final fit = {
+            'BoxFit.cover': 'cover',
+            'BoxFit.contain': 'contain',
+            'BoxFit.fill': 'fill',
+          }[n['fit'] ?? 'BoxFit.contain'];
+          if (fit == null) fail('Unsupported image fit.', call.line);
+          final label = n['semanticLabel'] ?? '';
+          if (label is! String)
+            fail('Image label must be static text.', call.line);
+          assets.add(asset);
+          return '<img src="${_escape(asset)}" alt="${_escape(label)}" '
+              'style="max-width:100%;object-fit:$fit;'
+              '${n['width'] == null ? '' : 'width:${pixels(n['width'])};'}'
+              '${n['height'] == null ? '' : 'height:${pixels(n['height'])};'}">';
+        case 'DataTable':
+          check(call, {'columns', 'rows'});
+          final columns = n['columns'], rows = n['rows'];
+          if (columns is! List || rows is! List)
+            fail('DataTable requires static columns and rows.', call.line);
+          final header = columns.map((column) {
+            if (column is! _Call || column.name != 'DataColumn')
+              fail('Expected DataColumn.');
+            check(column, {'label'});
+            return '<th scope="col">${render(column.named['label'])}</th>';
+          }).join();
+          final body = rows.map((row) {
+            if (row is! _Call || row.name != 'DataRow')
+              fail('Expected DataRow.');
+            check(row, {'cells'});
+            final cells = row.named['cells'];
+            if (cells is! List || cells.length != columns.length)
+              fail('DataRow cells must match column count.');
+            return '<tr>${cells.map((cell) {
+              if (cell is! _Call || cell.name != 'DataCell') fail('Expected DataCell.');
+              check(cell, {}, 1);
+              return '<td>${render(cell.positional.single)}</td>';
+            }).join()}</tr>';
+          }).join();
+          return '<div class="table-scroll"><table><thead><tr>$header</tr></thead><tbody>$body</tbody></table></div>';
         case 'Text':
           check(call, {'style', 'textAlign'}, 1);
           if (call.positional.single is! String)
@@ -492,6 +548,7 @@ class FlutterDomCompiler {
         '</body></html>\n';
     return Compilation(html, {
       'root': root,
+      'assets': assets.toList(),
       'widgets': counts,
       'island': island,
       'nativeAdapterInstances': adapterCount,
@@ -509,3 +566,48 @@ class FlutterDomCompiler {
 }
 
 String _escape(String value) => const HtmlEscape().convert(value);
+
+/// Infer only the normal direct runApp(MyApp()) entry point; never execute Dart.
+String discoverRoot(String source) {
+  final unit = parseString(content: source, throwIfDiagnostics: false).unit;
+  final visitor = _RunAppVisitor();
+  for (final function in unit.declarations.whereType<FunctionDeclaration>()) {
+    if (function.name.lexeme == 'main') {
+      final body = function.functionExpression.body;
+      if (body is BlockFunctionBody &&
+          (body.block.statements.length != 1 ||
+              body.block.statements.single is! ExpressionStatement)) {
+        throw CompileException(
+          'main contains startup logic. Set an explicit root in flutter_dom.json; startup logic is not compiled to DOM.',
+        );
+      }
+      body.accept(visitor);
+    }
+  }
+  if (visitor.roots.length == 1) return visitor.roots.single;
+  if (unit.declarations.whereType<ClassDeclaration>().any(
+    (c) => c.name.lexeme == 'App',
+  ))
+    return 'App';
+  throw CompileException(
+    'Cannot infer the root. Use main() => runApp(MyApp()) or set root in flutter_dom.json.',
+  );
+}
+
+class _RunAppVisitor extends RecursiveAstVisitor<void> {
+  final roots = <String>[];
+  @override
+  void visitMethodInvocation(MethodInvocation node) {
+    if (node.methodName.name == 'runApp' &&
+        node.argumentList.arguments.length == 1) {
+      final argument = node.argumentList.arguments.single;
+      if (argument is InstanceCreationExpression &&
+          argument.constructorName.name == null) {
+        roots.add(argument.constructorName.type.toSource());
+      } else if (argument is MethodInvocation && argument.target == null) {
+        roots.add(argument.methodName.name);
+      }
+    }
+    super.visitMethodInvocation(node);
+  }
+}

@@ -5,7 +5,7 @@ Verified locally on 2026-09-22 with Flutter 3.41.6, Dart 3.11.4, macOS and the C
 ## Automated checks
 
 - `dart analyze`: no issues.
-- `dart test`: 25 passing tests, including CLI integration tests.
+- `dart test`: 29 passing tests, including CLI integration tests.
 - The catalog and shared-source showcase compile through real release Flutter builds.
 - Static builds emit HTML/CSS with no scripts or Flutter directory into a fresh output directory.
 - Strict DOM-only mode rejects configured Flutter islands before creating output.
@@ -32,3 +32,9 @@ Flutter emits a deprecated `--pwa-strategy` notice and a font-family diagnostic 
 CI is configured for compiler checks, Flutter analysis and showcase release builds. Local results are recorded above; GitHub Actions is the authority for remote CI status. No public deployment or package publication is configured.
 
 The catalog inspection currently accepts 3 of 6 direct widget entry points (50%). This is the documented parameterless-entry dry-run metric, not general application compatibility. Static interpolation and conditional branches have regression tests. Current development-only Node dependencies pass `npm audit` with no reported vulnerabilities at installation time.
+
+
+The revised demo was visually checked at 1440 px desktop and 390 px phone widths. The Wasm build renders the shared illustration and data table; search returns one match for HTML and its counter increments. Three-target browser results replace the prior text-only showcase measurements. CLI tests now cover root discovery without a sidecar and `build web` invocation. Image/table tests cover escaping, safe paths and mismatched rows.
+
+
+The final renderer audit uses a real desktop user-agent with GPU support enabled. Recorded requests confirm CanvasKit for the JavaScript build and SkWasm plus `main.dart.wasm` for the Wasm build. Median Lighthouse performance scores are 100 / 70 / 73 (native / CanvasKit / Wasm); SEO is 100 for all three. Canvas LCP caveats still apply. The current illustration is the supplied refinement and is included in all size/transfer measurements.

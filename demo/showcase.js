@@ -2,8 +2,9 @@ const frame = document.getElementById('preview');
 const targetLink = document.getElementById('open-target');
 const note = document.getElementById('target-note');
 const targets = {
-  native: {path: 'native/', title: 'Native DOM build preview', note: 'HTML content + an explicit native search adapter. Flutter loads only when the counter is activated.'},
-  flutter: {path: 'flutter/', title: 'Flutter Web build preview', note: 'The same Dart source built by standard Flutter Web. The full Flutter UI and counter start together.'}
+  native: {path: 'native/', title: 'Native DOM build preview', note: 'HTML + native search · Flutter counter loads on demand'},
+  wasm: {path: 'wasm/', title: 'Flutter Wasm build preview', note: 'Dart Wasm + runtime renderer selection · no cross-origin isolation'},
+  flutter: {path: 'flutter/', title: 'Flutter Web build preview', note: 'Dart JavaScript + CanvasKit · full Flutter UI'}
 };
 for (const button of document.querySelectorAll('[data-target]')) {
   button.addEventListener('click', () => {
@@ -22,7 +23,7 @@ fetch('metrics.json').then(response => {
   return response.text();
 }).then(async metricsText => {
   const metrics = JSON.parse(metricsText);
-  document.getElementById('hero-size').textContent = format(metrics.nativeInitial.bytes);
+
   loadAudits(metricsText);
   for (const [id, value] of [['native-size', metrics.nativeInitial], ['complete-size', metrics.nativeComplete], ['flutter-size', metrics.flutterInitial]]) {
     const element = document.getElementById(id);
@@ -47,9 +48,8 @@ async function loadAudits(metricsText) {
     const native = audit.targets.native, flutter = audit.targets.flutter;
     const time = n => n == null ? 'Unavailable' : `${(n/1000).toFixed(2)} s`;
     const score = n => n == null ? 'Unavailable' : `${Math.round(n)} / 100`;
-    document.getElementById('hero-fcp').textContent = time(native.median.fcpMs);
-    document.getElementById('hero-seo').textContent = score(native.median.seo);
-    document.getElementById('audit-status').textContent = `${audit.runs} runs per target · ${new Date(audit.date).toLocaleDateString()} · Lighthouse ${audit.lighthouseVersion}. ${audit.methodology}`;
+
+    document.getElementById('audit-status').textContent = `${audit.runs} runs per target · ${new Date(audit.date).toLocaleDateString()} · Lighthouse ${audit.lighthouseVersion}. Medians; see methodology below.`;
     const rows = [
       ['Performance score',score(native.median.performance),`${score(flutter.median.performance)} *`],
       ['SEO score',score(native.median.seo),score(flutter.median.seo)],
@@ -60,6 +60,14 @@ async function loadAudits(metricsText) {
       ['H1 headings in server HTML',native.serverHtml.h1Count,flutter.serverHtml.h1Count],
       ['Inputs in server HTML',native.serverHtml.searchInputCount,flutter.serverHtml.searchInputCount]
     ];
+    const wasm = audit.targets.wasm;
+    const wasmValues = wasm ? [score(wasm.median.performance)+' *', score(wasm.median.seo), time(wasm.median.fcpMs), time(wasm.median.lcpMs)+' *', time(wasm.median.tbtMs), wasm.median.transferredBytes == null ? 'Unavailable' : format(wasm.median.transferredBytes), wasm.serverHtml.h1Count, wasm.serverHtml.searchInputCount] : rows.map(() => 'Not audited');
+    rows.forEach((row, i) => row.push(wasmValues[i]));
+    const renderer = target => {
+      const resources = target?.samples.flatMap(s => s.rendererResources || []) || [];
+      return resources.some(r => r.includes('skwasm')) ? 'SkWasm' : resources.some(r => r.includes('canvaskit')) ? 'CanvasKit' : 'DOM';
+    };
+    rows.unshift(['Observed renderer', 'DOM', renderer(flutter), wasm ? renderer(wasm) : 'Not audited']);
     document.getElementById('audit-rows').replaceChildren(...rows.map(cells => {
       const row = document.createElement('tr');
       for (const text of cells) {const cell = document.createElement('td');cell.textContent = text;row.append(cell);}

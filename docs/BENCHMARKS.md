@@ -72,3 +72,9 @@ Run the showcase server, then `npm ci --prefix tool/browser && npm run audit --p
 [The portable result](../benchmarks/results/showcase-browser.json) includes medians, ranges, all samples, Lighthouse version, browser environment and effective settings. Raw Lighthouse reports stay under ignored `build/browser-audits/`. Results are linked to the compiled artifacts by a SHA-256 hash of their size/content-hash manifest. The demo declines to show stale scores after a changed build.
 
 Both targets have matching description metadata. The audit currently gives both an SEO score of 100: it does not measure search ranking or guarantee indexing. Native HTML contains an H1 and search input before JavaScript. Flutter paints app content after startup. FCP is not readiness and does not distinguish these behaviors adequately. Lighthouse's canvas trace can emit `NO_LCP` yet report a synthesized LCP estimate and a derived performance score; do not interpret these as a reliable application-startup comparison. No N× faster claim follows from this audit.
+
+### Expanded renderer comparison
+
+The current showcase includes the generated image and a native semantic table. Its numbers supersede the earlier text-only showcase results; the separate catalog artifact snapshots remain historical fixtures. The benchmark now visits `/native/`, `/flutter/` (Dart JavaScript/CanvasKit), and `/wasm/` (`--wasm`, runtime-selected renderer).
+
+The harness explicitly disables Lighthouse's default mobile user-agent override, in addition to desktop form factor and viewport. Each sample records renderer requests, and the UI labels the observed renderer so a Wasm build falling back to CanvasKit cannot be mistaken for SkWasm. Cross-origin-isolated multithreaded rendering, forced CanvasKit fallback, other browsers/devices and third-party DOM frameworks remain unmeasured. CanvasKit itself also uses WebAssembly; “Wasm build” refers to the Dart compilation target.

@@ -23,3 +23,13 @@ Prefer Dart's existing JavaScript compiler for supported business logic. Transla
 - A versioned CLI and reproducible external app evaluations before proposing deeper upstream integration.
 
 A standalone CLI is the least coupled starting point. An IDE extension can surface the same reports later. Community feedback and an experimental RFC become useful once the compatibility contract and reproducible benchmarks demonstrate a stable benefit. Upstream adoption is uncertain; no submission has been made.
+
+
+## Immediate coverage priorities after images and tables
+
+1. Resolve imported widget definitions and symbols, preserving per-file diagnostics. This is the most useful next step for ordinary project structure.
+2. Support immutable top-level constants, static collection `if`/`for`, `Wrap` and constrained responsive layout.
+3. Add native links and a small controlled form/event contract with interaction parity tests.
+4. Implement one local-state slice before attempting broad Provider/Riverpod compatibility.
+
+Image assets and static tables are implemented. Styling remains an approximate CSS mapping, not a translation of arbitrary Material themes.

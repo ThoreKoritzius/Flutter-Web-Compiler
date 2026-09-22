@@ -28,13 +28,13 @@ git clone https://github.com/ThoreKoritzius/Flutter-Web-Compiler.git
 cd Flutter-Web-Compiler
 dart pub get
 
-# Build both targets and start the comparison page.
+# Build all three targets and start the comparison page.
 dart run tool/showcase.dart
 ```
 
-Open [127.0.0.1:8097](http://127.0.0.1:8097). Toggle **Native DOM / Flutter Web**, select text, search the features and try the counter. Both targets use [the same Dart source](examples/showcase/lib/main.dart). Only the active target loads. Switching resets local state; this is not a state-preserving renderer swap.
+Open [127.0.0.1:8097](http://127.0.0.1:8097). Toggle **Native DOM / CanvasKit / Wasm**, select text, search the features and try the counter. All targets use [the same Dart source](examples/showcase/lib/main.dart). Only the active target loads. Switching resets local state; this is not a state-preserving renderer swap.
 
-Direct targets are `/native/` and `/flutter/` on the same server. Use `--port 8098` if needed, or `--no-serve` to build only. The small comparison shell is hand-written HTML; the native target inside it is compiler output. Search uses the documented explicit adapter, not general state transpilation. See [the demo guide](demo/README.md).
+Direct targets are `/native/`, `/flutter/` and `/wasm/` on the same server. Use `--port 8098` if needed, or `--no-serve` to build only. The small comparison shell is hand-written HTML; the native target inside it is compiler output. Search uses the documented explicit adapter, not general state transpilation. See [the demo guide](demo/README.md).
 
 For the original minimal counter fixture:
 
@@ -59,15 +59,24 @@ Install from this checkout; it is not published to pub.dev yet:
 ```sh
 dart pub global activate --source path .
 flutter_dom --help
-flutter_dom inspect --project /path/to/flutter_app --output build/inspection.json
-flutter_dom build --project /path/to/flutter_app --output build/site
+flutter_dom inspect --project examples/catalog --output build/inspection.json
+flutter_dom build --project examples/catalog --output build/site
 ```
 
 The executable must be on your `PATH`, usually from Dart's `.pub-cache/bin`. Alternatively, replace `flutter_dom` with `dart pub global run flutter_dom_compiler:flutter_dom`.
 
-`build` defaults to the current project and `build/dom`. It requires `flutter_dom.json`. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative native compatibility score. Each recognized direct widget subclass is compiled as a parameterless DOM-only root; failures include source locations and reasons. This measures compiler acceptance, not the fraction of an entire application that works. Keep private inspection reports outside version control.
+`build` (or `build web`) defaults to the current project, `lib/main.dart` and `build/dom`. It discovers a direct `runApp(MyApp())` root; `flutter_dom.json` is optional for plain supported pages and required for explicit adapter/island configuration. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative native compatibility score. Each recognized direct widget subclass is compiled as a parameterless DOM-only root; failures include source locations and reasons. This measures compiler acceptance, not the fraction of an entire application that works. Keep private inspection reports outside version control.
 
 This is an independent tool. It does not patch the SDK or add an official `flutter build dom` command. An editor extension can later wrap the same CLI.
+
+Inside your own Flutter app, after installing the CLI, use:
+
+```sh
+flutter_dom inspect
+flutter_dom build web
+```
+
+The SDK is unchanged: `flutter build dom` is not an official command. Builds show elapsed time, native boundary counts, adapter/island counts and initial file size. Flutter subprocess output is saved to `flutter-build.log`; use `--verbose` to display it. Terminal colors respect `NO_COLOR`. Inspection shows the first five blockers with the complete list in JSON/Markdown.
 
 ## Compared with Flutter Web
 

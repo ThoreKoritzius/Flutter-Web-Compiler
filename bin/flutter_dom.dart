@@ -12,6 +12,8 @@ Future<void> main(List<String> arguments) async {
   }
   if (arguments.isNotEmpty && arguments.first == 'build') {
     arguments = arguments.skip(1).toList();
+    if (arguments.isNotEmpty && arguments.first == 'web')
+      arguments = arguments.skip(1).toList();
   }
   final parser = ArgParser()
     ..addOption('project', defaultsTo: '.', help: 'Flutter project directory.')
@@ -30,6 +32,7 @@ Future<void> main(List<String> arguments) async {
       defaultsTo: 'build/dom',
       help: 'Output relative to current directory.',
     )
+    ..addFlag('verbose', abbr: 'v', negatable: false)
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
@@ -45,13 +48,20 @@ Future<void> main(List<String> arguments) async {
       throw ArgumentError('Unexpected arguments: ${args.rest}');
     final project = p.absolute(args['project'] as String);
     final input = File(p.join(project, args['source'] as String));
-    final config =
-        jsonDecode(
-              File(
-                p.join(project, args['config'] as String),
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
+    if (!input.existsSync())
+      throw ArgumentError(
+        'No ${input.path}. Run inside a Flutter app or pass --project examples/catalog.',
+      );
+    final configFile = File(p.join(project, args['config'] as String));
+    if (args.wasParsed('config') && !configFile.existsSync())
+      throw ArgumentError('Configuration not found: ${configFile.path}');
+    final config = configFile.existsSync()
+        ? jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>
+        : <String, dynamic>{};
+    final watch = Stopwatch()..start();
+    stdout.writeln(
+      '\n${_accent('Flutter DOM')}  Building ${p.basename(project)}',
+    );
     final compiled = FlutterDomCompiler().compile(
       input.readAsStringSync(),
       config,
@@ -80,6 +90,7 @@ Future<void> main(List<String> arguments) async {
           'web',
           '--release',
           '--no-web-resources-cdn',
+          '--no-wasm-dry-run',
           '--pwa-strategy=none',
           '--target',
           generated.path,
@@ -87,18 +98,23 @@ Future<void> main(List<String> arguments) async {
           p.join(output.path, 'flutter'),
         ],
       ]) {
-        stdout.writeln('flutter ${command.join(' ')}');
-        final process = await Process.start(
+        stdout.writeln(
+          '  ${command.first == 'pub' ? 'Resolve dependencies' : 'Compile Flutter island'}…',
+        );
+        final process = await Process.run(
           'flutter',
           command,
           workingDirectory: project,
-          mode: ProcessStartMode.inheritStdio,
         );
-        if (await process.exitCode != 0) {
+        final log = '${process.stdout}${process.stderr}';
+        File(
+          p.join(output.path, 'flutter-build.log'),
+        ).writeAsStringSync(log, mode: FileMode.append);
+        if (args['verbose'] as bool || process.exitCode != 0) stdout.write(log);
+        if (process.exitCode != 0)
           throw CompileException(
-            'Flutter island build failed. No new HTML was emitted.',
+            'Flutter island build failed. See flutter-build.log.',
           );
-        }
       }
       final bootstrap = File(
         p.join(output.path, 'flutter', 'flutter_bootstrap.js'),
@@ -117,6 +133,19 @@ Future<void> main(List<String> arguments) async {
       );
       File(p.join(output.path, 'islands.js')).writeAsStringSync(_loader);
     }
+    for (final asset in compiled.report['assets'] as List<String>) {
+      final original = File(p.join(project, asset));
+      if (!original.existsSync() ||
+          !p.isWithin(
+            Directory(project).resolveSymbolicLinksSync(),
+            original.resolveSymbolicLinksSync(),
+          )) {
+        throw CompileException('Asset missing or outside project: $asset');
+      }
+      final destination = File(p.join(output.path, asset));
+      destination.parent.createSync(recursive: true);
+      original.copySync(destination.path);
+    }
     File(p.join(output.path, 'index.html')).writeAsStringSync(compiled.html);
     File(p.join(output.path, 'styles.css')).writeAsStringSync(_styles);
     if ((compiled.report['nativeAdapterInstances'] as int) > 0) {
@@ -126,6 +155,7 @@ Future<void> main(List<String> arguments) async {
       for (final name in [
         'index.html',
         'styles.css',
+        ...compiled.report['assets'] as List<String>,
         if ((compiled.report['nativeAdapterInstances'] as int) > 0) 'native.js',
         if (compiled.island != null) 'islands.js',
       ])
@@ -134,9 +164,26 @@ Future<void> main(List<String> arguments) async {
     File(p.join(output.path, 'report.json')).writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(compiled.report),
     );
-    stdout.writeln('Built ${p.join(output.path, 'index.html')}');
+    final counts = compiled.report['widgets'] as Map<String, int>;
+    final total = counts.values.fold(0, (sum, count) => sum + count);
+    final native = total - (compiled.island == null ? 0 : 1);
+    final sizes =
+        compiled.report['initialFilesBytesUncompressed'] as Map<String, int>;
+    final bytes = sizes.values.fold(0, (sum, size) => sum + size);
     stdout.writeln(
-      'Static HTML ready. Flutter island: ${compiled.island ?? 'none'}.',
+      '  ${_accent('✓ Built')}  ${(watch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
+    );
+    stdout.writeln(
+      '  Native boundaries  $native/$total (${total == 0 ? 'N/A' : (100 * native / total).toStringAsFixed(1)}%) · ${compiled.report['nativeAdapterInstances']} adapters · ${compiled.island == null ? 0 : 1} Flutter island',
+    );
+    stdout.writeln(
+      '  Initial files      ${(bytes / 1024).toStringAsFixed(1)} KiB (including images)',
+    );
+    stdout.writeln(
+      '  Output             ${p.relative(output.path)}/index.html',
+    );
+    stdout.writeln(
+      '  Counts stop at adapters/islands; not whole-app conversion.\n',
     );
   } catch (error) {
     stderr.writeln(error);
@@ -175,16 +222,19 @@ Future<void> _inspect(List<String> arguments) async {
     final coverage = report['compatibility'] as Map<String, Object?>;
     final score = coverage['percent'] as num?;
     stdout.writeln(
-      'Native entry compatibility: ${score?.toStringAsFixed(1) ?? 'N/A'}'
+      '${_accent('Native entry compatibility')}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
       '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
     );
-    stdout.writeln(coverage['definition']);
+    stdout.writeln('  Independent widget roots · adapters/islands excluded');
+    var shown = 0;
     for (final entry in coverage['entries'] as List) {
-      if (entry['status'] == 'blocked')
+      if (entry['status'] == 'blocked' && shown++ < 5)
         stdout.writeln(
           '  ${entry['file']}:${entry['line']} ${entry['widget']}: ${entry['blocker']}',
         );
     }
+    if (shown > 5)
+      stdout.writeln('  … ${shown - 5} more blockers in the report');
     stdout.writeln('Full report: ${output.path}');
   } catch (error) {
     stderr.writeln(error);
@@ -254,10 +304,10 @@ for (const region of document.querySelectorAll('[data-filter-list]')) {
 
 const _styles = '''
 * { box-sizing: border-box; }
-body { margin: 0; background: #f4f6f9; color: #182b42;
+body { margin: 0; background: #faf9f6; color: #202422;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.5; }
-main { max-width: 960px; margin: 48px auto; background: white; border-radius: 20px;
-  border: 1px solid #dbe2ea; overflow: hidden; }
+main { max-width: 960px; margin: 0 auto; background: #fff; border-radius: 0;
+  overflow: hidden; }
 p, h1, h2, h3, h4, h5, h6 { margin: 0; white-space: pre-wrap; }
 .island-shell { position: relative; width: 100%; border: 1px solid #dbe2ea;
   border-radius: 12px; overflow: hidden; background: #f4f6f9; }
@@ -276,5 +326,18 @@ button:disabled { opacity: .65; cursor: wait; }
 .filter-status { font-size:13px; color:#51647b; padding:10px 0; }
 .dom-filter ul { list-style:none; padding:0; margin:0; }
 .dom-filter li { padding:12px 16px; border:1px solid #dbe2ea; border-radius:8px; margin-bottom:8px; }
-@media (max-width: 600px) { main { margin: 12px; } }
+img { display:block; border-radius:12px; width:100%; }
+h1 { letter-spacing:-.045em; line-height:1.12; }
+h2 { letter-spacing:-.025em; }
+.table-scroll { max-width:100%; overflow-x:auto; }
+table { border-collapse:collapse; width:100%; text-align:left; font-size:13px; }
+th,td { padding:16px 18px; border-bottom:1px solid #e7e7e2; white-space:nowrap; }
+th { font-size:11px; color:#68726c; text-transform:uppercase; letter-spacing:.06em; }
+@media (max-width: 600px) { main { margin: 0; } h1 { font-size:32px !important; } }
+
 ''';
+
+String _accent(String value) =>
+    stdout.supportsAnsiEscapes && !Platform.environment.containsKey('NO_COLOR')
+    ? '\x1b[1;36m$value\x1b[0m'
+    : value;

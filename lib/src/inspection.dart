@@ -11,7 +11,10 @@ class ProjectInspector {
   Map<String, Object?> inspect(String projectPath) {
     final project = Directory(p.absolute(projectPath));
     final lib = Directory(p.join(project.path, 'lib'));
-    if (!lib.existsSync()) throw ArgumentError('Project must contain lib/.');
+    if (!lib.existsSync())
+      throw ArgumentError(
+        'No lib/ directory at ${project.path}. Use a real Flutter project, e.g. --project examples/catalog.',
+      );
     final files =
         lib
             .listSync(recursive: true, followLinks: false)
