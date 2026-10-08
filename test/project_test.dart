@@ -425,7 +425,7 @@ class Page extends StatelessWidget {
 import 'package:flutter/widgets.dart';
 class Page extends StatelessWidget {
  const Page();
- Widget build(BuildContext context) { final content = 'runtime'; return Text(content); }
+ Widget build(BuildContext context) => Text(DateTime.now().toString());
 }
 """);
       final syntax = ProjectInspector().inspect(directory.path);

@@ -16,3 +16,5 @@ The build emits static HTML/CSS. `report.json` identifies resolved analysis and 
 This is a parser fixture, not a new visual showcase. It uses the same documented static widget subset. The web build selects `platform_web.dart`; the native branch remains ordinary Flutter source. Arbitrary third-party widget packages, custom conditional variables, state and dynamic logic are unsupported.
 
 Run `dart run bin/flutter_dom.dart inspect --project examples/multifile --resolve-imports` to check both parameterless roots and actual constructor calls in the resolved web graph. `Heading` needs a title in isolation, but its real call with `content.title` compiles.
+
+The separate [sample_stat.dart](lib/sample_stat.dart) fixture and [preview configuration](flutter_dom.preview.json) demonstrate local static calculations, positional fields and explicit theme snapshots. See the [preview guide](../../docs/COMPONENT_PREVIEWS.md).

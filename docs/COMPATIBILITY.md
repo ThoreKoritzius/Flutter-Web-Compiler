@@ -6,12 +6,12 @@ This document describes implemented behavior. The roadmap is not part of the com
 
 - Default mode: one Dart source file selected with `--source` (default `lib/main.dart`). Opt-in resolved project mode is described below.
 - Local classes directly extending `StatelessWidget`.
-- A single return expression in `build`, either arrow syntax or a block with one return.
+- A return expression in `build`, either arrow syntax or a block with initialized `final`/`const` locals followed by one return. Mutable/late locals, side-effect statements and control-flow statements remain unsupported.
 - Literal strings, adjacent strings, numbers, booleans, null and literal lists.
 - Same-file top-level `const` values (including forward references), boolean `!`, list `if`/`else`, list spreads and null-aware spreads. Only selected branches are evaluated.
-- Named `this.field` parameters bound to final instance fields, with required arguments or literal defaults. `super.key` is allowed.
+- Named or positional `this.field` parameters bound to final instance fields, including required inputs and supported static defaults. `super.key` is allowed.
 - Static data is resolved per widget instance; child widgets can be passed through constructor fields too.
-- No named/factory/redirecting constructors, constructor bodies, initializer lists, positional field arguments or mutable fields.
+- No named/factory/redirecting constructors, constructor bodies, initializer lists or mutable fields.
 - No imported custom widgets, aliases, complete symbol/type resolution, runtime getters, collection `for`/patterns, async builders or API data loading.
 
 The parser recognizes unprefixed constructor names syntactically. This assumes they refer to the expected Flutter APIs; shadowed names are not resolved. Input should also pass `flutter analyze`. Parsing is not evidence of semantic compatibility.
@@ -137,3 +137,12 @@ The compiler evaluates the original resolved constructor AST, so it does not gen
 Checks are bounded to 1,000 constructor sites, sorted by source file and offset. `callSites` reports total, checked, skipped, limit, separate outcome counts and located entries. Skipped sites are not classified. Root records keep the prior `status`, `native`, `total` and `percent` fields for consumers, with new `category`, diagnostic `code`, `needsInputs` and `unsupported` fields. The resolved CLI/Markdown view uses categories; the legacy percentage still means parameterless-root acceptance only.
 
 An apparent score decrease can reflect a different graph: a whole-project syntax scan may accept a non-web fallback whose selected web implementation is unsupported. Compare graph and metric before interpreting differences as a regression.
+
+
+### Static component data flow and themes
+
+Initialized local final/const values are evaluated in order, with per-instance scope and separate `this.field` bindings. Numeric arithmetic (`+`, `-`, `*`, `/`, `~/`, `%`), numeric comparisons, short-circuit boolean operations and string concatenation are supported within the existing operation budget. Division by zero and non-finite results fail. This is bounded static evaluation, not arbitrary Dart execution or runtime state translation. Primitive constructor field types are checked; numeric inputs to explicit double fields are promoted to double.
+
+An explicit `staticTheme` snapshot enables Theme.of, selected textTheme/colorScheme properties, TextStyle.copyWith and Color.withValues(alpha:). No theme values are guessed from application startup. Text supports positive maxLines through browser CSS line clamping; truncation and text metrics are approximate. Container supports BoxDecoration with a static theme color and BorderRadius.circular. Unsupported decoration/style fields still fail.
+
+The [component preview guide](COMPONENT_PREVIEWS.md) documents configuration-driven composition and static constructor arguments. Reports distinguish `componentPreview` and `staticThemeProvided`; neither proves general application compatibility. Inspector runs without these snapshots remain conservative.

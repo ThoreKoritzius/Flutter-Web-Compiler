@@ -1,0 +1,16 @@
+{
+  "title": "Activity summary",
+  "theme": "dark",
+  "staticTheme": {
+    "textTheme": {
+      "titleMedium": {"fontSize": 28},
+      "labelMedium": {"fontSize": 13}
+    },
+    "colorScheme": {"onSurfaceVariant": "#a8b0c5"}
+  },
+  "preview": [
+    {"root": "SampleStat", "positionalArguments": ["Completed"], "arguments": {"value": "24"}},
+    {"root": "SampleStat", "positionalArguments": ["In progress"], "arguments": {"value": "6"}},
+    {"root": "SampleStat", "positionalArguments": ["Remaining"], "arguments": {"value": "12"}}
+  ]
+}

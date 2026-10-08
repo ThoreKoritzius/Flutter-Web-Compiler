@@ -358,6 +358,11 @@ for (const region of document.querySelectorAll('[data-filter-list]')) {
 
 const _styles = '''
 * { box-sizing: border-box; }
+.dom-preview { padding:clamp(20px,5vw,64px); }
+.dom-preview > p { color:#949aac; margin:12px 0 28px; }
+.dom-preview-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr)); gap:16px; }
+.dom-preview-card { padding:24px; border:1px solid #353842; border-radius:18px; min-width:0; }
+
 body { margin: 0; background: #faf9f6; color: #202422;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.5; }
 main { max-width: 960px; margin: 0 auto; background: #fff; border-radius: 0;

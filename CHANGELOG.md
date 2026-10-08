@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compile initialized static locals, numeric arithmetic and positional field constructors.
+- Add explicit theme snapshots, supported text-style/color operations and basic decoration.
+- Add configuration-driven previews of original components with primitive mock inputs.
+
 - Separate missing constructor inputs from unsupported root behavior in resolved inspection.
 - Evaluate actual resolved constructor call sites, with explicit context requirements and bounded, reported work.
 - Replace the resolved CLI headline percentage with root and call-site outcome counts.

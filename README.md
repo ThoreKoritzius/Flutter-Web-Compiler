@@ -88,6 +88,10 @@ flutter_dom build web
 
 The SDK is unchanged: `flutter build dom` is not an official command. Builds show elapsed time, native boundary counts, adapter/island counts and initial file size. Flutter subprocess output is saved to `flutter-build.log`; use `--verbose` to display it. Terminal colors respect `NO_COLOR`. Inspection shows the first five blockers with the complete list in JSON/Markdown.
 
+## Preview a component before porting the whole app
+
+Use explicit constructor inputs and a static theme snapshot to compile existing stateless components without booting application services. See the [component preview guide](docs/COMPONENT_PREVIEWS.md) and [reproducible fixture](examples/multifile/flutter_dom.preview.json). Preview composition and mock data are explicit; this does not infer the application's live theme, state or screen layout.
+
 ## Compared with Flutter Web
 
 | Concern | Flutter Web | This prototype |

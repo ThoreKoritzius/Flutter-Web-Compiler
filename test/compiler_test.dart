@@ -53,7 +53,7 @@ void main() {
 
   test('rejects unsupported named arguments with source location', () {
     expect(
-      () => compiler.compile(app('const Text("Hello", maxLines: 1)'), {}),
+      () => compiler.compile(app('const Text("Hello", softWrap: false)'), {}),
       throwsA(
         isA<CompileException>().having(
           (e) => e.message,

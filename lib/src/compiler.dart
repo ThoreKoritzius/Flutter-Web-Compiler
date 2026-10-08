@@ -37,6 +37,21 @@ class _Call {
   final int line;
 }
 
+class _StaticObject {
+  _StaticObject(this.fields);
+  final Map<String, Object?> fields;
+}
+
+class _StaticColor {
+  _StaticColor(this.hex, [this.alpha = 1]);
+  final String hex;
+  final double alpha;
+  String get css {
+    final n = int.parse(hex.substring(1), radix: 16);
+    return 'rgba(${n >> 16},${(n >> 8) & 255},${n & 255},$alpha)';
+  }
+}
+
 /// Deliberately static: never executes the input application.
 class FlutterDomCompiler {
   Future<Compilation> compileProject(
@@ -76,7 +91,12 @@ class FlutterDomCompiler {
               in result.unit.declarations.whereType<ClassDeclaration>())
             node.name.lexeme: node,
         };
-    final rootName = config['root'] as String? ?? discoverRoot(source);
+    final previews = config['preview'] as List?;
+    final rootName =
+        config['root'] as String? ??
+        (previews != null && previews.isNotEmpty
+            ? (previews.first as Map)['root'] as String
+            : discoverRoot(source));
     final root = resolved?.root(rootName) ?? rootName;
     final islandConfig = Map<String, dynamic>.from(
       config['islands'] as Map? ?? {},
@@ -110,6 +130,7 @@ class FlutterDomCompiler {
     var darkTheme = false;
     final stack = <String>[];
     var scope = <String, Object?>{};
+    var instanceFields = <String, Object?>{};
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
     for (final declaration
@@ -144,6 +165,65 @@ class FlutterDomCompiler {
           code: code,
         );
 
+    _StaticColor color(Object? input) {
+      if (input is _StaticColor) return input;
+      if (input is! String || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(input)) {
+        fail('Static theme colors require six-digit hex values.');
+      }
+      return _StaticColor(input);
+    }
+
+    final themeConfig = config['staticTheme'];
+    _StaticObject? staticTheme;
+    if (themeConfig != null) {
+      if (themeConfig is! Map ||
+          themeConfig.keys.any(
+            (k) => !['textTheme', 'colorScheme'].contains(k),
+          )) {
+        fail('staticTheme accepts textTheme and colorScheme only.');
+      }
+      if ((themeConfig['colorScheme'] != null &&
+              themeConfig['colorScheme'] is! Map) ||
+          (themeConfig['textTheme'] != null &&
+              themeConfig['textTheme'] is! Map))
+        fail('Static theme groups must be maps.');
+      final colors = <String, Object?>{};
+      final styles = <String, Object?>{};
+      for (final entry in (themeConfig['colorScheme'] as Map? ?? {}).entries) {
+        colors[entry.key as String] = color(entry.value);
+      }
+      for (final entry in (themeConfig['textTheme'] as Map? ?? {}).entries) {
+        if (entry.value is! Map) fail('Static text styles must be maps.');
+        final properties = Map<String, Object?>.from(entry.value as Map);
+        if (properties.keys.any(
+          (k) => !['fontSize', 'fontWeight', 'color'].contains(k),
+        ))
+          fail('Unsupported static text style property.');
+        if (properties['color'] != null)
+          properties['color'] = color(properties['color']);
+        styles[entry.key as String] = _Call('TextStyle', [], properties, 1);
+      }
+      staticTheme = _StaticObject({
+        'textTheme': _StaticObject(styles),
+        'colorScheme': _StaticObject(colors),
+      });
+    }
+
+    Object? property(Object? target, String name) {
+      if (target is _StaticObject && target.fields.containsKey(name))
+        return target.fields[name];
+      fail('Unsupported or missing static property $name.');
+    }
+
+    bool staticReceiver(Expression? node) => switch (node) {
+      SimpleIdentifier n => scope.containsKey(n.name),
+      PrefixedIdentifier n => scope.containsKey(n.prefix.name),
+      PropertyAccess n => staticReceiver(n.target),
+      MethodInvocation n =>
+        n.methodName.name == 'of' || staticReceiver(n.target),
+      _ => false,
+    };
+
     Object? value(Expression expression) {
       currentNode = expression;
       final line = (resolved?.unitFor(expression).lineInfo ?? result.lineInfo)
@@ -176,6 +256,41 @@ class FlutterDomCompiler {
           fail('Only static primitive values may be interpolated.', line);
         }).join();
       }
+      if (expression is BinaryExpression) {
+        final op = expression.operator.lexeme;
+        final a = value(expression.leftOperand);
+        if (op == '&&' || op == '||') {
+          if (a is! bool) fail('Boolean operator requires booleans.', line);
+          if (op == '&&' && !a || op == '||' && a) return a;
+          final b = value(expression.rightOperand);
+          if (b is! bool) fail('Boolean operator requires booleans.', line);
+          return b;
+        }
+        final b = value(expression.rightOperand);
+        if (op == '+' && a is String && b is String) return a + b;
+        if (a is! num || b is! num)
+          fail('Arithmetic requires static numbers.', line);
+        if (['/', '~/', '%'].contains(op) && b == 0)
+          fail('Division by zero.', line);
+        final Object number = switch (op) {
+          '+' => a + b,
+          '-' => a - b,
+          '*' => a * b,
+          '/' => a / b,
+          '~/' => a ~/ b,
+          '%' => a % b,
+          '<' => a < b,
+          '>' => a > b,
+          '<=' => a <= b,
+          '>=' => a >= b,
+          '==' => a == b,
+          '!=' => a != b,
+          _ => fail('Unsupported static operator $op.', line),
+        };
+        if (number is num && !number.isFinite)
+          fail('Arithmetic must remain finite.', line);
+        return number;
+      }
       if (expression is IntegerLiteral) return expression.value;
       if (expression is DoubleLiteral) return expression.value;
       if (expression is BooleanLiteral) return expression.value;
@@ -199,11 +314,14 @@ class FlutterDomCompiler {
           fail('Constant nesting limit exceeded.', line);
         resolving.add(name);
         final previous = scope;
+        final previousFields = instanceFields;
+        instanceFields = {};
         scope = {}; // Top-level initializers cannot capture widget fields.
         try {
           return constantValues[name] = value(constants[name]!);
         } finally {
           scope = previous;
+          instanceFields = previousFields;
           resolving.removeLast();
         }
       }
@@ -214,8 +332,8 @@ class FlutterDomCompiler {
       }
       if (expression is PropertyAccess &&
           expression.target is ThisExpression &&
-          scope.containsKey(expression.propertyName.name)) {
-        return scope[expression.propertyName.name];
+          instanceFields.containsKey(expression.propertyName.name)) {
+        return instanceFields[expression.propertyName.name];
       }
       if (expression is PrefixExpression && expression.operator.lexeme == '-') {
         final operand = value(expression.operand);
@@ -260,6 +378,76 @@ class FlutterDomCompiler {
           append(element);
         }
         return items;
+      }
+      if (expression is MethodInvocation) {
+        final method = expression.methodName.name;
+        final element = expression.methodName.element;
+        final frameworkTheme = resolved == null
+            ? expression.target?.toSource() == 'Theme'
+            : element?.enclosingElement2?.name3 == 'Theme' &&
+                  element?.library2?.uri.toString().startsWith(
+                        'package:flutter/',
+                      ) ==
+                      true;
+        if (method == 'of' && frameworkTheme) {
+          if (staticTheme == null)
+            fail(
+              'Theme.of requires an explicit staticTheme snapshot; inherited themes are not inferred.',
+              line,
+            );
+          if (expression.argumentList.arguments.length != 1)
+            fail('Theme.of expects context.', line);
+          return staticTheme;
+        }
+        if (expression.target != null &&
+            ['copyWith', 'withValues'].contains(method)) {
+          final target = value(expression.target!);
+          final args = <String, Object?>{};
+          for (final arg in expression.argumentList.arguments) {
+            if (arg is! NamedExpression)
+              fail('$method requires named arguments.', line);
+            args[arg.name.label.name] = value(arg.expression);
+          }
+          if (method == 'copyWith' &&
+              target is _Call &&
+              target.name == 'TextStyle') {
+            return _Call(
+              'TextStyle',
+              [],
+              {
+                ...target.named,
+                for (final entry in args.entries)
+                  if (entry.value != null) entry.key: entry.value,
+              },
+              line,
+              expression,
+            );
+          }
+          if (method == 'withValues' &&
+              target is _StaticColor &&
+              args.keys.every((k) => k == 'alpha')) {
+            final alpha = args['alpha'] ?? target.alpha;
+            if (alpha is! num || !alpha.isFinite || alpha < 0 || alpha > 1)
+              fail('Color alpha must be between zero and one.', line);
+            return _StaticColor(target.hex, alpha.toDouble());
+          }
+          fail('Unsupported static $method target.', line);
+        }
+      }
+      if (expression is PrefixedIdentifier &&
+          scope.containsKey(expression.prefix.name)) {
+        return property(
+          scope[expression.prefix.name],
+          expression.identifier.name,
+        );
+      }
+      if (expression is PropertyAccess &&
+          expression.target is! ThisExpression &&
+          staticReceiver(expression.target)) {
+        return property(
+          value(expression.target!),
+          expression.propertyName.name,
+        );
       }
       if (expression is PrefixedIdentifier || expression is PropertyAccess) {
         if (resolved != null) return resolved.frameworkValue(expression);
@@ -331,7 +519,7 @@ class FlutterDomCompiler {
       if (number is! num || !number.isFinite || number < 0) {
         fail('Expected a finite non-negative layout number; found $number.');
       }
-      return '${number}px';
+      return '${number % 1 == 0 ? number.toStringAsFixed(0) : number}px';
     }
 
     String padding(Object? object) {
@@ -351,8 +539,10 @@ class FlutterDomCompiler {
       if (object is! _Call || object.name != 'TextStyle') {
         fail('Expected a TextStyle constructor.');
       }
-      check(object, {'fontSize', 'fontWeight'});
+      check(object, {'fontSize', 'fontWeight', 'color'});
       final css = <String>[];
+      if (object.named['color'] != null)
+        css.add('color:${color(object.named['color']).css}');
       if (object.named.containsKey('fontSize')) {
         css.add('font-size:${pixels(object.named['fontSize'])}');
       }
@@ -425,6 +615,7 @@ class FlutterDomCompiler {
           );
         }
         final allowed = <String>{};
+        var position = 0;
         final previous = scope;
         scope = {};
         try {
@@ -435,16 +626,21 @@ class FlutterDomCompiler {
             if (parameter is SuperFormalParameter &&
                 parameter.name.lexeme == 'key')
               continue;
-            if (parameter is! FieldFormalParameter || !wrapped.isNamed) {
-              fail(
-                '$name supports only named this.field parameters and super.key.',
-              );
+            if (parameter is! FieldFormalParameter) {
+              fail('$name supports only this.field parameters and super.key.');
             }
             final field = parameter.name.lexeme;
-            allowed.add(field);
-            if (call.named.containsKey(field)) {
-              bindings[field] = call.named[field];
-            } else if (wrapped.isRequiredNamed) {
+            final named = wrapped.isNamed;
+            if (named) allowed.add(field);
+            final provided = named
+                ? call.named.containsKey(field)
+                : position < call.positional.length;
+            if (provided) {
+              bindings[field] = named
+                  ? call.named[field]
+                  : call.positional[position];
+            } else if (wrapped.isRequiredNamed ||
+                wrapped.isRequiredPositional) {
               fail(
                 '$name is missing required argument $field.',
                 call.line,
@@ -458,11 +654,32 @@ class FlutterDomCompiler {
                   ? null
                   : value(defaultValue);
             }
+            if (!named) position++;
           }
         } finally {
           scope = previous;
         }
-        check(call, allowed);
+        if (call.positional.length > position)
+          fail('$name has too many positional arguments.', call.line);
+        check(call, allowed, call.positional.length);
+      }
+      for (final declaration in fields) {
+        final declaredType = declaration.fields.type?.toSource();
+        for (final field in declaration.fields.variables) {
+          final name = field.name.lexeme;
+          if (!bindings.containsKey(name) || declaredType == null) continue;
+          final item = bindings[name];
+          if (item == null && declaredType.endsWith('?')) continue;
+          final type = declaredType.replaceAll('?', '');
+          if (type == 'double' && item is num) {
+            bindings[name] = item.toDouble();
+          } else if (type == 'double' ||
+              type == 'int' && item is! int ||
+              type == 'String' && item is! String ||
+              type == 'bool' && item is! bool) {
+            fail('Constructor field $name requires $declaredType.');
+          }
+        }
       }
       final declared = fields
           .expand((field) => field.fields.variables.map((v) => v.name.lexeme))
@@ -480,20 +697,45 @@ class FlutterDomCompiler {
       if (methods.length != 1) fail('$name needs one build method.');
       final body = methods.single.body;
       Expression? expression;
+      final locals = <VariableDeclaration>[];
       if (body is ExpressionFunctionBody) expression = body.expression;
-      if (body is BlockFunctionBody && body.block.statements.length == 1) {
-        final statement = body.block.statements.single;
-        if (statement is ReturnStatement) expression = statement.expression;
+      if (body is BlockFunctionBody && body.block.statements.isNotEmpty) {
+        final statements = body.block.statements;
+        if (statements.last is ReturnStatement) {
+          expression = (statements.last as ReturnStatement).expression;
+          for (final statement in statements.take(statements.length - 1)) {
+            if (statement is! VariableDeclarationStatement ||
+                !(statement.variables.isFinal || statement.variables.isConst) ||
+                statement.variables.lateKeyword != null ||
+                statement.variables.variables.any(
+                  (v) => v.initializer == null,
+                )) {
+              fail(
+                '$name.build supports only initialized final/const locals followed by return.',
+              );
+            }
+            locals.addAll(statement.variables.variables);
+          }
+        }
       }
       if (expression == null)
-        fail('$name.build must contain a single return expression.');
+        fail('$name.build must contain a return expression.');
       stack.add(name);
       final previous = scope;
-      scope = bindings;
+      final previousFields = instanceFields;
+      scope = {...bindings};
+      instanceFields = bindings;
       try {
+        final localNames = <String>{};
+        for (final local in locals) {
+          if (!localNames.add(local.name.lexeme))
+            fail('Duplicate local ${local.name.lexeme}.');
+          scope[local.name.lexeme] = value(local.initializer!);
+        }
         return render(value(expression));
       } finally {
         scope = previous;
+        instanceFields = previousFields;
         stack.removeLast();
       }
     }
@@ -672,7 +914,7 @@ class FlutterDomCompiler {
           }).join();
           return '<div class="table-scroll"><table><thead><tr>$header</tr></thead><tbody>$body</tbody></table></div>';
         case 'Text':
-          check(call, {'style', 'textAlign'}, 1);
+          check(call, {'style', 'textAlign', 'maxLines'}, 1);
           if (call.positional.single is! String)
             fail('Text requires a literal string.', call.line);
           final key = n['key'];
@@ -683,6 +925,13 @@ class FlutterDomCompiler {
           }
           final tag = heading == null ? 'p' : 'h$heading';
           var style = n['style'] == null ? '' : textStyle(n['style']);
+          if (n['maxLines'] != null) {
+            final lines = n['maxLines'];
+            if (lines is! int || lines < 1)
+              fail('Text maxLines must be a positive integer.');
+            style +=
+                ';display:-webkit-box;-webkit-line-clamp:$lines;-webkit-box-orient:vertical;overflow:hidden';
+          }
           if (n['textAlign'] != null) {
             final align = {
               'TextAlign.left': 'left',
@@ -735,11 +984,32 @@ class FlutterDomCompiler {
         case 'Center':
           check(call, switch (call.name) {
             'Padding' => {'padding', 'child'},
-            'Container' => {'padding', 'width', 'height', 'child'},
+            'Container' => {
+              'padding',
+              'width',
+              'height',
+              'child',
+              'decoration',
+            },
             'SizedBox' => {'width', 'height', 'child'},
             _ => {'child'},
           });
           final styles = <String>[];
+          if (n['decoration'] != null) {
+            final decoration = n['decoration'];
+            if (decoration is! _Call || decoration.name != 'BoxDecoration')
+              fail('Expected BoxDecoration.');
+            check(decoration, {'color', 'borderRadius'});
+            if (decoration.named['color'] != null)
+              styles.add('background:${color(decoration.named['color']).css}');
+            final radius = decoration.named['borderRadius'];
+            if (radius != null) {
+              if (radius is! _Call || radius.name != 'BorderRadius.circular')
+                fail('Only circular border radius is supported.');
+              check(radius, {}, 1);
+              styles.add('border-radius:${pixels(radius.positional.single)}');
+            }
+          }
           if (call.name == 'Padding' && n['padding'] == null)
             fail('Padding requires padding.');
           if (n['padding'] != null)
@@ -757,9 +1027,37 @@ class FlutterDomCompiler {
       }
     };
 
-    final body = entryExpression == null
-        ? buildClass(root)
-        : render(value(entryExpression));
+    _Call configuredCall(String name, Map item) {
+      final named = Map<String, Object?>.from(item['arguments'] as Map? ?? {});
+      final positional = List<Object?>.from(
+        item['positionalArguments'] as List? ?? [],
+      );
+      bool primitive(Object? v) =>
+          v == null || v is String || v is bool || v is num && v.isFinite;
+      if (!named.values.every(primitive) || !positional.every(primitive))
+        fail('Preview arguments must be finite primitive JSON values.');
+      return _Call(name, positional, named, 1);
+    }
+
+    final String body;
+    if (previews != null) {
+      if (previews.isEmpty || previews.length > 60 || entryExpression != null)
+        fail('Preview requires 1–60 component entries.');
+      final cards = previews.map((item) {
+        if (item is! Map || item['root'] is! String)
+          fail('Preview entries require a root.');
+        final name =
+            resolved?.root(item['root'] as String) ?? item['root'] as String;
+        return '<section class="dom-preview-card">${buildClass(name, configuredCall(name, item))}</section>';
+      }).join();
+      body =
+          '<main class="dom-preview"><h1>${_escape(config['title'] as String? ?? 'Component preview')}</h1>'
+          '<p>Mock data</p><div class="dom-preview-grid">$cards</div></main>';
+    } else {
+      body = entryExpression == null
+          ? buildClass(root, configuredCall(root, config))
+          : render(value(entryExpression));
+    }
     final title = _escape(config['title'] as String? ?? rootName);
     final description = _escape(config['description'] as String? ?? '');
     final lang = _escape(config['lang'] as String? ?? 'en');
@@ -776,6 +1074,8 @@ class FlutterDomCompiler {
         '</body></html>\n';
     return Compilation(html, {
       'root': rootName,
+      'componentPreview': previews != null,
+      'staticThemeProvided': staticTheme != null,
       'analysis': resolved == null ? 'single-file syntax' : 'resolved project',
       if (resolved != null)
         'sourceFiles': resolved.units

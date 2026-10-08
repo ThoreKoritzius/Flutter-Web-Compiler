@@ -67,3 +67,10 @@ The real multi-file Flutter fixture passes `flutter analyze`, builds to DOM with
 56 tests pass and analysis is clean. Regression cases distinguish a non-web fallback from an unsupported selected web implementation, compile real constructor arguments without guessing missing inputs, retain runtime identifiers as context requirements, and verify the 1,000-site cap reports skipped work explicitly.
 
 The real multi-file CLI inspection reports one static root and one input-dependent root, while both actual constructor sites compile. This verifies the distinction between declaration-level acceptance and supplied-input evaluation. It does not establish runtime reachability or full application conversion. Resolved inspection schema 4 keeps legacy root fields for readers and adds categories, diagnostic codes and call-site records.
+
+
+## Static component previews — 2026-10-08
+
+62 tests pass, `dart analyze` is clean, and the reusable sample-stat fixture passes Flutter analysis and a resolved DOM-only CLI build. Coverage includes local scope and field shadowing, arithmetic, positional/default constructor inputs, scalar type promotion, explicit theme snapshots, null copyWith behavior, color alpha/decoration and rejection of mutable locals, side effects and unsafe CSS values. A previous unsupported-maxLines test now uses unsupported softWrap; maxLines has a supported approximate CSS mapping. Preview layout was checked at desktop and 390 px phone width.
+
+This validates static components with supplied inputs. It does not establish live theme parity, provider/lifecycle behavior, full app startup or interactive application conversion. Existing full-showcase benchmark snapshots were not regenerated for this feature.
