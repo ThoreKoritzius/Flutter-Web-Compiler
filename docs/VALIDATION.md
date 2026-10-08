@@ -46,3 +46,10 @@ The health demo's restricted painter compiler passes `dart run tool/check_health
 ## Static-data parser update — 2026-10-08
 
 `dart analyze` passes and the compiler suite now has 39 passing tests. Added coverage includes forward constant references, conditional/spread lists, null-aware spreads, constructor shadowing/defaults, isolated top-level scope, cycles, invalid conditions/spreads, unsupported patterns/loops and bounded collection expansion. Earlier browser/benchmark results above retain their original date; this parser change does not constitute a new performance audit.
+
+
+## Resolved project parser — 2026-10-08
+
+`dart analyze` passes; 49 tests pass, including ten resolver cases for prefixes, exports, duplicate class names, constants, package-local imports, parts, import cycles, private roots, missing/ambiguous imports, source diagnostics and rejection of function-name impersonation/conditional imports. Resolver unit tests use minimal framework declarations to run without Flutter; separate real Flutter checks compile the catalog and the five-file `examples/multifile` fixture with `--resolve-imports`. The latter also passes `flutter analyze` and emits static HTML/CSS with no adapters or engine. CI now installs/analyzes/builds that fixture. These are local results; remote CI completion is not implied.
+
+The health fixture also builds with resolved analysis. Its five SVG charts match the existing syntax-mode build exactly; resolved Paint/Path/Rect constructors are checked against dart:ui declarations.

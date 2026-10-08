@@ -4,7 +4,7 @@ The practical product is an additional web build target for document-oriented pa
 
 ## Largest engineering gaps
 
-1. **Resolved, multi-file Dart analysis.** Today constructor recognition is syntactic and local to one source file. Resolve imports, symbols, generic types and reachable widget definitions before expanding the supported subset. Keep source locations and actionable diagnostics in an intermediate representation.
+1. **Resolved, multi-file Dart analysis.** Opt-in project analysis now resolves project-local imports, symbols, exports and parts. Complete generic/type semantics, imported adapter/island boundaries and inspection integration before broadening the compatibility claim. Keep source locations and actionable diagnostics in an intermediate representation.
 2. **Layout semantics.** Flutter constraints, intrinsic sizing, scrolling, slivers, text measurement and CSS layout are different models. Publish supported mappings and test them across viewport sizes. Exact pixel fidelity would undermine much of the advantage of using the browser's layout engine.
 3. **State and lifecycle.** `setState`, element identity/keys, inherited context, providers, controllers, disposal, effects and asynchronous rebuilding need a coherent DOM runtime. Implement a small stateful vertical slice, then provider integrations. Do not translate arbitrary callbacks by substituting strings.
 4. **Application boundaries.** Routing, URLs, hydration, API calls, authentication, plugin initialization and state crossing between DOM and Flutter islands need explicit contracts. Server-rendered data must agree with client state without exposing server-only values.
@@ -16,7 +16,7 @@ Prefer Dart's existing JavaScript compiler for supported business logic. Transla
 
 ## Feasible milestones
 
-- Resolved cross-file static pages, dependency graph and richer diagnostics.
+- Expand the implemented resolved cross-file static pages into inspection, structured diagnostics and dependency reporting.
 - A small native reactive runtime: local scalar state, events, conditional content and keyed lists, with interaction parity tests against Flutter.
 - Router and data-loading contracts, native forms and accessibility semantics.
 - Tested state/package adapters and robust island initialization/state boundaries.
@@ -27,7 +27,7 @@ A standalone CLI is the least coupled starting point. An IDE extension can surfa
 
 ## Immediate coverage priorities after images and tables
 
-1. Resolve imported widget definitions and symbols, preserving per-file diagnostics. This is the most useful next step for ordinary project structure.
+1. Build on resolved project-local definitions: integrate inspection, formalize source spans and lower into a typed intermediate representation.
 2. Extend the implemented same-file constants, collection `if` and spreads to collection `for`, then `Wrap` and constrained responsive layout.
 3. Add native links and a small controlled form/event contract with interaction parity tests.
 4. Implement one local-state slice before attempting broad Provider/Riverpod compatibility.
@@ -37,9 +37,9 @@ Image assets and static tables are implemented. Styling remains an approximate C
 
 ## Parser architecture and release gates
 
-Same-file static constants and list branches/spreads now share the compiler's bounded evaluator. The next architectural milestone is **resolved symbols**, before adding more name-based special cases:
+Same-file static constants and list branches/spreads now share the compiler's bounded evaluator. Opt-in **resolved symbols** are implemented for project-local libraries. The next milestone is a **typed intermediate representation**, before adding more rendering features:
 
-1. Use analyzer project contexts and package configuration to resolve the entry library and reachable declarations. Preserve library identity rather than merging source files or matching imported classes by short name. Test prefixes, exports, duplicate names, cycles and unavailable packages.
+1. Implemented: analyzer project contexts, package configuration, separate declaration identities and reachable local libraries; fixtures cover prefixes, exports, duplicate names, cycles and missing imports. Next: resolved inspection, structured diagnostic codes and explicit external-package boundaries.
 2. Separate source analysis, static evaluation and rendering using a typed intermediate representation with source spans. Keep explicit adapters distinguishable from automatically lowered widgets in reports.
 3. Add a capability diagnostic for every unsupported reachable operation. Keep existing fail-closed behavior; do not silently replace unknown widgets with placeholders or count adapters as translated internals.
 4. Compare representative supported fixtures against Flutter for content, geometry and interactions; distinguish semantic equivalence from approximate CSS layout. Version the supported subset alongside SDK fixtures.

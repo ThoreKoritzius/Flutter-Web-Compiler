@@ -135,6 +135,29 @@ class SvgPainter {
       }
       return target;
     }
+    if (node is InstanceCreationExpression) {
+      // Resolved analyzer ASTs represent constructor calls differently from parse-only ASTs.
+      // ignore: experimental_member_use
+      final constructor = node.constructorName.element;
+      if (constructor == null ||
+          constructor.library2.uri.toString() != 'dart:ui') {
+        unsupported(node);
+      }
+      final name = constructor.enclosingElement2.name3;
+      final suffix = node.constructorName.name?.name;
+      final args = node.argumentList.arguments;
+      if (suffix == null && args.isEmpty) {
+        if (name == 'Paint') return _Paint();
+        if (name == 'Path') return _Path();
+      }
+      if (name == 'Rect' && suffix == 'fromLTWH') {
+        final values = args.map(expression).map(number).toList();
+        if (values.length != 4 || values[2] < 0 || values[3] < 0)
+          unsupported(node);
+        return _Rect(values);
+      }
+      unsupported(node);
+    }
     if (node is MethodInvocation) {
       final name = node.methodName.name;
       if (node.target == null &&

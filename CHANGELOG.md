@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in `build --resolve-imports` with analyzer-backed local imports, exports, prefixes, parts and constants.
+- Preserve declaration identity and file locations across project libraries; add a multi-file Flutter fixture and CI build.
+
 - Evaluate same-file top-level constants with isolated scope, cycle detection and resource limits.
 - Compile static collection `if`/`else`, list spreads and null-aware spreads.
 - Reject unsupported collection patterns and runtime data explicitly.

@@ -1,6 +1,12 @@
+// Analyzer 7 element model is experimental; bounded by the package major version.
+// ignore_for_file: experimental_member_use
+
 import 'dart:convert';
 import 'chart.dart';
 import 'painter.dart';
+import 'project.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
@@ -21,7 +27,8 @@ class Compilation {
 }
 
 class _Call {
-  _Call(this.name, this.positional, this.named, this.line);
+  _Call(this.name, this.positional, this.named, this.line, [this.origin]);
+  final AstNode? origin;
   final String name;
   final List<Object?> positional;
   final Map<String, Object?> named;
@@ -30,20 +37,44 @@ class _Call {
 
 /// Deliberately static: never executes the input application.
 class FlutterDomCompiler {
+  Future<Compilation> compileProject(
+    String project,
+    String source,
+    Map<String, dynamic> config, {
+    bool domOnly = false,
+  }) async {
+    try {
+      final model = await ResolvedProject.load(project, source);
+      return compile(
+        File(source).readAsStringSync(),
+        config,
+        domOnly: domOnly,
+        resolved: model,
+      );
+    } on ArgumentError catch (error) {
+      throw CompileException(error.message.toString());
+    }
+  }
+
   Compilation compile(
     String source,
     Map<String, dynamic> config, {
     bool domOnly = false,
+    ResolvedProject? resolved,
   }) {
     final result = parseString(content: source, throwIfDiagnostics: false);
     if (result.errors.isNotEmpty) {
       throw CompileException(result.errors.first.toString());
     }
-    final classes = <String, ClassDeclaration>{
-      for (final node in result.unit.declarations.whereType<ClassDeclaration>())
-        node.name.lexeme: node,
-    };
-    final root = config['root'] as String? ?? discoverRoot(source);
+    final classes =
+        resolved?.classes ??
+        <String, ClassDeclaration>{
+          for (final node
+              in result.unit.declarations.whereType<ClassDeclaration>())
+            node.name.lexeme: node,
+        };
+    final rootName = config['root'] as String? ?? discoverRoot(source);
+    final root = resolved?.root(rootName) ?? rootName;
     final islandConfig = Map<String, dynamic>.from(
       config['islands'] as Map? ?? {},
     );
@@ -54,6 +85,22 @@ class FlutterDomCompiler {
     final nativeAdapters = Map<String, dynamic>.from(
       config['nativeAdapters'] as Map? ?? {},
     );
+    if (resolved != null) {
+      for (final mapping in [islandConfig, nativeAdapters]) {
+        for (final name in mapping.keys.toList()) {
+          final key = resolved.root(name);
+          if (!identical(
+            resolved.unitFor(classes[key]!).unit,
+            resolved.entry.unit,
+          )) {
+            throw CompileException(
+              'Imported adapter/island $name is not supported yet.',
+            );
+          }
+          mapping[key] = mapping.remove(name);
+        }
+      }
+    }
     final assets = <String>{};
     var adapterCount = 0;
     var filterCount = 0;
@@ -61,9 +108,12 @@ class FlutterDomCompiler {
     final stack = <String>[];
     var scope = <String, Object?>{};
     String? island;
-    final constants = <String, Expression>{};
+    final constants = <String, Expression>{...?resolved?.constants};
     for (final declaration
-        in result.unit.declarations.whereType<TopLevelVariableDeclaration>()) {
+        in (resolved == null
+                ? result.unit.declarations
+                : <CompilationUnitMember>[])
+            .whereType<TopLevelVariableDeclaration>()) {
       if (!declaration.variables.isConst) continue;
       for (final variable in declaration.variables.variables) {
         if (variable.initializer != null) {
@@ -80,11 +130,20 @@ class FlutterDomCompiler {
     final resolving = <String>[];
     var evaluationBudget = 20000;
 
-    Never fail(String message, [int? line]) =>
-        throw CompileException('${line == null ? '' : 'Line $line: '}$message');
+    AstNode? currentNode;
+    Never fail(String message, [int? line]) => throw CompileException(
+      '${resolved != null && currentNode != null
+          ? '${resolved.location(currentNode!)}: '
+          : line == null
+          ? ''
+          : 'Line $line: '}$message',
+    );
 
     Object? value(Expression expression) {
-      final line = result.lineInfo.getLocation(expression.offset).lineNumber;
+      currentNode = expression;
+      final line = (resolved?.unitFor(expression).lineInfo ?? result.lineInfo)
+          .getLocation(expression.offset)
+          .lineNumber;
       if (--evaluationBudget < 0)
         fail('Static evaluation budget exceeded.', line);
       if (expression is SimpleStringLiteral) return expression.value;
@@ -120,9 +179,13 @@ class FlutterDomCompiler {
           scope.containsKey(expression.name)) {
         return scope[expression.name];
       }
-      if (expression is SimpleIdentifier &&
-          constants.containsKey(expression.name)) {
-        final name = expression.name;
+      final constantName = resolved != null && expression is Identifier
+          ? resolved.symbol(expression.element)
+          : expression is SimpleIdentifier
+          ? expression.name
+          : null;
+      if (constantName != null && constants.containsKey(constantName)) {
+        final name = constantName;
         if (constantValues.containsKey(name)) return constantValues[name];
         if (resolving.contains(name)) {
           fail('Cyclic constant: ${[...resolving, name].join(' → ')}.', line);
@@ -193,13 +256,24 @@ class FlutterDomCompiler {
         }
         return items;
       }
-      if (expression is PrefixedIdentifier) return expression.toSource();
+      if (expression is PrefixedIdentifier || expression is PropertyAccess) {
+        if (resolved != null) return resolved.frameworkValue(expression);
+        if (expression is PrefixedIdentifier) return expression.toSource();
+      }
       String? name;
       ArgumentList? args;
       if (expression is InstanceCreationExpression) {
-        name = expression.constructorName.toSource();
+        name =
+            resolved?.constructor(expression) ??
+            expression.constructorName.toSource();
         args = expression.argumentList;
       } else if (expression is MethodInvocation) {
+        if (resolved != null) {
+          fail(
+            'Function/method calls are not static widget constructors: ${expression.toSource()}.',
+            line,
+          );
+        }
         name = expression.target == null
             ? expression.methodName.name
             : '${expression.target!.toSource()}.${expression.methodName.name}';
@@ -215,7 +289,7 @@ class FlutterDomCompiler {
             positional.add(value(argument));
           }
         }
-        return _Call(name, positional, named, line);
+        return _Call(name, positional, named, line, expression);
       }
       fail(
         'Expected a static literal or supported constructor; found '
@@ -225,6 +299,7 @@ class FlutterDomCompiler {
     }
 
     void check(_Call call, Set<String> named, [int positional = 0]) {
+      if (call.origin != null) currentNode = call.origin;
       final unknown = call.named.keys.toSet().difference({...named, 'key'});
       if (unknown.isNotEmpty || call.positional.length != positional) {
         fail(
@@ -289,11 +364,13 @@ class FlutterDomCompiler {
     late String Function(Object?) render;
     String buildClass(String name, [_Call? invocation]) {
       final node = classes[name];
+      if (node != null) currentNode = node;
       if (node == null)
-        fail(
-          'Unknown widget $name. Imported widgets are not expanded in v0.1.',
-        );
-      if (node.extendsClause?.superclass.toSource() != 'StatelessWidget') {
+        fail('Unknown widget $name or unsupported declaration.');
+      if ((resolved == null
+              ? node.extendsClause?.superclass.toSource()
+              : resolved.superclass(node)) !=
+          'StatelessWidget') {
         fail(
           '$name must be a StatelessWidget or an explicitly configured Flutter island.',
         );
@@ -322,7 +399,9 @@ class FlutterDomCompiler {
             name,
             [],
             {},
-            result.lineInfo.getLocation(node.offset).lineNumber,
+            (resolved?.unitFor(node).lineInfo ?? result.lineInfo)
+                .getLocation(node.offset)
+                .lineNumber,
           );
       if (constructors.isEmpty) {
         check(call, {});
@@ -411,6 +490,7 @@ class FlutterDomCompiler {
       if (object is! _Call)
         fail('Expected a widget constructor, found $object.');
       final call = object;
+      if (call.origin != null) currentNode = call.origin;
       final n = call.named;
       counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
       if (nativeAdapters.containsKey(call.name)) {
@@ -426,7 +506,10 @@ class FlutterDomCompiler {
         final adapter = nativeAdapters[call.name];
         if (adapter is Map && adapter['type'] == 'paint-chart') {
           check(call, {'label', 'display', 'values', 'color', 'kind'});
-          final painter = classes[adapter['painter']];
+          final painter =
+              classes[resolved == null
+                  ? adapter['painter']
+                  : resolved.root(adapter['painter'] as String)];
           if (painter == null ||
               painter.extendsClause?.superclass.toSource() != 'CustomPainter')
             fail('paint-chart requires a local CustomPainter class.');
@@ -493,7 +576,7 @@ class FlutterDomCompiler {
         if (island != null) fail('v0.1 supports one island instance per page.');
         if (!classes.containsKey(call.name))
           fail('Island must be declared in the input file.');
-        island = call.name;
+        island = resolved == null ? call.name : classes[call.name]!.name.lexeme;
         final options = Map<String, dynamic>.from(
           islandConfig[call.name] as Map,
         );
@@ -663,7 +746,7 @@ class FlutterDomCompiler {
     };
 
     final body = buildClass(root);
-    final title = _escape(config['title'] as String? ?? root);
+    final title = _escape(config['title'] as String? ?? rootName);
     final description = _escape(config['description'] as String? ?? '');
     final lang = _escape(config['lang'] as String? ?? 'en');
     final theme = config['theme'] ?? (darkTheme ? 'dark' : 'light');
@@ -678,7 +761,12 @@ class FlutterDomCompiler {
         '${island == null ? '' : '<script src="islands.js" defer></script>\n'}'
         '</body></html>\n';
     return Compilation(html, {
-      'root': root,
+      'root': rootName,
+      'analysis': resolved == null ? 'single-file syntax' : 'resolved project',
+      if (resolved != null)
+        'sourceFiles': resolved.units
+            .map((u) => p.relative(u.path, from: resolved.directory))
+            .toList(),
       'assets': assets.toList(),
       'widgets': counts,
       'island': island,
@@ -687,7 +775,10 @@ class FlutterDomCompiler {
       'initialFlutterBytes': 0,
       'rendering': 'static HTML; approximate CSS layout',
       'limitations': [
-        'Single source file',
+        if (resolved == null)
+          'Single source file'
+        else
+          'Project-local declarations; external widget packages unsupported',
         'Static data and named constructor fields only',
         'One explicit island',
         'No state bridge',
@@ -736,8 +827,11 @@ class _RunAppVisitor extends RecursiveAstVisitor<void> {
       if (argument is InstanceCreationExpression &&
           argument.constructorName.name == null) {
         roots.add(argument.constructorName.type.toSource());
-      } else if (argument is MethodInvocation && argument.target == null) {
-        roots.add(argument.methodName.name);
+      } else if (argument is MethodInvocation &&
+          (argument.target == null || argument.target is SimpleIdentifier)) {
+        roots.add(
+          '${argument.target == null ? '' : '${argument.target!.toSource()}.'}${argument.methodName.name}',
+        );
       }
     }
     super.visitMethodInvocation(node);

@@ -4,7 +4,7 @@ This document describes implemented behavior. The roadmap is not part of the com
 
 ## Static source model
 
-- One Dart source file, selected with `--source` (default `lib/main.dart`).
+- Default mode: one Dart source file selected with `--source` (default `lib/main.dart`). Opt-in resolved project mode is described below.
 - Local classes directly extending `StatelessWidget`.
 - A single return expression in `build`, either arrow syntax or a block with one return.
 - Literal strings, adjacent strings, numbers, booleans, null and literal lists.
@@ -103,3 +103,14 @@ const shared = [Text('Shared content')];
 ```
 
 Only `const` declarations are eligible; `final` globals, getters, imported constants, static class fields, arbitrary function calls and collection patterns remain unsupported. This syntax evaluator does not replace `flutter analyze` or perform full Dart type/constant validation. Unselected static branches and unused declarations are not compiled.
+
+
+### Resolved project analysis (experimental)
+
+`build --resolve-imports` uses analyzer project contexts and `.dart_tool/package_config.json`. Run `flutter pub get` beforehand. The entry must be within project `lib/`. The resolver follows reachable project-local imports/exports and library parts; relative and package-local URIs, prefixes and show/hide combinators use Dart's resolved namespaces. Local declarations are keyed by source path and symbol identity, so duplicate short names remain distinct. Class and constant ASTs retain their source files; compiler failures identify file/line/column. Report `sourceFiles` lists loaded project units, not every transitive SDK dependency.
+
+All analyzer errors in those project units fail the build, including errors in unused declarations of a loaded unit. Unrelated project files are not compiled. Package/SDK dependencies are resolved for symbol identity, but their custom widget implementations are not expanded. Framework constructors are recognized by resolved Flutter declarations; a local `Text` class or function is not treated as Flutter's `Text`.
+
+This first version rejects conditional imports/exports rather than choosing a potentially incorrect platform branch. Imported adapter/island declarations are also rejected; existing entry-file configurations remain supported. Named constructors, general methods/getters, inherited widget implementations and dynamic state retain their existing restrictions. `inspect` is still the documented single-file dry run; it does not yet use this mode. Root configuration accepts a name visible from the entry library, including an import prefix. The unflagged library/CLI API remains syntax-only.
+
+The analyzer 7 element model used here is experimental. Its APIs are isolated primarily in `project.dart`, the dependency is constrained below analyzer 8, and resolver fixtures run in CI. A stable project-analysis API and typed lowering representation remain future work.

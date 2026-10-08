@@ -67,6 +67,15 @@ The executable must be on your `PATH`, usually from Dart's `.pub-cache/bin`. Alt
 
 `build` (or `build web`) defaults to the current project, `lib/main.dart` and `build/dom`. It discovers a direct `runApp(MyApp())` root; `flutter_dom.json` is optional for plain supported pages and required for explicit adapter/island configuration. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative native compatibility score. Each recognized direct widget subclass is compiled as a parameterless DOM-only root; failures include source locations and reasons. This measures compiler acceptance, not the fraction of an entire application that works. Keep private inspection reports outside version control.
 
+For project-local imports, opt into analyzer-backed resolution:
+
+```sh
+# First run flutter pub get inside your Flutter project.
+flutter_dom build web --resolve-imports
+```
+
+This resolves relative/package-local imports, exports, prefixes, parts and same-project constants, preserving declaration identity. See the [multi-file example](examples/multifile/README.md). External widget packages and conditional imports are rejected when unsupported; arbitrary application state is still outside the subset. Without the flag, builds and `inspect` retain their existing single-file syntax behavior.
+
 This is an independent tool. It does not patch the SDK or add an official `flutter build dom` command. An editor extension can later wrap the same CLI.
 
 Inside your own Flutter app, after installing the CLI, use:

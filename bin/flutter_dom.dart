@@ -32,6 +32,11 @@ Future<void> main(List<String> arguments) async {
       defaultsTo: 'build/dom',
       help: 'Output relative to current directory.',
     )
+    ..addFlag(
+      'resolve-imports',
+      negatable: false,
+      help: 'Resolve project-local imports (requires flutter pub get).',
+    )
     ..addFlag('verbose', abbr: 'v', negatable: false)
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
     ..addFlag('help', abbr: 'h', negatable: false);
@@ -62,11 +67,18 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln(
       '\n${_accent('Flutter DOM')}  Building ${p.basename(project)}',
     );
-    final compiled = FlutterDomCompiler().compile(
-      input.readAsStringSync(),
-      config,
-      domOnly: args['dom-only'] as bool,
-    );
+    final compiled = args['resolve-imports'] as bool
+        ? await FlutterDomCompiler().compileProject(
+            project,
+            input.path,
+            config,
+            domOnly: args['dom-only'] as bool,
+          )
+        : FlutterDomCompiler().compile(
+            input.readAsStringSync(),
+            config,
+            domOnly: args['dom-only'] as bool,
+          );
     final output = Directory(p.absolute(args['output'] as String));
     output.createSync(recursive: true);
     if (compiled.island != null) {
