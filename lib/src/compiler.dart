@@ -61,12 +61,32 @@ class FlutterDomCompiler {
     final stack = <String>[];
     var scope = <String, Object?>{};
     String? island;
+    final constants = <String, Expression>{};
+    for (final declaration
+        in result.unit.declarations.whereType<TopLevelVariableDeclaration>()) {
+      if (!declaration.variables.isConst) continue;
+      for (final variable in declaration.variables.variables) {
+        if (variable.initializer != null) {
+          if (constants.containsKey(variable.name.lexeme)) {
+            throw CompileException(
+              'Duplicate constant ${variable.name.lexeme}.',
+            );
+          }
+          constants[variable.name.lexeme] = variable.initializer!;
+        }
+      }
+    }
+    final constantValues = <String, Object?>{};
+    final resolving = <String>[];
+    var evaluationBudget = 20000;
 
     Never fail(String message, [int? line]) =>
         throw CompileException('${line == null ? '' : 'Line $line: '}$message');
 
     Object? value(Expression expression) {
       final line = result.lineInfo.getLocation(expression.offset).lineNumber;
+      if (--evaluationBudget < 0)
+        fail('Static evaluation budget exceeded.', line);
       if (expression is SimpleStringLiteral) return expression.value;
       if (expression is AdjacentStrings) {
         final parts = expression.strings.map(value).toList();
@@ -100,6 +120,30 @@ class FlutterDomCompiler {
           scope.containsKey(expression.name)) {
         return scope[expression.name];
       }
+      if (expression is SimpleIdentifier &&
+          constants.containsKey(expression.name)) {
+        final name = expression.name;
+        if (constantValues.containsKey(name)) return constantValues[name];
+        if (resolving.contains(name)) {
+          fail('Cyclic constant: ${[...resolving, name].join(' → ')}.', line);
+        }
+        if (resolving.length >= 128)
+          fail('Constant nesting limit exceeded.', line);
+        resolving.add(name);
+        final previous = scope;
+        scope = {}; // Top-level initializers cannot capture widget fields.
+        try {
+          return constantValues[name] = value(constants[name]!);
+        } finally {
+          scope = previous;
+          resolving.removeLast();
+        }
+      }
+      if (expression is PrefixExpression && expression.operator.lexeme == '!') {
+        final operand = value(expression.operand);
+        if (operand is bool) return !operand;
+        fail('Static ! requires a boolean.', line);
+      }
       if (expression is PropertyAccess &&
           expression.target is ThisExpression &&
           scope.containsKey(expression.propertyName.name)) {
@@ -110,15 +154,44 @@ class FlutterDomCompiler {
         if (operand is num) return -operand;
       }
       if (expression is ListLiteral) {
-        return expression.elements.map((element) {
-          if (element is! Expression) {
+        final items = <Object?>[];
+        void append(CollectionElement element) {
+          if (--evaluationBudget < 0)
+            fail('Static evaluation budget exceeded.', line);
+          if (element is Expression) {
+            items.add(value(element));
+          } else if (element is IfElement) {
+            if (element.caseClause != null) {
+              fail('Collection if-case patterns are not supported.', line);
+            }
+            final condition = value(element.expression);
+            if (condition is! bool)
+              fail('Collection condition must be a boolean.', line);
+            if (condition) {
+              append(element.thenElement);
+            } else if (element.elseElement != null) {
+              append(element.elseElement!);
+            }
+          } else if (element is SpreadElement) {
+            final spread = value(element.expression);
+            if (spread == null && element.isNullAware) return;
+            if (spread is! List) fail('Static spread requires a list.', line);
+            if (items.length + spread.length > 20000) {
+              fail('Static collection size limit exceeded.', line);
+            }
+            items.addAll(spread);
+          } else {
             fail(
-              'Collection control flow and spreads are not supported.',
+              'Unsupported static collection element: ${element.toSource()}.',
               line,
             );
           }
-          return value(element);
-        }).toList();
+        }
+
+        for (final element in expression.elements) {
+          append(element);
+        }
+        return items;
       }
       if (expression is PrefixedIdentifier) return expression.toSource();
       String? name;

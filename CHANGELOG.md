@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Evaluate same-file top-level constants with isolated scope, cycle detection and resource limits.
+- Compile static collection `if`/`else`, list spreads and null-aware spreads.
+- Reject unsupported collection patterns and runtime data explicitly.
+
 - Add explicit `build` and `inspect` CLI commands, defaulting to the current project.
 - Add local project syntax inventories with JSON/Markdown output and explicit confidence limits.
 - Compile named final constructor fields and literal defaults in simple stateless widgets.

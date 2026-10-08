@@ -17,7 +17,7 @@ An experimental Dart CLI that compiles a supported subset of existing Flutter UI
 - **Keep supported Flutter source intact.** Metadata, heading intent and island policy live in a sidecar configuration.
 - **Make limitations visible.** Unsupported code fails the build; inspection dry-runs widget entry points and lists concrete blockers.
 
-These benefits depend on the supported subset. One explicit filter-list adapter provides native search; general input widgets, anchors, routing and arbitrary data-driven interaction remain roadmap items.
+Supported static content includes same-file constants and conditional/spread lists, with bounded evaluation and explicit diagnostics. These benefits depend on the supported subset. One explicit filter-list adapter provides native search; general input widgets, anchors, routing and arbitrary data-driven interaction remain roadmap items.
 
 ## Quick start
 

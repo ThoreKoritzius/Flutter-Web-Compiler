@@ -41,3 +41,8 @@ The final renderer audit uses a real desktop user-agent with GPU support enabled
 
 
 The health demo's restricted painter compiler passes `dart run tool/check_health_geometry.dart`: actual Flutter Canvas drawing commands agree with compiled SVG rectangle coordinates, path bounds/length, stroke width and scale for bar and line fixtures (0.001 tolerance). Regression tests verify source geometry changes propagate and unsupported drawing calls fail. This does not establish arbitrary painter coverage or pixel-perfect layout parity.
+
+
+## Static-data parser update — 2026-10-08
+
+`dart analyze` passes and the compiler suite now has 39 passing tests. Added coverage includes forward constant references, conditional/spread lists, null-aware spreads, constructor shadowing/defaults, isolated top-level scope, cycles, invalid conditions/spreads, unsupported patterns/loops and bounded collection expansion. Earlier browser/benchmark results above retain their original date; this parser change does not constitute a new performance audit.

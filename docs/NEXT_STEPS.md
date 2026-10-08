@@ -28,8 +28,20 @@ A standalone CLI is the least coupled starting point. An IDE extension can surfa
 ## Immediate coverage priorities after images and tables
 
 1. Resolve imported widget definitions and symbols, preserving per-file diagnostics. This is the most useful next step for ordinary project structure.
-2. Support immutable top-level constants, static collection `if`/`for`, `Wrap` and constrained responsive layout.
+2. Extend the implemented same-file constants, collection `if` and spreads to collection `for`, then `Wrap` and constrained responsive layout.
 3. Add native links and a small controlled form/event contract with interaction parity tests.
 4. Implement one local-state slice before attempting broad Provider/Riverpod compatibility.
 
 Image assets and static tables are implemented. Styling remains an approximate CSS mapping, not a translation of arbitrary Material themes.
+
+
+## Parser architecture and release gates
+
+Same-file static constants and list branches/spreads now share the compiler's bounded evaluator. The next architectural milestone is **resolved symbols**, before adding more name-based special cases:
+
+1. Use analyzer project contexts and package configuration to resolve the entry library and reachable declarations. Preserve library identity rather than merging source files or matching imported classes by short name. Test prefixes, exports, duplicate names, cycles and unavailable packages.
+2. Separate source analysis, static evaluation and rendering using a typed intermediate representation with source spans. Keep explicit adapters distinguishable from automatically lowered widgets in reports.
+3. Add a capability diagnostic for every unsupported reachable operation. Keep existing fail-closed behavior; do not silently replace unknown widgets with placeholders or count adapters as translated internals.
+4. Compare representative supported fixtures against Flutter for content, geometry and interactions; distinguish semantic equivalence from approximate CSS layout. Version the supported subset alongside SDK fixtures.
+
+Before an initial public experimental release: complete a repository/license/assets review, keep private fixture reports excluded, verify clean-checkout CI and CLI installation, publish reproducible examples and known limitations, and review the package API/version. Publication and repository visibility changes require a separate decision; this work keeps both disabled.

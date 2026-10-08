@@ -8,10 +8,11 @@ This document describes implemented behavior. The roadmap is not part of the com
 - Local classes directly extending `StatelessWidget`.
 - A single return expression in `build`, either arrow syntax or a block with one return.
 - Literal strings, adjacent strings, numbers, booleans, null and literal lists.
+- Same-file top-level `const` values (including forward references), boolean `!`, list `if`/`else`, list spreads and null-aware spreads. Only selected branches are evaluated.
 - Named `this.field` parameters bound to final instance fields, with required arguments or literal defaults. `super.key` is allowed.
 - Static data is resolved per widget instance; child widgets can be passed through constructor fields too.
 - No named/factory/redirecting constructors, constructor bodies, initializer lists, positional field arguments or mutable fields.
-- No imported custom widgets, aliases, complete symbol/type resolution, runtime getters, collection control flow, async builders or API data loading.
+- No imported custom widgets, aliases, complete symbol/type resolution, runtime getters, collection `for`/patterns, async builders or API data loading.
 
 The parser recognizes unprefixed constructor names syntactically. This assumes they refer to the expected Flutter APIs; shadowed names are not resolved. Input should also pass `flutter analyze`. Parsing is not evidence of semantic compatibility.
 
@@ -88,3 +89,17 @@ The build summary counts visited rendering boundaries; a native adapter counts a
 Configure `"MetricChart": {"type": "paint-chart", "painter": "_ChartPainter"}` to derive geometry from a CustomPainter class in the same source file. The adapter binds static `values`, `color` and `kind` fields and accepts the metric-chart contract above. Supported drawing statements are interpreted at build time with a bounded operation budget; unsupported syntax and Canvas operations fail explicitly. No application Dart is executed.
 
 The initial subset supports numeric arithmetic/comparisons, conditions, simple for loops, list indexing/fold, Paint color/style/strokeWidth, Rect.fromLTWH, Path.moveTo/lineTo, Canvas.scale/drawRect/drawPath. It does not resolve imported painters, arbitrary method calls, shaders, text painting or general state. The chart wrapper, hover/focus targets and daily-values disclosure still use an explicit adapter; the compiler does not infer these from arbitrary widget implementations. See the [health fixture and geometry check](../examples/health/README.md).
+
+
+### Static data evaluation
+
+Top-level constants are evaluated lazily in their own lexical scope, cached per compilation, and cannot capture a widget's constructor fields. Constructor fields may shadow a top-level name. Defaults can reference supported constants. Cycles, excessive nesting (128 constant references), evaluation beyond 20,000 steps and spread expansion beyond 20,000 items fail with diagnostics. These are protective implementation limits, not a Dart language specification.
+
+```dart
+const showDetails = true;
+const shared = [Text('Shared content')];
+// Within a supported build expression:
+// Column(children: [...shared, if (showDetails) Text('Details')])
+```
+
+Only `const` declarations are eligible; `final` globals, getters, imported constants, static class fields, arbitrary function calls and collection patterns remain unsupported. This syntax evaluator does not replace `flutter analyze` or perform full Dart type/constant validation. Unselected static branches and unused declarations are not compiled.
