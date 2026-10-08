@@ -243,19 +243,46 @@ Future<void> _inspect(List<String> arguments) async {
       'Inspected ${report['dartFiles']} Dart files; ${report['parserDiagnostics']} parser diagnostics.',
     );
     final coverage = report['compatibility'] as Map<String, Object?>;
-    final score = coverage['percent'] as num?;
-    stdout.writeln(
-      '${_accent('Native entry compatibility')}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
-      '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
-    );
-    stdout.writeln(
-      args['resolve-imports'] as bool
-          ? '  Resolved web library graph · independent roots · adapters/islands excluded'
-          : '  Independent widget roots · adapters/islands excluded',
-    );
+    final sites = report['callSites'] as Map<String, Object?>?;
+    if (sites != null) {
+      stdout.writeln(
+        '${_accent('Widget roots')}: ${coverage['native']} static · '
+        '${coverage['needsInputs']} need inputs · ${coverage['unsupported']} unsupported '
+        '(${coverage['total']} checked).',
+      );
+      stdout.writeln(
+        '${_accent('Constructor sites')}: ${sites['native']} static · '
+        '${sites['needsContext']} need context · ${sites['unsupported']} unsupported '
+        '(${sites['checked']}/${sites['total']} checked).',
+      );
+      if ((sites['skipped'] as int) > 0)
+        stdout.writeln(
+          '  ${sites['skipped']} sites skipped at the analysis limit.',
+        );
+      stdout.writeln(
+        '  Isolated checks in the web library graph; not app conversion coverage.',
+      );
+      for (final site
+          in (sites['entries'] as List)
+              .where((e) => e['status'] == 'native')
+              .take(3)) {
+        stdout.writeln(
+          '  ✓ ${site['file']}:${site['line']}:${site['column']} ${site['widget']}',
+        );
+      }
+    } else {
+      final score = coverage['percent'] as num?;
+      stdout.writeln(
+        '${_accent('Native entry compatibility')}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
+        '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
+      );
+      stdout.writeln('  Independent widget roots · adapters/islands excluded');
+    }
     var shown = 0;
     for (final entry in coverage['entries'] as List) {
-      if (entry['status'] == 'blocked' && shown++ < 5)
+      if (entry['status'] == 'blocked' &&
+          entry['category'] != 'needs-inputs' &&
+          shown++ < 5)
         stdout.writeln(
           '  ${entry['file']}:${entry['line']} ${entry['widget']}: ${entry['blocker']}',
         );

@@ -163,6 +163,7 @@ class ProjectInspector {
       if (model.widgetBase(node) == null) continue;
       final unit = model.unitFor(node);
       String? blocker;
+      String? code;
       try {
         FlutterDomCompiler().compile(
           model.entry.content,
@@ -172,8 +173,10 @@ class ProjectInspector {
         );
       } on CompileException catch (error) {
         blocker = error.message;
+        code = error.code;
       } on ArgumentError catch (error) {
         blocker = error.message.toString();
+        code = 'unsupported';
       }
       entries.add({
         'file': p.relative(unit.path, from: project),
@@ -181,6 +184,12 @@ class ProjectInspector {
         'widget': node.name.lexeme,
         'symbol': entry.key,
         'status': blocker == null ? 'native' : 'blocked',
+        'category': blocker == null
+            ? 'native'
+            : code == 'requires-inputs'
+            ? 'needs-inputs'
+            : 'unsupported',
+        if (code != null) 'code': code,
         if (blocker != null) 'blocker': blocker,
       });
     }
@@ -188,7 +197,7 @@ class ProjectInspector {
       (a, b) => (a['symbol'] as String).compareTo(b['symbol'] as String),
     );
     final accepted = entries.where((e) => e['status'] == 'native').length;
-    report['schemaVersion'] = 3;
+    report['schemaVersion'] = 4;
     report['kind'] = 'syntax-inventory-with-resolved-entry-checks';
     report['analysis'] = 'resolved project';
     report['analysisTarget'] = 'web-js';
@@ -203,6 +212,12 @@ class ProjectInspector {
       'total': entries.length,
       'percent': entries.isEmpty ? null : 100 * accepted / entries.length,
       'entries': entries,
+      'needsInputs': entries
+          .where((e) => e['category'] == 'needs-inputs')
+          .length,
+      'unsupported': entries
+          .where((e) => e['category'] == 'unsupported')
+          .length,
       'definition':
           'Recognized direct widget subclasses in the selected entry library graph, '
           'including selected web imports and parts, compiled independently without arguments, adapters or islands. '
@@ -219,6 +234,61 @@ class ProjectInspector {
       'Analyzer errors in selected project libraries block resolution; custom conditional environment variables are unsupported.',
       'No application source is executed, modified or uploaded.',
     ];
+    const limit = 1000;
+    final calls = model.widgetCalls();
+    final sites = <Map<String, Object?>>[];
+    for (final call in calls.take(limit)) {
+      final unit = model.unitFor(call.expression);
+      final location = unit.lineInfo.getLocation(call.expression.offset);
+      String? blocker;
+      String? code;
+      try {
+        FlutterDomCompiler().compile(
+          model.entry.content,
+          {'root': call.symbol},
+          domOnly: true,
+          resolved: model,
+          entryExpression: call.expression,
+        );
+      } on CompileException catch (error) {
+        blocker = error.message;
+        code = error.code;
+      } on ArgumentError catch (error) {
+        blocker = error.message.toString();
+        code = 'unsupported';
+      }
+      sites.add({
+        'file': p.relative(unit.path, from: project),
+        'line': location.lineNumber,
+        'column': location.columnNumber,
+        'widget': model.classes[call.symbol]!.name.lexeme,
+        'symbol': call.symbol,
+        'status': blocker == null
+            ? 'native'
+            : code == 'requires-context'
+            ? 'needs-context'
+            : 'unsupported',
+        if (code != null) 'code': code,
+        if (blocker != null) 'blocker': blocker,
+      });
+    }
+    report['callSites'] = {
+      'metric': 'isolated-constructor-call-dry-run',
+      'total': calls.length,
+      'checked': sites.length,
+      'skipped': calls.length - sites.length,
+      'limit': limit,
+      'native': sites.where((s) => s['status'] == 'native').length,
+      'needsContext': sites.where((s) => s['status'] == 'needs-context').length,
+      'unsupported': sites.where((s) => s['status'] == 'unsupported').length,
+      'entries': sites,
+      'definition':
+          'Actual constructor expressions of project-local widget classes in selected libraries, '
+          'checked independently with supplied arguments. Static constants and literals are evaluated; '
+          'enclosing parameters, locals and runtime state are not invented. '
+          'A passing call proves only that this isolated subtree emits DOM. Calls can be nested, '
+          'inside unused functions or inactive runtime branches; no runtime reachability or app coverage is implied.',
+    };
     return report;
   }
 
@@ -233,18 +303,42 @@ class ProjectInspector {
     final coverage = report['compatibility'] as Map<String, Object?>;
     final percent = coverage['percent'] as num?;
     out.writeln('## Native compiler compatibility\n');
-    out.writeln(
-      '**${percent?.toStringAsFixed(1) ?? 'N/A'}${percent == null ? '' : '%'}** '
-      '(${coverage['native']}/${coverage['total']} widget entry points).\n',
-    );
+    if (report.containsKey('callSites')) {
+      out.writeln(
+        '${coverage['native']} static · ${coverage['needsInputs']} need inputs · '
+        '${coverage['unsupported']} unsupported (${coverage['total']} roots).\n',
+      );
+    } else {
+      out.writeln(
+        '**${percent?.toStringAsFixed(1) ?? 'N/A'}${percent == null ? '' : '%'}** '
+        '(${coverage['native']}/${coverage['total']} widget entry points).\n',
+      );
+    }
     out.writeln('${coverage['definition']}\n');
     for (final entry in coverage['entries'] as List) {
       out.writeln(
         '- `${entry['file']}:${entry['line']}` **${entry['widget']}**: '
-        '${entry['status']}${entry['blocker'] == null ? '' : ' — ${entry['blocker']}'}',
+        '${entry['category'] ?? entry['status']}${entry['blocker'] == null ? '' : ' — ${entry['blocker']}'}',
       );
     }
     out.writeln();
+    final sites = report['callSites'] as Map<String, Object?>?;
+    if (sites != null) {
+      out.writeln('## Constructor call sites\n');
+      out.writeln(
+        '${sites['native']} static · ${sites['needsContext']} need context · '
+        '${sites['unsupported']} unsupported (${sites['checked']}/${sites['total']} checked; '
+        '${sites['skipped']} skipped).\n',
+      );
+      out.writeln('${sites['definition']}\n');
+      for (final site in sites['entries'] as List) {
+        out.writeln(
+          '- `${site['file']}:${site['line']}:${site['column']}` **${site['widget']}**: '
+          '${site['status']}${site['blocker'] == null ? '' : ' — ${site['blocker']}'}',
+        );
+      }
+      out.writeln();
+    }
     for (final section in ['classBases', 'signals']) {
       out.writeln('## $section\n\n| Signal | Source sites |\n| --- | ---: |');
       for (final entry in (report[section] as Map<String, int>).entries) {

@@ -60,3 +60,10 @@ The health fixture also builds with resolved analysis. Its five SVG charts match
 53 tests pass and `dart analyze` is clean. New cases verify web import/export selection on the native host, first-match ordering, explicit string equality, prefixed constants, fallback branches, rejection of custom condition variables and resolved inspection scope. Required constructor inputs remain blockers; unrelated libraries do not enter the resolved score. Resolution failure produces no score.
 
 The real multi-file Flutter fixture passes `flutter analyze`, builds to DOM with `platform_web.dart` selected, and resolves inspection through the CLI. It accepts one of two parameterless roots: its Page compiles with the actual Heading arguments, while Heading fails in isolation without its required title. This demonstrates why independent-root percentages are not application conversion coverage. CI includes both commands. Analyzer is pinned to 7.7.1 because target environment configuration currently uses an isolated internal factory.
+
+
+## Input-aware inspection — 2026-10-08
+
+56 tests pass and analysis is clean. Regression cases distinguish a non-web fallback from an unsupported selected web implementation, compile real constructor arguments without guessing missing inputs, retain runtime identifiers as context requirements, and verify the 1,000-site cap reports skipped work explicitly.
+
+The real multi-file CLI inspection reports one static root and one input-dependent root, while both actual constructor sites compile. This verifies the distinction between declaration-level acceptance and supplied-input evaluation. It does not establish runtime reachability or full application conversion. Resolved inspection schema 4 keeps legacy root fields for readers and adds categories, diagnostic codes and call-site records.

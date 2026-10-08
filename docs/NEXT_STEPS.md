@@ -27,7 +27,7 @@ A standalone CLI is the least coupled starting point. An IDE extension can surfa
 
 ## Immediate coverage priorities after images and tables
 
-1. Build on resolved project-local definitions: evaluate real call sites, formalize source spans and lower into a typed intermediate representation.
+1. Build on resolved project-local definitions: extend isolated call-site checks into supported local data flow, formalize source spans and lower into a typed intermediate representation.
 2. Extend the implemented same-file constants, collection `if` and spreads to collection `for`, then `Wrap` and constrained responsive layout.
 3. Add native links and a small controlled form/event contract with interaction parity tests.
 4. Implement one local-state slice before attempting broad Provider/Riverpod compatibility.
@@ -39,7 +39,7 @@ Image assets and static tables are implemented. Styling remains an approximate C
 
 Same-file static constants and list branches/spreads now share the compiler's bounded evaluator. Opt-in **resolved symbols** are implemented for project-local libraries. The next milestone is a **typed intermediate representation**, before adding more rendering features:
 
-1. Implemented: analyzer project contexts, package configuration, separate declaration identities and reachable local libraries; fixtures cover prefixes, exports, duplicate names, cycles and missing imports. Resolved inspection and fixed web conditional selection are also implemented. Next: call-site-aware input evaluation, structured diagnostic codes and explicit external-package boundaries.
+1. Implemented: analyzer project contexts, package configuration, separate declaration identities and reachable local libraries; fixtures cover prefixes, exports, duplicate names, cycles and missing imports. Resolved inspection and fixed web conditional selection are also implemented. Isolated constructor call-site evaluation and first-blocker diagnostic codes are now implemented. Next: propagate supported enclosing local values, introduce typed lowering and formalize external-package boundaries.
 2. Separate source analysis, static evaluation and rendering using a typed intermediate representation with source spans. Keep explicit adapters distinguishable from automatically lowered widgets in reports.
 3. Add a capability diagnostic for every unsupported reachable operation. Keep existing fail-closed behavior; do not silently replace unknown widgets with placeholders or count adapters as translated internals.
 4. Compare representative supported fixtures against Flutter for content, geometry and interactions; distinguish semantic equivalence from approximate CSS layout. Version the supported subset alongside SDK fixtures.

@@ -340,10 +340,16 @@ class Unrelated extends StatelessWidget {
 """);
       final report = await ProjectInspector().inspectResolved(directory.path);
       final coverage = report['compatibility'] as Map;
-      expect(report['schemaVersion'], 3);
+      expect(report['schemaVersion'], 4);
       expect(report['analysisTarget'], 'web-js');
       expect(coverage['total'], 2);
       expect(coverage['native'], 1);
+      expect(coverage['needsInputs'], 1);
+      expect(coverage['unsupported'], 0);
+      final sites = report['callSites'] as Map;
+      expect(sites['native'], 2); // Page() and Child(label: literal).
+      expect(sites['needsContext'], 0);
+      expect(sites['unsupported'], 0);
       final entries = coverage['entries'] as List;
       expect(
         entries.singleWhere((e) => e['widget'] == 'Page')['status'],
@@ -369,6 +375,90 @@ class Unrelated extends StatelessWidget {
         ProjectInspector().inspectResolved(directory.path),
         throwsA(isA<CompileException>()),
       );
+    },
+  );
+  test(
+    'call sites separate static arguments from enclosing runtime context',
+    () async {
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+const title = 'Known';
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Label(text: title);
+}
+class Label extends StatelessWidget {
+ const Label({required this.text});
+ final String text;
+ Widget build(BuildContext context) => Text(text);
+}
+Widget makeLabel(String runtimeText) => Label(text: runtimeText);
+""");
+      final report = await ProjectInspector().inspectResolved(directory.path);
+      final sites = report['callSites'] as Map;
+      expect(sites['total'], 3);
+      expect(sites['native'], 2);
+      expect(sites['needsContext'], 1);
+      final dynamic = (sites['entries'] as List).singleWhere(
+        (e) => e['status'] == 'needs-context',
+      );
+      expect(dynamic['code'], 'requires-context');
+      expect(dynamic['file'], 'lib/page.dart');
+    },
+  );
+
+  test(
+    'a selected web implementation can fail while its non-web fallback passes',
+    () async {
+      write(
+        'lib/page.dart',
+        "export 'stub.dart' if (dart.library.html) 'web.dart';",
+      );
+      write('lib/stub.dart', """
+import 'package:flutter/widgets.dart';
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text('Unavailable on this platform');
+}
+""");
+      write('lib/web.dart', """
+import 'package:flutter/widgets.dart';
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) { final content = 'runtime'; return Text(content); }
+}
+""");
+      final syntax = ProjectInspector().inspect(directory.path);
+      final resolved = await ProjectInspector().inspectResolved(directory.path);
+      expect((syntax['compatibility'] as Map)['native'], 1);
+      expect((resolved['compatibility'] as Map)['native'], 0);
+      expect(resolved['sourceFiles'], isNot(contains('lib/stub.dart')));
+    },
+  );
+  test(
+    'call-site limit reports skipped work without assigning it an outcome',
+    () async {
+      final calls = List.filled(1001, "Label(text: 'sample')").join(',');
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+const samples = [$calls];
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text('Page');
+}
+class Label extends StatelessWidget {
+ const Label({required this.text});
+ final String text;
+ Widget build(BuildContext context) => Text(text);
+}
+""");
+      final report = await ProjectInspector().inspectResolved(directory.path);
+      final sites = report['callSites'] as Map;
+      expect(sites['total'], 1002);
+      expect(sites['checked'], 1000);
+      expect(sites['skipped'], 2);
+      expect(sites['native'], 1000);
+      expect(sites['entries'], hasLength(1000));
     },
   );
 }

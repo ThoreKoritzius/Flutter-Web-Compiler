@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Separate missing constructor inputs from unsupported root behavior in resolved inspection.
+- Evaluate actual resolved constructor call sites, with explicit context requirements and bounded, reported work.
+- Replace the resolved CLI headline percentage with root and call-site outcome counts.
+
 - Resolve standard conditional imports/exports against a fixed web target; report selected branches.
 - Add resolved compatibility inspection with an explicitly scoped denominator.
 - Pin analyzer 7.7.1 and isolate its environment-configuration API.

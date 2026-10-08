@@ -6,6 +6,7 @@ import 'dart:io';
 import 'analysis_environment.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element2.dart';
 import 'package:analyzer/error/error.dart';
 import 'package:path/path.dart' as p;
@@ -169,6 +170,30 @@ class ResolvedProject {
     return '${p.relative(unit.path, from: directory)}:${loc.lineNumber}:${loc.columnNumber}';
   }
 
+  List<({String symbol, InstanceCreationExpression expression})> widgetCalls() {
+    final result = <({String symbol, InstanceCreationExpression expression})>[];
+    final visitor = _ConstructorVisitor((node) {
+      final key = symbol(node.constructorName.element?.enclosingElement2);
+      if (key != null &&
+          classes.containsKey(key) &&
+          widgetBase(classes[key]!) != null) {
+        result.add((symbol: key, expression: node));
+      }
+    });
+    for (final unit in units) {
+      unit.unit.accept(visitor);
+    }
+    result.sort((a, b) {
+      final byFile = unitFor(
+        a.expression,
+      ).path.compareTo(unitFor(b.expression).path);
+      return byFile == 0
+          ? a.expression.offset.compareTo(b.expression.offset)
+          : byFile;
+    });
+    return result;
+  }
+
   String? widgetBase(ClassDeclaration node) {
     final type = node.declaredFragment?.element.supertype?.element3;
     if (type == null) return null;
@@ -230,5 +255,16 @@ class ResolvedProject {
     throw ArgumentError(
       'Unsupported external constructor ${type.name3} at ${location(node)}.',
     );
+  }
+}
+
+class _ConstructorVisitor extends RecursiveAstVisitor<void> {
+  _ConstructorVisitor(this.onConstructor);
+  final void Function(InstanceCreationExpression) onConstructor;
+
+  @override
+  void visitInstanceCreationExpression(InstanceCreationExpression node) {
+    onConstructor(node);
+    super.visitInstanceCreationExpression(node);
   }
 }

@@ -122,4 +122,18 @@ Resolved builds and inspection use the same fixed `web-js` target, independent o
 
 The public analyzer factory cannot set declared variables in the pinned release. `analysis_environment.dart` isolates the internal factory needed to supply this environment. Resolver regression tests and real Flutter fixture builds guard the dependency. Build and inspection reports include `analysisTarget`, `conditionalEnvironment` and selected conditional directives.
 
-`inspect --resolve-imports [--source lib/main.dart]` emits schema version 3. Compatibility checks use direct, recognized widget subclasses from selected project libraries/parts, resolved by declaration identity. Each is compiled independently with no arguments, adapters or islands. Required inputs remain blockers; inactive platform implementations and unrelated libraries are excluded from this denominator. Inventory counts remain project-wide syntax counts and can include those files. Generated parts required by the selected graph are resolved even though inventory excludes generated files. Resolution errors abort inspection instead of producing a misleading score. This score is not directly comparable with the unflagged project-wide syntax score.
+`inspect --resolve-imports [--source lib/main.dart]` emits schema version 4. Compatibility checks use direct, recognized widget subclasses from selected project libraries/parts, resolved by declaration identity. Each is compiled independently with no arguments, adapters or islands. Required inputs remain blockers; inactive platform implementations and unrelated libraries are excluded from this denominator. Inventory counts remain project-wide syntax counts and can include those files. Generated parts required by the selected graph are resolved even though inventory excludes generated files. Resolution errors abort inspection instead of producing a misleading score. This score is not directly comparable with the unflagged project-wide syntax score.
+
+
+### Input-aware inspection results
+
+Resolved inspection now presents two separate breakdowns instead of a headline percentage:
+
+- **Widget roots:** static, needs inputs, or unsupported. Required constructor inputs are a distinct first blocker, not evidence that the widget body is incompatible.
+- **Constructor sites:** actual project-widget constructor expressions checked independently with their supplied arguments. Static literals, supported constants and nested constructors can compile. Unbound enclosing identifiers need context; unsupported syntax or rendering operations remain unsupported. Categories describe the first blocker; supplying context does not guarantee the remainder will compile.
+
+The compiler evaluates the original resolved constructor AST, so it does not generate guessed arguments or substitute source strings. Calls in unused functions or inactive runtime branches are still source sites, and nested calls may each be counted. This is not runtime reachability, unique screen coverage or verified behavior. Inspection does not perform interprocedural propagation of enclosing locals, parameters or state.
+
+Checks are bounded to 1,000 constructor sites, sorted by source file and offset. `callSites` reports total, checked, skipped, limit, separate outcome counts and located entries. Skipped sites are not classified. Root records keep the prior `status`, `native`, `total` and `percent` fields for consumers, with new `category`, diagnostic `code`, `needsInputs` and `unsupported` fields. The resolved CLI/Markdown view uses categories; the legacy percentage still means parameterless-root acceptance only.
+
+An apparent score decrease can reflect a different graph: a whole-project syntax scan may accept a non-web fallback whose selected web implementation is unsupported. Compare graph and metric before interpreting differences as a regression.

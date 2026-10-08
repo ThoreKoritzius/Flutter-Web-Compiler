@@ -14,8 +14,9 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 
 class CompileException implements Exception {
-  CompileException(this.message);
+  CompileException(this.message, {this.code = 'unsupported'});
   final String message;
+  final String code;
   @override
   String toString() => 'Compile error: $message';
 }
@@ -62,6 +63,7 @@ class FlutterDomCompiler {
     Map<String, dynamic> config, {
     bool domOnly = false,
     ResolvedProject? resolved,
+    Expression? entryExpression,
   }) {
     final result = parseString(content: source, throwIfDiagnostics: false);
     if (result.errors.isNotEmpty) {
@@ -132,13 +134,15 @@ class FlutterDomCompiler {
     var evaluationBudget = 20000;
 
     AstNode? currentNode;
-    Never fail(String message, [int? line]) => throw CompileException(
-      '${resolved != null && currentNode != null
-          ? '${resolved.location(currentNode!)}: '
-          : line == null
-          ? ''
-          : 'Line $line: '}$message',
-    );
+    Never fail(String message, [int? line, String code = 'unsupported']) =>
+        throw CompileException(
+          '${resolved != null && currentNode != null
+              ? '${resolved.location(currentNode!)}: '
+              : line == null
+              ? ''
+              : 'Line $line: '}$message',
+          code: code,
+        );
 
     Object? value(Expression expression) {
       currentNode = expression;
@@ -296,6 +300,9 @@ class FlutterDomCompiler {
         'Expected a static literal or supported constructor; found '
         '`${expression.toSource()}`. Move dynamic UI into an explicit island.',
         line,
+        expression is SimpleIdentifier || expression is ThisExpression
+            ? 'requires-context'
+            : 'unsupported',
       );
     }
 
@@ -438,7 +445,11 @@ class FlutterDomCompiler {
             if (call.named.containsKey(field)) {
               bindings[field] = call.named[field];
             } else if (wrapped.isRequiredNamed) {
-              fail('$name is missing required argument $field.', call.line);
+              fail(
+                '$name is missing required argument $field.',
+                call.line,
+                'requires-inputs',
+              );
             } else {
               final defaultValue = wrapped is DefaultFormalParameter
                   ? wrapped.defaultValue
@@ -746,7 +757,9 @@ class FlutterDomCompiler {
       }
     };
 
-    final body = buildClass(root);
+    final body = entryExpression == null
+        ? buildClass(root)
+        : render(value(entryExpression));
     final title = _escape(config['title'] as String? ?? rootName);
     final description = _escape(config['description'] as String? ?? '');
     final lang = _escape(config['lang'] as String? ?? 'en');
