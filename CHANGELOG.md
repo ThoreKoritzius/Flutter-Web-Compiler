@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resolve standard conditional imports/exports against a fixed web target; report selected branches.
+- Add resolved compatibility inspection with an explicitly scoped denominator.
+- Pin analyzer 7.7.1 and isolate its environment-configuration API.
+
 - Add opt-in `build --resolve-imports` with analyzer-backed local imports, exports, prefixes, parts and constants.
 - Preserve declaration identity and file locations across project libraries; add a multi-file Flutter fixture and CI build.
 

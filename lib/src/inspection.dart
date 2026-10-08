@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'compiler.dart';
+import 'project.dart';
+import 'analysis_environment.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
@@ -139,6 +141,85 @@ class ProjectInspector {
         'The score is not a percentage of screens, pixels, runtime behavior or total app code.',
       ],
     };
+  }
+
+  /// Dry-run direct widget roots in the entry's resolved web dependency graph.
+  /// Syntax inventory remains project-wide and is reported separately.
+  Future<Map<String, Object?>> inspectResolved(
+    String projectPath, {
+    String source = 'lib/main.dart',
+  }) async {
+    final project = p.normalize(p.absolute(projectPath));
+    final ResolvedProject model;
+    try {
+      model = await ResolvedProject.load(project, p.join(project, source));
+    } on ArgumentError catch (error) {
+      throw CompileException(error.message.toString());
+    }
+    final report = inspect(project);
+    final entries = <Map<String, Object?>>[];
+    for (final entry in model.classes.entries) {
+      final node = entry.value;
+      if (model.widgetBase(node) == null) continue;
+      final unit = model.unitFor(node);
+      String? blocker;
+      try {
+        FlutterDomCompiler().compile(
+          model.entry.content,
+          {'root': entry.key},
+          domOnly: true,
+          resolved: model,
+        );
+      } on CompileException catch (error) {
+        blocker = error.message;
+      } on ArgumentError catch (error) {
+        blocker = error.message.toString();
+      }
+      entries.add({
+        'file': p.relative(unit.path, from: project),
+        'line': unit.lineInfo.getLocation(node.offset).lineNumber,
+        'widget': node.name.lexeme,
+        'symbol': entry.key,
+        'status': blocker == null ? 'native' : 'blocked',
+        if (blocker != null) 'blocker': blocker,
+      });
+    }
+    entries.sort(
+      (a, b) => (a['symbol'] as String).compareTo(b['symbol'] as String),
+    );
+    final accepted = entries.where((e) => e['status'] == 'native').length;
+    report['schemaVersion'] = 3;
+    report['kind'] = 'syntax-inventory-with-resolved-entry-checks';
+    report['analysis'] = 'resolved project';
+    report['analysisTarget'] = 'web-js';
+    report['conditionalEnvironment'] = webAnalysisEnvironment;
+    report['conditionalDirectives'] = model.conditionalDirectives;
+    report['sourceFiles'] =
+        model.units.map((u) => p.relative(u.path, from: project)).toList()
+          ..sort();
+    report['compatibility'] = {
+      'metric': 'resolved-parameterless-widget-entry-dry-run',
+      'native': accepted,
+      'total': entries.length,
+      'percent': entries.isEmpty ? null : 100 * accepted / entries.length,
+      'entries': entries,
+      'definition':
+          'Recognized direct widget subclasses in the selected entry library graph, '
+          'including selected web imports and parts, compiled independently without arguments, adapters or islands. '
+          'Imports and constants are resolved; required inputs and runtime state remain blockers. '
+          'This measures compiler acceptance, not app-wide behavior or runtime reachability.',
+    };
+    report['limitations'] = [
+      'The compatibility denominator covers the selected library graph, not every project file or runtime widget.',
+      'Indirect widget subclasses and external-package implementations are excluded from entry checks.',
+      'Required constructor data is not invented; rejected roots may work when supplied supported static inputs.',
+      'Adapters and islands are disabled; no behavioral or pixel equivalence is established.',
+      'Syntax inventory counts remain project-wide and include inactive platform branches; they are not the compatibility score.',
+      'Inventory excludes generated files; resolved checks include generated parts needed by selected libraries.',
+      'Analyzer errors in selected project libraries block resolution; custom conditional environment variables are unsupported.',
+      'No application source is executed, modified or uploaded.',
+    ];
+    return report;
   }
 
   String markdown(Map<String, Object?> report) {

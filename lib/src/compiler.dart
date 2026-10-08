@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'chart.dart';
 import 'painter.dart';
 import 'project.dart';
+import 'analysis_environment.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
@@ -767,6 +768,10 @@ class FlutterDomCompiler {
         'sourceFiles': resolved.units
             .map((u) => p.relative(u.path, from: resolved.directory))
             .toList(),
+      if (resolved != null) 'analysisTarget': 'web-js',
+      if (resolved != null) 'conditionalEnvironment': webAnalysisEnvironment,
+      if (resolved != null)
+        'conditionalDirectives': resolved.conditionalDirectives,
       'assets': assets.toList(),
       'widgets': counts,
       'island': island,

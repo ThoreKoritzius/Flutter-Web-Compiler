@@ -1,0 +1,1 @@
+const platformLabel = 'Web platform';

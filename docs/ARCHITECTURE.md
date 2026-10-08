@@ -2,7 +2,7 @@
 
 ## Implemented prototype
 
-The package exposes a Dart CLI with `build` and `inspect` commands. Build parses a single source file with the Dart analyzer, evaluates a restricted static subset and emits escaped HTML. Named final constructor fields are bound separately for each stateless instance. Configuration supplies document metadata, heading levels and one explicit Flutter island.
+The package exposes a Dart CLI with `build` and `inspect` commands. Default builds parse a single source file. With `--resolve-imports`, analyzer resolves selected project libraries under a fixed web target; conditional imports, prefixes and declaration identity are retained. Both paths evaluate a restricted static subset and emit escaped HTML. Resolved inspection reuses that library graph for independent widget-root checks. Named final constructor fields are bound separately for each stateless instance. Configuration supplies document metadata, heading levels and one explicit Flutter island.
 
 The island is compiled separately using Flutter. The initial document loads a small host script; only activation loads the island bootstrap, engine, application and fonts. Island state remains inside Flutter. A separate opt-in filter-list adapter supports native local search with its own isolated state; there is no shared-state runtime.
 

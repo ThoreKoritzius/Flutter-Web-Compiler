@@ -207,6 +207,12 @@ Future<void> _inspect(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('project', defaultsTo: '.')
     ..addOption('output', defaultsTo: 'build/inspection.json')
+    ..addOption('source', defaultsTo: 'lib/main.dart')
+    ..addFlag(
+      'resolve-imports',
+      negatable: false,
+      help: 'Check roots in the resolved web library graph.',
+    )
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
     final args = parser.parse(arguments);
@@ -217,7 +223,12 @@ Future<void> _inspect(List<String> arguments) async {
     if (args.rest.isNotEmpty)
       throw ArgumentError('Unexpected arguments: ${args.rest}');
     final inspector = ProjectInspector();
-    final report = inspector.inspect(args['project'] as String);
+    final report = args['resolve-imports'] as bool
+        ? await inspector.inspectResolved(
+            args['project'] as String,
+            source: args['source'] as String,
+          )
+        : inspector.inspect(args['project'] as String);
     final output = File(args['output'] as String);
     if (p.extension(output.path) != '.json')
       throw ArgumentError('Inspection output must end in .json.');
@@ -237,7 +248,11 @@ Future<void> _inspect(List<String> arguments) async {
       '${_accent('Native entry compatibility')}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
       '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
     );
-    stdout.writeln('  Independent widget roots · adapters/islands excluded');
+    stdout.writeln(
+      args['resolve-imports'] as bool
+          ? '  Resolved web library graph · independent roots · adapters/islands excluded'
+          : '  Independent widget roots · adapters/islands excluded',
+    );
     var shown = 0;
     for (final entry in coverage['entries'] as List) {
       if (entry['status'] == 'blocked' && shown++ < 5)

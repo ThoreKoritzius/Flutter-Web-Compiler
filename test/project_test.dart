@@ -232,31 +232,142 @@ class _Page extends StatelessWidget {
     expect((await compile()).html, contains('Private root'));
   });
 
-  test(
-    'conditional imports fail explicitly instead of selecting the host branch',
-    () async {
-      write(
-        'lib/page.dart',
-        "export 'one.dart' if (dart.library.html) 'two.dart';",
-      );
-      const widget = """
+  test('conditional exports choose web on a native compiler host', () async {
+    write(
+      'lib/page.dart',
+      "export 'stub.dart' if (dart.library.html) 'web.dart';",
+    );
+    write('lib/stub.dart', 'class WrongPlatform {}');
+    write('lib/web.dart', """
 import 'package:flutter/widgets.dart';
 class Page extends StatelessWidget {
  const Page();
- Widget build(BuildContext context) => Text('branch');
+ Widget build(BuildContext context) => Text('Web selected');
+}
+""");
+    final result = await compile();
+    expect(result.html, contains('Web selected'));
+    expect(result.report['sourceFiles'], isNot(contains('lib/stub.dart')));
+    expect(result.report['analysisTarget'], 'web-js');
+    expect(
+      (result.report['conditionalDirectives'] as List)
+          .single['selectedLibrary'],
+      endsWith('/web.dart'),
+    );
+  });
+
+  test(
+    'conditional imports use first matching branch and preserve prefixed constants',
+    () async {
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+import 'stub.dart' if (dart.library.io) 'native.dart'
+ if (dart.library.js_interop == 'true') 'web.dart'
+ if (dart.library.html) 'second.dart' as platform;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text(platform.title);
+}
+""");
+      write('lib/stub.dart', "const title = 'Stub';");
+      write('lib/native.dart', "const title = 'Native';");
+      write('lib/web.dart', "const title = 'First web match';");
+      write('lib/second.dart', "const title = 'Wrong second match';");
+      final result = await compile();
+      expect(result.html, contains('First web match'));
+      expect(result.report['sourceFiles'], isNot(contains('lib/native.dart')));
+      expect(result.report['sourceFiles'], isNot(contains('lib/second.dart')));
+    },
+  );
+
+  test(
+    'false conditions retain the fallback and custom conditions fail explicitly',
+    () async {
+      const page = """
+import 'package:flutter/widgets.dart';
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text('Fallback');
 }
 """;
-      write('lib/one.dart', widget);
-      write('lib/two.dart', widget);
+      write(
+        'lib/page.dart',
+        "export 'stub.dart' if (dart.library.io) 'native.dart';",
+      );
+      write('lib/stub.dart', page);
+      write('lib/native.dart', 'class WrongPlatform {}');
+      expect((await compile()).html, contains('Fallback'));
+      write(
+        'lib/page.dart',
+        "export 'stub.dart' if (custom.flag) 'native.dart';",
+      );
       await expectLater(
         compile(),
         throwsA(
           isA<CompileException>().having(
             (e) => e.message,
             'diagnostic',
-            contains('Conditional imports/exports'),
+            contains('Unsupported conditional-import variable custom.flag'),
           ),
         ),
+      );
+    },
+  );
+  test(
+    'resolved inspection checks imported roots and does not invent constructor inputs',
+    () async {
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart' as f;
+import 'child.dart';
+class Page extends f.StatelessWidget {
+ const Page();
+ f.Widget build(f.BuildContext context) => Child(label: 'Resolved content');
+}
+""");
+      write('lib/child.dart', """
+import 'package:flutter/widgets.dart';
+class Child extends StatelessWidget {
+ const Child({required this.label});
+ final String label;
+ Widget build(BuildContext context) => Text(label);
+}
+""");
+      write('lib/unrelated.dart', """
+import 'package:flutter/widgets.dart';
+class Unrelated extends StatelessWidget {
+ Widget build(BuildContext context) => Text('Outside entry graph');
+}
+""");
+      final report = await ProjectInspector().inspectResolved(directory.path);
+      final coverage = report['compatibility'] as Map;
+      expect(report['schemaVersion'], 3);
+      expect(report['analysisTarget'], 'web-js');
+      expect(coverage['total'], 2);
+      expect(coverage['native'], 1);
+      final entries = coverage['entries'] as List;
+      expect(
+        entries.singleWhere((e) => e['widget'] == 'Page')['status'],
+        'native',
+      );
+      expect(
+        entries.singleWhere((e) => e['widget'] == 'Child')['blocker'],
+        contains('missing required argument label'),
+      );
+      expect(report['sourceFiles'], isNot(contains('lib/unrelated.dart')));
+      expect(
+        ProjectInspector().markdown(report),
+        contains('Imports and constants are resolved'),
+      );
+    },
+  );
+
+  test(
+    'inspection does not emit a score when project resolution fails',
+    () async {
+      write('lib/page.dart', "import 'missing.dart';");
+      await expectLater(
+        ProjectInspector().inspectResolved(directory.path),
+        throwsA(isA<CompileException>()),
       );
     },
   );

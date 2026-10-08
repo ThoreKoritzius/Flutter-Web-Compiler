@@ -72,9 +72,10 @@ For project-local imports, opt into analyzer-backed resolution:
 ```sh
 # First run flutter pub get inside your Flutter project.
 flutter_dom build web --resolve-imports
+flutter_dom inspect --resolve-imports
 ```
 
-This resolves relative/package-local imports, exports, prefixes, parts and same-project constants, preserving declaration identity. See the [multi-file example](examples/multifile/README.md). External widget packages and conditional imports are rejected when unsupported; arbitrary application state is still outside the subset. Without the flag, builds and `inspect` retain their existing single-file syntax behavior.
+This resolves relative/package-local imports, exports, prefixes, parts and same-project constants, preserving declaration identity. See the [multi-file example](examples/multifile/README.md). Standard web conditional imports select the web branch independently of the host OS; custom condition variables and unsupported external widget packages fail explicitly; arbitrary application state is still outside the subset. Without the flag, builds and `inspect` retain their existing single-file syntax behavior. Resolved inspection checks independent widget roots in the selected library graph; required constructor inputs remain blockers, so its percentage is not application-wide coverage.
 
 This is an independent tool. It does not patch the SDK or add an official `flutter build dom` command. An editor extension can later wrap the same CLI.
 

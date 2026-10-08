@@ -3,7 +3,7 @@
 
 import 'dart:io';
 
-import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
+import 'analysis_environment.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element2.dart';
@@ -16,6 +16,7 @@ class ResolvedProject {
   final units = <ResolvedUnitResult>[];
   final classes = <String, ClassDeclaration>{};
   final constants = <String, Expression>{};
+  final conditionalDirectives = <Map<String, Object?>>[];
   final _symbols = <Element2, String>{};
   late ResolvedUnitResult entry;
   late String directory;
@@ -35,7 +36,7 @@ class ResolvedProject {
         'Resolved analysis needs package configuration. Run flutter pub get in the project first.',
       );
     }
-    final collection = AnalysisContextCollection(includedPaths: [lib]);
+    final collection = webAnalysisContexts(lib);
     try {
       final pending = [entryPath];
       final seen = <String>{};
@@ -71,19 +72,35 @@ class ResolvedProject {
           model.units.add(unit);
           if (unit.path == entryPath) model.entry = unit;
           for (final directive in unit.unit.directives) {
-            if (directive is ImportDirective &&
-                    directive.configurations.isNotEmpty ||
-                directive is ExportDirective &&
-                    directive.configurations.isNotEmpty) {
-              throw ArgumentError(
-                'Conditional imports/exports are not supported in resolved DOM builds: ${unit.path}.',
-              );
+            final configurations = switch (directive) {
+              ImportDirective d => d.configurations,
+              ExportDirective d => d.configurations,
+              _ => <Configuration>[],
+            };
+            for (final configuration in configurations) {
+              final name = configuration.name.toSource();
+              if (!webAnalysisEnvironment.containsKey(name)) {
+                throw ArgumentError(
+                  'Unsupported conditional-import variable $name at '
+                  '${p.relative(unit.path, from: model.directory)}:'
+                  '${unit.lineInfo.getLocation(configuration.offset).lineNumber}. '
+                  'Custom environment definitions are not supported.',
+                );
+              }
             }
             final library = switch (directive) {
               ImportDirective d => d.libraryImport?.importedLibrary2,
               ExportDirective d => d.libraryExport?.exportedLibrary2,
               _ => null,
             };
+            if (configurations.isNotEmpty) {
+              model.conditionalDirectives.add({
+                'file': p.relative(unit.path, from: model.directory),
+                'line': unit.lineInfo.getLocation(directive.offset).lineNumber,
+                'kind': directive is ImportDirective ? 'import' : 'export',
+                'selectedLibrary': library?.uri.toString(),
+              });
+            }
             final target = library?.firstFragment.source.fullName;
             if (target != null && p.isWithin(lib, target)) pending.add(target);
           }
@@ -117,6 +134,7 @@ class ResolvedProject {
   }
 
   String root(String name) {
+    if (classes.containsKey(name)) return name;
     final pieces = name.split('.');
     final matches = <String>{};
     if (pieces.length == 1) {
@@ -149,6 +167,30 @@ class ResolvedProject {
     final unit = unitFor(node);
     final loc = unit.lineInfo.getLocation(node.offset);
     return '${p.relative(unit.path, from: directory)}:${loc.lineNumber}:${loc.columnNumber}';
+  }
+
+  String? widgetBase(ClassDeclaration node) {
+    final type = node.declaredFragment?.element.supertype?.element3;
+    if (type == null) return null;
+    final library = type.library2.uri.toString();
+    const packages = [
+      'flutter',
+      'flutter_riverpod',
+      'hooks_riverpod',
+      'flutter_hooks',
+    ];
+    const names = [
+      'StatelessWidget',
+      'StatefulWidget',
+      'ConsumerWidget',
+      'ConsumerStatefulWidget',
+      'HookWidget',
+      'HookConsumerWidget',
+    ];
+    return packages.any((name) => library.startsWith('package:$name/')) &&
+            names.contains(type.name3)
+        ? type.name3
+        : null;
   }
 
   String? superclass(ClassDeclaration node) {

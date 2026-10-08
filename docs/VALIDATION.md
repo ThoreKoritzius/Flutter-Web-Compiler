@@ -53,3 +53,10 @@ The health demo's restricted painter compiler passes `dart run tool/check_health
 `dart analyze` passes; 49 tests pass, including ten resolver cases for prefixes, exports, duplicate class names, constants, package-local imports, parts, import cycles, private roots, missing/ambiguous imports, source diagnostics and rejection of function-name impersonation/conditional imports. Resolver unit tests use minimal framework declarations to run without Flutter; separate real Flutter checks compile the catalog and the five-file `examples/multifile` fixture with `--resolve-imports`. The latter also passes `flutter analyze` and emits static HTML/CSS with no adapters or engine. CI now installs/analyzes/builds that fixture. These are local results; remote CI completion is not implied.
 
 The health fixture also builds with resolved analysis. Its five SVG charts match the existing syntax-mode build exactly; resolved Paint/Path/Rect constructors are checked against dart:ui declarations.
+
+
+## Web conditional resolution and inspection — 2026-10-08
+
+53 tests pass and `dart analyze` is clean. New cases verify web import/export selection on the native host, first-match ordering, explicit string equality, prefixed constants, fallback branches, rejection of custom condition variables and resolved inspection scope. Required constructor inputs remain blockers; unrelated libraries do not enter the resolved score. Resolution failure produces no score.
+
+The real multi-file Flutter fixture passes `flutter analyze`, builds to DOM with `platform_web.dart` selected, and resolves inspection through the CLI. It accepts one of two parameterless roots: its Page compiles with the actual Heading arguments, while Heading fails in isolation without its required title. This demonstrates why independent-root percentages are not application conversion coverage. CI includes both commands. Analyzer is pinned to 7.7.1 because target environment configuration currently uses an isolated internal factory.

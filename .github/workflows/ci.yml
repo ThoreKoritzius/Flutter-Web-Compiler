@@ -41,6 +41,7 @@ jobs:
       - run: flutter analyze
         working-directory: examples/multifile
       - run: dart run bin/flutter_dom.dart build --project examples/multifile --resolve-imports --dom-only --output build/multifile
+      - run: dart run bin/flutter_dom.dart inspect --project examples/multifile --resolve-imports --output build/multifile-inspection.json
       - run: dart run tool/check_health_geometry.dart
       - run: dart run tool/showcase.dart --no-serve
       - run: dart run bin/flutter_dom.dart build --project examples/health --resolve-imports --dom-only --output build/resolved-health

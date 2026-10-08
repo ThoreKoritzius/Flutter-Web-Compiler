@@ -6,7 +6,7 @@ repository: https://github.com/ThoreKoritzius/Flutter-Web-Compiler
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
-  analyzer: ^7.5.6
+  analyzer: 7.7.1
   args: ^2.7.0
   crypto: ^3.0.7
   path: ^1.9.1
