@@ -85,3 +85,15 @@ The shared period-selector fixture passes Flutter analysis and a resolved
 DOM-only CLI build. Browser checks verified mouse activation, Enter activation,
 changed totals and retained keyboard focus. This is a finite-state compiler
 experiment; it does not validate providers or full application conversion.
+
+## Targeted boolean-state bindings — 2026-10-09
+
+70 tests pass and Dart analysis is clean. DOM binding tests apply transitions in
+both directions and check text, empty text, styles, attribute removal/disabled,
+escaping and retained button identity. Structural changes and app-context/theme
+rebuilding fail explicitly. Existing static-site tests still require no JS.
+The resolved period-selector build emits one tree with binding metadata and no
+HTML templates. Browser click and Enter checks update both totals and labels
+while preserving keyboard focus without runtime focus restoration.
+The compiler still evaluates both boolean states; general reactive expression
+lowering and providers remain unimplemented. No performance benchmark was rerun.

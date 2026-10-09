@@ -148,4 +148,4 @@ An explicit `staticTheme` snapshot enables Theme.of, selected textTheme/colorSch
 The [component preview guide](COMPONENT_PREVIEWS.md) documents configuration-driven composition and static constructor arguments. Reports distinguish `componentPreview` and `staticThemeProvided`; neither proves general application compatibility. Inspector runs without these snapshots remain conservative.
 
 
-Native boolean state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts include both compiled state variants.
+Native boolean state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts include both analyzed states. A single DOM tree plus targeted text/attribute bindings is emitted; structural changes between states are rejected.

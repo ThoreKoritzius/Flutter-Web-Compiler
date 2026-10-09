@@ -1,5 +1,6 @@
 import 'package:flutter_dom_compiler/flutter_dom_compiler.dart';
 import 'package:test/test.dart';
+import 'package:html/parser.dart';
 
 const source = """
 class Toggle extends StatefulWidget {
@@ -21,16 +22,21 @@ void main() {
   Compilation compile(String input) =>
       compiler.compile(input, {'root': 'Toggle'}, domOnly: true);
 
-  test('boolean state emits initial HTML and both validated variants', () {
+  test('boolean state emits one initial tree and targeted bindings', () {
     final result = compile(source);
     expect(result.report['nativeStateInstances'], 1);
     expect(result.report['nativeAdapterInstances'], 0);
     expect(result.island, isNull);
-    final initial = result.html.split('<template').first;
+    final initial = parse(
+      result.html,
+    ).querySelector('[data-dom-view]')!.outerHtml;
     expect(initial, contains('Collapsed'));
     expect(initial, isNot(contains('Expanded')));
     expect(initial, contains('data-dom-next="true"'));
-    expect(result.html, contains('data-dom-next="false"'));
+    expect(result.html, contains('data-dom-bindings='));
+    expect(result.html, isNot(contains('<template')));
+    expect(result.nativeRuntime, isNot(contains('replaceChildren')));
+    expect(result.nativeRuntime, isNot(contains('.focus(')));
     expect(result.html, contains('native.js'));
     expect(result.nativeRuntime, isNot(contains('eval(')));
   });
@@ -41,12 +47,23 @@ void main() {
           .replaceFirst('expanded = false', 'expanded = true')
           .replaceFirst('expanded = !expanded', 'expanded = false'),
     );
-    expect(result.html.split('<template').first, contains('Expanded'));
+    expect(
+      parse(result.html).querySelector('[data-dom-view]')!.text,
+      contains('Expanded'),
+    );
     expect(result.html, isNot(contains('data-dom-next="true"')));
   });
 
   test('unsupported state behavior fails instead of being dropped', () {
     for (final input in [
+      source.replaceFirst(
+        "Text(expanded ? 'Expanded' : 'Collapsed')",
+        "expanded ? Row(children: [Text('Expanded')]) : Text('Collapsed')",
+      ),
+      source.replaceFirst(
+        "Text(expanded ? 'Expanded' : 'Collapsed')",
+        "MaterialApp(home: Text('Content'), theme: expanded ? ThemeData.dark() : null)",
+      ),
       source.replaceFirst('onPressed: () =>', 'onPressed: () async =>'),
       source.replaceFirst('setState(() =>', 'setState(() async =>'),
       source.replaceFirst('bool expanded = false;', 'int expanded = 0;'),

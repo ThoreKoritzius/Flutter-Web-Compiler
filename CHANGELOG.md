@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace boolean-state HTML templates with targeted text/attribute patches that preserve existing elements and keyboard focus. Reject structural state changes explicitly.
+
 - Add a bounded native boolean StatefulWidget subset, HTML buttons and a shared event runtime.
 - Add a shared Flutter period-selector fixture; report state instances and variant counts explicitly.
 

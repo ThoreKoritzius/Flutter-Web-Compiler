@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'chart.dart';
+import 'state_dom.dart';
 import 'painter.dart';
 import 'project.dart';
 import 'analysis_environment.dart';
@@ -707,9 +708,16 @@ class FlutterDomCompiler {
               field.name.lexeme: stateValue,
             });
           }
-          return '<section data-dom-state="$id"><div data-dom-view>${variants[initial]}</div>'
-              '<template data-dom-variant="false">${variants[false]}</template>'
-              '<template data-dom-variant="true">${variants[true]}</template></section>';
+          try {
+            return bindBooleanDom(
+              variants[false]!,
+              variants[true]!,
+              initial,
+              id,
+            );
+          } on ArgumentError catch (error) {
+            fail(error.message.toString());
+          }
         } finally {
           activeStateField = null;
         }
@@ -1010,6 +1018,10 @@ class FlutterDomCompiler {
             fail('Buttons require a supported native state callback.');
           return '<button type="button" ${action == null ? 'disabled' : 'data-dom-next="${(action as _StateAction).target}"'}>${render(n['child'])}</button>';
         case 'MaterialApp':
+          if (activeStateField != null)
+            fail(
+              'Native state cannot rebuild MaterialApp theme or application context.',
+            );
           check(call, {'home', 'debugShowCheckedModeBanner', 'title', 'theme'});
           if (n['theme'] != null) {
             final theme = n['theme'];
@@ -1258,11 +1270,11 @@ class FlutterDomCompiler {
       'nativeFilterInstances': filterCount,
       'nativeStateInstances': reactiveCount,
       'stateStrategy':
-          'Two precompiled DOM variants per boolean state; no Dart-to-JS translation',
+          'Targeted DOM bindings derived from two boolean builds; no Dart-to-JS translation',
       'initialFlutterBytes': 0,
       'rendering': reactiveCount == 0
           ? 'static HTML; approximate CSS layout'
-          : 'HTML with finite boolean-state variants; approximate CSS layout',
+          : 'HTML with targeted boolean-state bindings; approximate CSS layout',
       'limitations': [
         if (resolved == null)
           'Single source file'
@@ -1270,7 +1282,7 @@ class FlutterDomCompiler {
           'Project-local declarations; external widget packages unsupported',
         'Static data and constructor fields; native state limited to one boolean per instance',
         if (reactiveCount > 0)
-          'Boundary counts include both state variants; subtree replacement is not Flutter reconciliation',
+          'Boundary counts include both analyzed states; stable DOM structure required',
         'One explicit island',
         'No state bridge to Flutter islands',
         'No Flutter layout parity guarantee',
@@ -1328,19 +1340,3 @@ class _RunAppVisitor extends RecursiveAstVisitor<void> {
     super.visitMethodInvocation(node);
   }
 }
-
-/// Generic event runtime for the deliberately bounded boolean-state subset.
-const reactiveRuntime = r'''
-document.addEventListener('click', (event) => {
-  const button = event.target.closest('button[data-dom-next]');
-  if (!button) return;
-  const owner = button.closest('[data-dom-state]');
-  const view = owner.querySelector('[data-dom-view]');
-  const buttons = [...view.querySelectorAll('button')];
-  const index = buttons.indexOf(button);
-  const focused = document.activeElement === button;
-  const template = owner.querySelector('template[data-dom-variant="' + button.dataset.domNext + '"]');
-  view.replaceChildren(template.content.cloneNode(true));
-  if (focused) view.querySelectorAll('button')[index]?.focus();
-});
-''';

@@ -216,8 +216,8 @@ A second [synthetic-data dashboard](examples/health/README.md) demonstrates resp
 
 ### Native boolean state
 
-A small StatefulWidget subset now compiles directly to HTML buttons and two DOM
-variants, with a shared event runtime. No widget-name adapter is used.
+A small StatefulWidget subset now compiles directly to HTML buttons and targeted
+text/attribute bindings, with a shared event runtime. No widget-name adapter is used.
 Try the [period selector](examples/multifile/lib/period_selector.dart):
 
 ```sh
