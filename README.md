@@ -213,3 +213,22 @@ Independent community experiment. Not affiliated with or endorsed by the Flutter
 ## Native health demo
 
 A second [synthetic-data dashboard](examples/health/README.md) demonstrates responsive metric cards, native SVG charts and expandable data tables with no Flutter runtime or JavaScript. Build both native and Flutter targets with `dart run tool/health.dart`, then open `/health/` on the showcase server. Chart geometry is compiled from a restricted subset of the shared Dart `paint()` method; hover, keyboard focus and daily values are available in both targets. Widget and interaction adapters remain explicit; arbitrary chart libraries and state logic are not supported.
+
+### Native boolean state
+
+A small StatefulWidget subset now compiles directly to HTML buttons and two DOM
+variants, with a shared event runtime. No widget-name adapter is used.
+Try the [period selector](examples/multifile/lib/period_selector.dart):
+
+```sh
+dart run bin/flutter_dom.dart build --project examples/multifile \
+  --source lib/period_selector.dart --config flutter_dom.state.json \
+  --resolve-imports --dom-only --output build/reactive-demo
+python3 -m http.server 8112 --directory build/reactive-demo
+```
+
+Open http://localhost:8112 and click the period button or activate it with Enter.
+The same source runs in Flutter with
+`flutter run -d chrome -t lib/period_selector.dart` from `examples/multifile`.
+This is a bounded boolean-state experiment, not a general state-management
+compiler. See [supported state and limitations](docs/NATIVE_STATE.md).

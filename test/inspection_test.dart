@@ -56,7 +56,7 @@ class Imported extends StatelessWidget { Widget build(BuildContext c) => Unknown
     expect(score['total'], 3);
     expect(score['percent'], closeTo(100 / 3, .001));
     final entries = score['entries'] as List;
-    expect(entries[1]['blocker'], contains('StatelessWidget'));
+    expect(entries[1]['blocker'], contains('createState'));
     expect(entries[2]['file'], 'lib/main.dart');
     expect(entries[2]['line'], 3);
   });

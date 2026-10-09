@@ -74,3 +74,14 @@ The real multi-file CLI inspection reports one static root and one input-depende
 62 tests pass, `dart analyze` is clean, and the reusable sample-stat fixture passes Flutter analysis and a resolved DOM-only CLI build. Coverage includes local scope and field shadowing, arithmetic, positional/default constructor inputs, scalar type promotion, explicit theme snapshots, null copyWith behavior, color alpha/decoration and rejection of mutable locals, side effects and unsafe CSS values. A previous unsupported-maxLines test now uses unsupported softWrap; maxLines has a supported approximate CSS mapping. Preview layout was checked at desktop and 390 px phone width.
 
 This validates static components with supplied inputs. It does not establish live theme parity, provider/lifecycle behavior, full app startup or interactive application conversion. Existing full-showcase benchmark snapshots were not regenerated for this feature.
+
+## Bounded native state — 2026-10-09
+
+67 tests pass and Dart analysis is clean. New coverage checks initial boolean
+state, both variant transitions, literal assignments, independent instances and
+rejection of lifecycle methods, extra fields, arbitrary/async callbacks,
+unsupported inactive branches, nested state and state-shadowing locals.
+The shared period-selector fixture passes Flutter analysis and a resolved
+DOM-only CLI build. Browser checks verified mouse activation, Enter activation,
+changed totals and retained keyboard focus. This is a finite-state compiler
+experiment; it does not validate providers or full application conversion.

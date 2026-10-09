@@ -160,15 +160,25 @@ Future<void> main(List<String> arguments) async {
     }
     File(p.join(output.path, 'index.html')).writeAsStringSync(compiled.html);
     File(p.join(output.path, 'styles.css')).writeAsStringSync(_styles);
-    if ((compiled.report['nativeFilterInstances'] as int) > 0) {
-      File(p.join(output.path, 'native.js')).writeAsStringSync(_nativeAdapters);
+    if (((compiled.report['nativeFilterInstances'] as int) > 0 ||
+        (compiled.report['nativeStateInstances'] as int) > 0)) {
+      File(p.join(output.path, 'native.js')).writeAsStringSync(
+        ((compiled.report['nativeFilterInstances'] as int) > 0
+                ? _nativeAdapters
+                : '') +
+            ((compiled.report['nativeStateInstances'] as int) > 0
+                ? compiled.nativeRuntime
+                : ''),
+      );
     }
     compiled.report['initialFilesBytesUncompressed'] = {
       for (final name in [
         'index.html',
         'styles.css',
         ...compiled.report['assets'] as List<String>,
-        if ((compiled.report['nativeFilterInstances'] as int) > 0) 'native.js',
+        if (((compiled.report['nativeFilterInstances'] as int) > 0 ||
+            (compiled.report['nativeStateInstances'] as int) > 0))
+          'native.js',
         if (compiled.island != null) 'islands.js',
       ])
         name: File(p.join(output.path, name)).lengthSync(),
@@ -188,6 +198,11 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln(
       '  Native boundaries  $native/$total (${total == 0 ? 'N/A' : (100 * native / total).toStringAsFixed(1)}%) · ${compiled.report['nativeAdapterInstances']} adapters · ${compiled.island == null ? 0 : 1} Flutter island',
     );
+    if ((compiled.report['nativeStateInstances'] as int) > 0) {
+      stdout.writeln(
+        '  Native state       ${compiled.report['nativeStateInstances']} boolean instance(s) · both variants counted',
+      );
+    }
     stdout.writeln(
       '  Initial files      ${(bytes / 1024).toStringAsFixed(1)} KiB (including images)',
     );
@@ -246,12 +261,12 @@ Future<void> _inspect(List<String> arguments) async {
     final sites = report['callSites'] as Map<String, Object?>?;
     if (sites != null) {
       stdout.writeln(
-        '${_accent('Widget roots')}: ${coverage['native']} static · '
+        '${_accent('Widget roots')}: ${coverage['native']} native · '
         '${coverage['needsInputs']} need inputs · ${coverage['unsupported']} unsupported '
         '(${coverage['total']} checked).',
       );
       stdout.writeln(
-        '${_accent('Constructor sites')}: ${sites['native']} static · '
+        '${_accent('Constructor sites')}: ${sites['native']} native · '
         '${sites['needsContext']} need context · ${sites['unsupported']} unsupported '
         '(${sites['checked']}/${sites['total']} checked).',
       );

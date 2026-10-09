@@ -23,6 +23,7 @@ class CompileException implements Exception {
 
 class Compilation {
   Compilation(this.html, this.report, this.island);
+  String get nativeRuntime => reactiveRuntime;
   final String html;
   final Map<String, Object?> report;
   final String? island;
@@ -35,6 +36,11 @@ class _Call {
   final List<Object?> positional;
   final Map<String, Object?> named;
   final int line;
+}
+
+class _StateAction {
+  _StateAction(this.target);
+  final bool target;
 }
 
 class _StaticObject {
@@ -52,7 +58,7 @@ class _StaticColor {
   }
 }
 
-/// Deliberately static: never executes the input application.
+/// Build-time AST evaluation: never executes the input application.
 class FlutterDomCompiler {
   Future<Compilation> compileProject(
     String project,
@@ -128,6 +134,9 @@ class FlutterDomCompiler {
     var adapterCount = 0;
     var filterCount = 0;
     var darkTheme = false;
+    var reactiveCount = 0;
+    String? activeStateField;
+    var evaluatingState = false;
     final stack = <String>[];
     var scope = <String, Object?>{};
     var instanceFields = <String, Object?>{};
@@ -231,6 +240,45 @@ class FlutterDomCompiler {
           .lineNumber;
       if (--evaluationBudget < 0)
         fail('Static evaluation budget exceeded.', line);
+      if (expression is FunctionExpression) {
+        final field = activeStateField;
+        final outer = expression.body;
+        if (field == null ||
+            !evaluatingState ||
+            expression.parameters?.parameters.isNotEmpty == true ||
+            outer is! ExpressionFunctionBody ||
+            outer.isAsynchronous)
+          fail('Unsupported event callback.');
+        final call = outer.expression;
+        if (call is! MethodInvocation ||
+            call.target != null ||
+            call.methodName.name != 'setState' ||
+            call.argumentList.arguments.length != 1) {
+          fail('Events require () => setState(() => field = !field).');
+        }
+        final callback = call.argumentList.arguments.single;
+        if (callback is! FunctionExpression ||
+            callback.parameters?.parameters.isNotEmpty == true ||
+            callback.body is! ExpressionFunctionBody ||
+            callback.body.isAsynchronous)
+          fail('Unsupported setState body.');
+        final assignment = (callback.body as ExpressionFunctionBody).expression;
+        if (assignment is! AssignmentExpression ||
+            assignment.operator.lexeme != '=' ||
+            assignment.leftHandSide is! SimpleIdentifier ||
+            (assignment.leftHandSide as SimpleIdentifier).name != field) {
+          fail('setState supports assignment to the boolean state field only.');
+        }
+        final rhs = assignment.rightHandSide;
+        if (rhs is! BooleanLiteral &&
+            !(rhs is PrefixExpression &&
+                rhs.operator.lexeme == '!' &&
+                rhs.operand is SimpleIdentifier &&
+                (rhs.operand as SimpleIdentifier).name == field)) {
+          fail('State assignment requires true, false, or !field.');
+        }
+        return _StateAction(value(rhs) as bool);
+      }
       if (expression is SimpleStringLiteral) return expression.value;
       if (expression is AdjacentStrings) {
         final parts = expression.strings.map(value).toList();
@@ -560,22 +608,120 @@ class FlutterDomCompiler {
     }
 
     late String Function(Object?) render;
-    String buildClass(String name, [_Call? invocation]) {
+    String buildClass(
+      String name, [
+      _Call? invocation,
+      Map<String, Object?>? stateBindings,
+    ]) {
       final node = classes[name];
       if (node != null) currentNode = node;
       if (node == null)
         fail('Unknown widget $name or unsupported declaration.');
-      if ((resolved == null
-              ? node.extendsClause?.superclass.toSource()
-              : resolved.superclass(node)) !=
-          'StatelessWidget') {
+      final base = resolved == null
+          ? node.extendsClause?.superclass.name2.lexeme
+          : resolved.superclass(node);
+      if (base == 'StatefulWidget' && stateBindings == null) {
+        if (activeStateField != null)
+          fail('Nested native state is not supported yet.');
+        check(invocation ?? _Call(name, [], {}, 1), {});
+        if (node.withClause != null ||
+            node.implementsClause != null ||
+            node.members.whereType<FieldDeclaration>().isNotEmpty ||
+            node.members.whereType<MethodDeclaration>().any(
+              (m) => m.name.lexeme != 'createState',
+            )) {
+          fail(
+            'Native stateful widgets support no inputs, mixins, or extra methods yet.',
+          );
+        }
+        for (final ctor in node.members.whereType<ConstructorDeclaration>()) {
+          if (ctor.name != null ||
+              ctor.factoryKeyword != null ||
+              ctor.initializers.isNotEmpty ||
+              ctor.body is! EmptyFunctionBody ||
+              ctor.parameters.parameters.any((p) {
+                final parameter = p is DefaultFormalParameter ? p.parameter : p;
+                return parameter is! SuperFormalParameter ||
+                    parameter.name.lexeme != 'key' ||
+                    p is DefaultFormalParameter && p.defaultValue != null;
+              })) {
+            fail(
+              'Native stateful widgets support only an unnamed key constructor.',
+            );
+          }
+        }
+        final creators = node.members.whereType<MethodDeclaration>().toList();
+        if (creators.length != 1 ||
+            creators.single.body is! ExpressionFunctionBody)
+          fail('createState must directly return a State constructor.');
+        final creation =
+            (creators.single.body as ExpressionFunctionBody).expression;
+        final stateCall = value(creation);
+        if (stateCall is! _Call ||
+            stateCall.named.isNotEmpty ||
+            stateCall.positional.isNotEmpty ||
+            !classes.containsKey(stateCall.name))
+          fail(
+            'createState must directly return a zero-argument State constructor.',
+          );
+        final stateName = stateCall.name;
+        final state = classes[stateName];
+        if (state == null ||
+            state.withClause != null ||
+            state.implementsClause != null ||
+            (resolved == null
+                    ? state.extendsClause?.superclass.name2.lexeme
+                    : resolved.superclass(state)) !=
+                'State' ||
+            state.members.any(
+              (m) => m is! FieldDeclaration && m is! MethodDeclaration,
+            ) ||
+            state.members.whereType<MethodDeclaration>().any(
+              (m) => m.name.lexeme != 'build',
+            )) {
+          fail(
+            'Native State supports build only; lifecycle, mixins and helpers require an island.',
+          );
+        }
+        final fields = state.members.whereType<FieldDeclaration>().toList();
+        if (fields.length != 1 ||
+            fields.single.isStatic ||
+            fields.single.fields.isFinal ||
+            fields.single.fields.lateKeyword != null ||
+            fields.single.fields.type?.toSource() != 'bool' ||
+            fields.single.fields.variables.length != 1 ||
+            fields.single.fields.variables.single.initializer
+                is! BooleanLiteral) {
+          fail(
+            'Native State currently requires exactly one bool field with a literal initializer.',
+          );
+        }
+        final field = fields.single.fields.variables.single;
+        final initial = (field.initializer as BooleanLiteral).value;
+        final id = reactiveCount++;
+        activeStateField = field.name.lexeme;
+        try {
+          final variants = <bool, String>{};
+          for (final stateValue in [false, true]) {
+            variants[stateValue] = buildClass(stateName, null, {
+              field.name.lexeme: stateValue,
+            });
+          }
+          return '<section data-dom-state="$id"><div data-dom-view>${variants[initial]}</div>'
+              '<template data-dom-variant="false">${variants[false]}</template>'
+              '<template data-dom-variant="true">${variants[true]}</template></section>';
+        } finally {
+          activeStateField = null;
+        }
+      }
+      if (stateBindings == null && base != 'StatelessWidget') {
         fail(
           '$name must be a StatelessWidget or an explicitly configured Flutter island.',
         );
       }
       final fields = node.members
           .whereType<FieldDeclaration>()
-          .where((field) => !field.isStatic)
+          .where((field) => !field.isStatic && stateBindings == null)
           .toList();
       for (final field in fields) {
         if (!field.fields.isFinal ||
@@ -590,7 +736,7 @@ class FlutterDomCompiler {
           .toList();
       if (constructors.length > 1)
         fail('$name supports only one unnamed constructor.');
-      final bindings = <String, Object?>{};
+      final bindings = <String, Object?>{...?stateBindings};
       final call =
           invocation ??
           _Call(
@@ -696,6 +842,8 @@ class FlutterDomCompiler {
       );
       if (methods.length != 1) fail('$name needs one build method.');
       final body = methods.single.body;
+      if (stateBindings != null && body.isAsynchronous)
+        fail('Native build must be synchronous.');
       Expression? expression;
       final locals = <VariableDeclaration>[];
       if (body is ExpressionFunctionBody) expression = body.expression;
@@ -723,11 +871,15 @@ class FlutterDomCompiler {
       stack.add(name);
       final previous = scope;
       final previousFields = instanceFields;
+      final previousEvaluation = evaluatingState;
+      evaluatingState = stateBindings != null;
       scope = {...bindings};
       instanceFields = bindings;
       try {
         final localNames = <String>{};
         for (final local in locals) {
+          if (local.name.lexeme == activeStateField)
+            fail('Locals must not shadow the native state field.');
           if (!localNames.add(local.name.lexeme))
             fail('Duplicate local ${local.name.lexeme}.');
           scope[local.name.lexeme] = value(local.initializer!);
@@ -736,6 +888,7 @@ class FlutterDomCompiler {
       } finally {
         scope = previous;
         instanceFields = previousFields;
+        evaluatingState = previousEvaluation;
         stack.removeLast();
       }
     }
@@ -747,6 +900,10 @@ class FlutterDomCompiler {
       if (call.origin != null) currentNode = call.origin;
       final n = call.named;
       counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
+      if (activeStateField != null &&
+          (nativeAdapters.containsKey(call.name) ||
+              islandConfig.containsKey(call.name)))
+        fail('Native state variants cannot contain adapters or islands yet.');
       if (nativeAdapters.containsKey(call.name)) {
         if (!classes.containsKey(call.name))
           fail('Adapter widget must exist in the source file.');
@@ -843,6 +1000,15 @@ class FlutterDomCompiler {
             '</section>';
       }
       switch (call.name) {
+        case 'TextButton':
+        case 'ElevatedButton':
+        case 'OutlinedButton':
+          check(call, {'onPressed', 'child'});
+          final action = n['onPressed'];
+          if (activeStateField == null ||
+              action != null && action is! _StateAction)
+            fail('Buttons require a supported native state callback.');
+          return '<button type="button" ${action == null ? 'disabled' : 'data-dom-next="${(action as _StateAction).target}"'}>${render(n['child'])}</button>';
         case 'MaterialApp':
           check(call, {'home', 'debugShowCheckedModeBanner', 'title', 'theme'});
           if (n['theme'] != null) {
@@ -1069,7 +1235,7 @@ class FlutterDomCompiler {
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<title>$title</title><meta name="description" content="$description">\n'
         '<link rel="stylesheet" href="styles.css">\n</head><body class="theme-$theme">\n$body\n'
-        '${filterCount == 0 ? '' : '<script src="native.js" defer></script>\n'}'
+        '${filterCount == 0 && reactiveCount == 0 ? '' : '<script src="native.js" defer></script>\n'}'
         '${island == null ? '' : '<script src="islands.js" defer></script>\n'}'
         '</body></html>\n';
     return Compilation(html, {
@@ -1090,16 +1256,23 @@ class FlutterDomCompiler {
       'island': island,
       'nativeAdapterInstances': adapterCount,
       'nativeFilterInstances': filterCount,
+      'nativeStateInstances': reactiveCount,
+      'stateStrategy':
+          'Two precompiled DOM variants per boolean state; no Dart-to-JS translation',
       'initialFlutterBytes': 0,
-      'rendering': 'static HTML; approximate CSS layout',
+      'rendering': reactiveCount == 0
+          ? 'static HTML; approximate CSS layout'
+          : 'HTML with finite boolean-state variants; approximate CSS layout',
       'limitations': [
         if (resolved == null)
           'Single source file'
         else
           'Project-local declarations; external widget packages unsupported',
-        'Static data and named constructor fields only',
+        'Static data and constructor fields; native state limited to one boolean per instance',
+        if (reactiveCount > 0)
+          'Boundary counts include both state variants; subtree replacement is not Flutter reconciliation',
         'One explicit island',
-        'No state bridge',
+        'No state bridge to Flutter islands',
         'No Flutter layout parity guarantee',
       ],
     }, island);
@@ -1155,3 +1328,19 @@ class _RunAppVisitor extends RecursiveAstVisitor<void> {
     super.visitMethodInvocation(node);
   }
 }
+
+/// Generic event runtime for the deliberately bounded boolean-state subset.
+const reactiveRuntime = r'''
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-dom-next]');
+  if (!button) return;
+  const owner = button.closest('[data-dom-state]');
+  const view = owner.querySelector('[data-dom-view]');
+  const buttons = [...view.querySelectorAll('button')];
+  const index = buttons.indexOf(button);
+  const focused = document.activeElement === button;
+  const template = owner.querySelector('template[data-dom-variant="' + button.dataset.domNext + '"]');
+  view.replaceChildren(template.content.cloneNode(true));
+  if (focused) view.querySelectorAll('button')[index]?.focus();
+});
+''';

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a bounded native boolean StatefulWidget subset, HTML buttons and a shared event runtime.
+- Add a shared Flutter period-selector fixture; report state instances and variant counts explicitly.
+
 - Compile initialized static locals, numeric arithmetic and positional field constructors.
 - Add explicit theme snapshots, supported text-style/color operations and basic decoration.
 - Add configuration-driven previews of original components with primitive mock inputs.

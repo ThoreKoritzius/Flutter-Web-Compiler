@@ -305,7 +305,7 @@ class ProjectInspector {
     out.writeln('## Native compiler compatibility\n');
     if (report.containsKey('callSites')) {
       out.writeln(
-        '${coverage['native']} static · ${coverage['needsInputs']} need inputs · '
+        '${coverage['native']} native · ${coverage['needsInputs']} need inputs · '
         '${coverage['unsupported']} unsupported (${coverage['total']} roots).\n',
       );
     } else {
@@ -326,7 +326,7 @@ class ProjectInspector {
     if (sites != null) {
       out.writeln('## Constructor call sites\n');
       out.writeln(
-        '${sites['native']} static · ${sites['needsContext']} need context · '
+        '${sites['native']} native · ${sites['needsContext']} need context · '
         '${sites['unsupported']} unsupported (${sites['checked']}/${sites['total']} checked; '
         '${sites['skipped']} skipped).\n',
       );

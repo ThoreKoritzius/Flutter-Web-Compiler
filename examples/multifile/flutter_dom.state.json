@@ -1,0 +1,6 @@
+{
+  "root": "PeriodSelector",
+  "title": "Activity · native state",
+  "description": "A Flutter boolean-state selector compiled to native HTML buttons.",
+  "theme": "dark"
+}

@@ -61,7 +61,7 @@ It does **not** establish reachability, package compatibility, rendered widget c
 
 The CLI also dry-runs every recognized direct widget subclass as a parameterless, DOM-only root. The score is accepted entry points divided by tested entry points; zero candidates yields N/A. Reports list each widget, file, declaration line and its first blocking compiler diagnostic. This exercises the real compiler, including arguments and expressions, instead of counting familiar widget names.
 
-Required constructor arguments, imported definitions, stateful widgets and unresolved context are conservatively blocked. Adapters and islands are disabled for this measurement. A reusable widget may therefore fail in isolation while compiling when called with static data from a supported parent. Indirect subclasses and aliased types are outside the denominator. This score measures compiler acceptance, not verified behavior or a percentage of the whole application. Run Flutter analysis separately.
+Required constructor arguments, imported definitions, unsupported stateful widgets and unresolved context are conservatively blocked. Adapters and islands are disabled for this measurement. A reusable widget may therefore fail in isolation while compiling when called with static data from a supported parent. Indirect subclasses and aliased types are outside the denominator. This score measures compiler acceptance, not verified behavior or a percentage of the whole application. Run Flutter analysis separately.
 
 Static primitive string interpolation and boolean conditional expressions are now supported, including constructor-bound values. Only the selected static branch is compiled. Runtime conditions remain unsupported.
 
@@ -129,7 +129,7 @@ The public analyzer factory cannot set declared variables in the pinned release.
 
 Resolved inspection now presents two separate breakdowns instead of a headline percentage:
 
-- **Widget roots:** static, needs inputs, or unsupported. Required constructor inputs are a distinct first blocker, not evidence that the widget body is incompatible.
+- **Widget roots:** native, needs inputs, or unsupported. Required constructor inputs are a distinct first blocker, not evidence that the widget body is incompatible.
 - **Constructor sites:** actual project-widget constructor expressions checked independently with their supplied arguments. Static literals, supported constants and nested constructors can compile. Unbound enclosing identifiers need context; unsupported syntax or rendering operations remain unsupported. Categories describe the first blocker; supplying context does not guarantee the remainder will compile.
 
 The compiler evaluates the original resolved constructor AST, so it does not generate guessed arguments or substitute source strings. Calls in unused functions or inactive runtime branches are still source sites, and nested calls may each be counted. This is not runtime reachability, unique screen coverage or verified behavior. Inspection does not perform interprocedural propagation of enclosing locals, parameters or state.
@@ -146,3 +146,6 @@ Initialized local final/const values are evaluated in order, with per-instance s
 An explicit `staticTheme` snapshot enables Theme.of, selected textTheme/colorScheme properties, TextStyle.copyWith and Color.withValues(alpha:). No theme values are guessed from application startup. Text supports positive maxLines through browser CSS line clamping; truncation and text metrics are approximate. Container supports BoxDecoration with a static theme color and BorderRadius.circular. Unsupported decoration/style fields still fail.
 
 The [component preview guide](COMPONENT_PREVIEWS.md) documents configuration-driven composition and static constructor arguments. Reports distinguish `componentPreview` and `staticThemeProvided`; neither proves general application compatibility. Inspector runs without these snapshots remain conservative.
+
+
+Native boolean state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts include both compiled state variants.
