@@ -1,0 +1,55 @@
+{
+  "title": "Delivery overview",
+  "theme": "dark",
+  "staticTheme": {
+    "textTheme": {
+      "titleMedium": {
+        "fontSize": 28
+      },
+      "labelMedium": {
+        "fontSize": 13
+      }
+    },
+    "colorScheme": {
+      "onSurfaceVariant": "#a8b0c5",
+      "outlineVariant": "#4f5669"
+    }
+  },
+  "preview": [
+    {
+      "root": "InfoPanel",
+      "positionalArguments": [
+        "Delivery status"
+      ],
+      "arguments": {
+        "description": "This week",
+        "child": {
+          "widget": "lib/sample_stat.dart::SampleStat",
+          "positionalArguments": [
+            "Completed tasks"
+          ],
+          "arguments": {
+            "value": "24"
+          }
+        }
+      }
+    },
+    {
+      "root": "InfoPanel",
+      "positionalArguments": [
+        "Review queue"
+      ],
+      "arguments": {
+        "child": {
+          "widget": "lib/sample_stat.dart::SampleStat",
+          "positionalArguments": [
+            "Pending reviews"
+          ],
+          "arguments": {
+            "value": "6"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -149,3 +149,21 @@ The [component preview guide](COMPONENT_PREVIEWS.md) documents configuration-dri
 
 
 Native local bool/int state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts visit the state tree once. Typed expressions update dependent text and button enablement without state enumeration; state-dependent structure and styling are rejected.
+
+
+### Composed widgets and static getters
+
+Preview arguments may include bounded lists and explicit project-local widget
+references; see [composed previews](COMPONENT_PREVIEWS.md#composed-previews).
+Synchronous expression-bodied getters on stateless components use only instance scope and the
+existing expression subset. They cannot capture build locals. Recursive getters,
+arbitrary calls and unsupported bodies fail. Static equality accepts primitive
+values and null checks; comparing two non-primitive objects remains unsupported.
+Postfix null assertions are checked in the selected branch.
+
+`Expanded(child:, flex:)` maps a positive static flex factor to CSS flex sizing.
+`Card(child:, shape:, margin:, color:)` supports circular RoundedRectangleBorder
+radii and BorderSide with explicit color and optional nonnegative width. Margin
+uses supported EdgeInsets forms; color uses the existing static-color contract.
+Defaults use lightweight CSS colors/radius rather than resolving Material themes.
+Elevation, clipping, ink effects and exact Flutter constraints remain unsupported.

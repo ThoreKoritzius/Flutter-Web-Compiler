@@ -156,6 +156,8 @@ class FlutterDomCompiler {
     final stack = <String>[];
     var scope = <String, Object?>{};
     var instanceFields = <String, Object?>{};
+    var instanceGetters = <String, Expression>{};
+    final evaluatingGetters = <String>[];
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
     for (final declaration
@@ -377,6 +379,16 @@ class FlutterDomCompiler {
         }
         final b = value(expression.rightOperand);
         if (b is ReactiveValue) return ReactiveValue.operation(op, [a, b]);
+        if (op == '==' || op == '!=') {
+          bool primitive(Object? v) =>
+              v == null || v is num || v is String || v is bool;
+          if (a != null && b != null && (!primitive(a) || !primitive(b)))
+            fail(
+              'Equality between non-primitive objects is unsupported.',
+              line,
+            );
+          return op == '==' ? a == b : a != b;
+        }
         if (op == '+' && a is String && b is String) return a + b;
         if (a is! num || b is! num)
           fail('Arithmetic requires static numbers.', line);
@@ -409,6 +421,34 @@ class FlutterDomCompiler {
           scope.containsKey(expression.name)) {
         return scope[expression.name];
       }
+      final getterName = expression is SimpleIdentifier
+          ? expression.name
+          : expression is PropertyAccess && expression.target is ThisExpression
+          ? expression.propertyName.name
+          : null;
+      if (getterName != null && instanceGetters.containsKey(getterName)) {
+        if (evaluatingGetters.contains(getterName) ||
+            evaluatingGetters.length >= 64)
+          fail('Recursive or excessively nested getter $getterName.', line);
+        final previous = scope;
+        scope = {
+          ...instanceFields,
+        }; // Getters cannot capture build-local variables.
+        evaluatingGetters.add(getterName);
+        try {
+          return value(instanceGetters[getterName]!);
+        } finally {
+          scope = previous;
+          evaluatingGetters.removeLast();
+        }
+      }
+      if (expression is PostfixExpression &&
+          expression.operator.lexeme == '!') {
+        final operand = value(expression.operand);
+        if (operand == null)
+          fail('Null assertion failed in the compiled branch.', line);
+        return operand;
+      }
       final constantName = resolved != null && expression is Identifier
           ? resolved.symbol(expression.element)
           : expression is SimpleIdentifier
@@ -425,6 +465,8 @@ class FlutterDomCompiler {
         resolving.add(name);
         final previous = scope;
         final previousFields = instanceFields;
+        final previousGetters = instanceGetters;
+        instanceGetters = {};
         instanceFields = {};
         scope = {}; // Top-level initializers cannot capture widget fields.
         try {
@@ -432,6 +474,7 @@ class FlutterDomCompiler {
         } finally {
           scope = previous;
           instanceFields = previousFields;
+          instanceGetters = previousGetters;
           resolving.removeLast();
         }
       }
@@ -835,6 +878,10 @@ class FlutterDomCompiler {
         final allowed = <String>{};
         var position = 0;
         final previous = scope;
+        final defaultFields = instanceFields;
+        final defaultGetters = instanceGetters;
+        instanceFields = {};
+        instanceGetters = {};
         scope = {};
         try {
           for (final wrapped in constructor.parameters.parameters) {
@@ -876,6 +923,8 @@ class FlutterDomCompiler {
           }
         } finally {
           scope = previous;
+          instanceFields = defaultFields;
+          instanceGetters = defaultGetters;
         }
         if (call.positional.length > position)
           fail('$name has too many positional arguments.', call.line);
@@ -947,6 +996,16 @@ class FlutterDomCompiler {
       final previous = scope;
       final previousFields = instanceFields;
       final previousEvaluation = evaluatingState;
+      final previousGetters = instanceGetters;
+      instanceGetters = {
+        for (final method in node.members.whereType<MethodDeclaration>())
+          if (method.isGetter &&
+              !method.isStatic &&
+              method.body is ExpressionFunctionBody &&
+              !method.body.isAsynchronous)
+            method.name.lexeme:
+                (method.body as ExpressionFunctionBody).expression,
+      };
       evaluatingState = stateBindings != null;
       scope = {...bindings};
       instanceFields = bindings;
@@ -964,6 +1023,7 @@ class FlutterDomCompiler {
         scope = previous;
         instanceFields = previousFields;
         evaluatingState = previousEvaluation;
+        instanceGetters = previousGetters;
         stack.removeLast();
       }
     }
@@ -1236,6 +1296,43 @@ class FlutterDomCompiler {
           }
           return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
               'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
+        case 'Expanded':
+          check(call, {'child', 'flex'});
+          final flex = n['flex'] ?? 1;
+          if (flex is! int || flex <= 0)
+            fail('Expanded flex must be a positive static integer.');
+          return '<div style="flex:$flex 1 0%;min-width:0;min-height:0">${render(n['child'])}</div>';
+        case 'Card':
+          check(call, {'child', 'shape', 'margin', 'color'});
+          final styles = <String>[];
+          if (n['margin'] != null) styles.add('margin:${padding(n['margin'])}');
+          if (n['color'] != null)
+            styles.add('background:${color(n['color']).css}');
+          final shape = n['shape'];
+          if (shape != null) {
+            if (shape is! _Call || shape.name != 'RoundedRectangleBorder')
+              fail('Card supports RoundedRectangleBorder only.');
+            check(shape, {'borderRadius', 'side'});
+            final radius = shape.named['borderRadius'];
+            if (radius == null) styles.add('border-radius:0');
+            if (radius != null) {
+              if (radius is! _Call || radius.name != 'BorderRadius.circular')
+                fail('Card radius must use BorderRadius.circular.');
+              check(radius, {}, 1);
+              styles.add('border-radius:${pixels(radius.positional.single)}');
+            }
+            final side = shape.named['side'];
+            if (side != null) {
+              if (side is! _Call || side.name != 'BorderSide')
+                fail('Card side requires BorderSide.');
+              check(side, {'color', 'width'});
+              final width = side.named['width'] ?? 1;
+              styles.add(
+                'border:${pixels(width)} solid ${color(side.named['color']).css}',
+              );
+            }
+          }
+          return '<div class="dom-card" style="${styles.join(';')}">${render(n['child'])}</div>';
         case 'Padding':
         case 'Container':
         case 'SizedBox':
@@ -1285,17 +1382,51 @@ class FlutterDomCompiler {
       }
     };
 
-    _Call configuredCall(String name, Map item) {
+    var previewInputBudget = 2000;
+    late _Call Function(String, Map, int) configuredCall;
+    Object? configuredValue(Object? input, int depth) {
+      if (--previewInputBudget < 0 || depth > 16)
+        fail('Preview input nesting/size limit exceeded.');
+      if (input == null ||
+          input is String ||
+          input is bool ||
+          input is num && input.isFinite)
+        return input;
+      if (input is List)
+        return input.map((v) => configuredValue(v, depth + 1)).toList();
+      if (input is Map &&
+          input['widget'] is String &&
+          input.keys.every(
+            (key) =>
+                ['widget', 'arguments', 'positionalArguments'].contains(key),
+          )) {
+        final name =
+            resolved?.root(input['widget'] as String) ??
+            input['widget'] as String;
+        if (!classes.containsKey(name))
+          fail('Preview widget must name a project-local class.');
+        return configuredCall(name, input, depth + 1);
+      }
+      fail(
+        'Preview inputs require finite primitives, lists or explicit project-local widget descriptors.',
+      );
+    }
+
+    configuredCall = (String name, Map item, int depth) {
       final named = Map<String, Object?>.from(item['arguments'] as Map? ?? {});
       final positional = List<Object?>.from(
         item['positionalArguments'] as List? ?? [],
       );
-      bool primitive(Object? v) =>
-          v == null || v is String || v is bool || v is num && v.isFinite;
-      if (!named.values.every(primitive) || !positional.every(primitive))
-        fail('Preview arguments must be finite primitive JSON values.');
-      return _Call(name, positional, named, 1);
-    }
+      return _Call(
+        name,
+        positional.map((v) => configuredValue(v, depth + 1)).toList(),
+        {
+          for (final entry in named.entries)
+            entry.key: configuredValue(entry.value, depth + 1),
+        },
+        1,
+      );
+    };
 
     final String body;
     if (previews != null) {
@@ -1306,14 +1437,14 @@ class FlutterDomCompiler {
           fail('Preview entries require a root.');
         final name =
             resolved?.root(item['root'] as String) ?? item['root'] as String;
-        return '<section class="dom-preview-card">${buildClass(name, configuredCall(name, item))}</section>';
+        return '<section class="dom-preview-card">${buildClass(name, configuredCall(name, item, 0))}</section>';
       }).join();
       body =
           '<main class="dom-preview"><h1>${_escape(config['title'] as String? ?? 'Component preview')}</h1>'
           '<p>Mock data</p><div class="dom-preview-grid">$cards</div></main>';
     } else {
       body = entryExpression == null
-          ? buildClass(root, configuredCall(root, config))
+          ? buildClass(root, configuredCall(root, config, 0))
           : render(value(entryExpression));
     }
     final title = _escape(config['title'] as String? ?? rootName);

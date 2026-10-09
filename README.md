@@ -233,3 +233,11 @@ minutes update. Buttons support mouse and keyboard activation.
 The same source runs in Flutter with
 `flutter run -d chrome -t lib/period_selector.dart` from `examples/multifile`.
 Providers, lifecycle methods and general Dart logic remain unsupported. See [supported state and limitations](docs/NATIVE_STATE.md).
+
+
+### Compose original components
+
+Preview configuration can pass another project-local widget into a `child` slot.
+Simple instance getters, optional content, Card and Expanded now support richer
+read-only compositions without rewriting widget bodies. See the
+[composed preview example](docs/COMPONENT_PREVIEWS.md#composed-previews).

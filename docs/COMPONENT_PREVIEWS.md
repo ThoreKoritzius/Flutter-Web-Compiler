@@ -13,7 +13,7 @@ The fixture is ordinary Flutter source. Its local variables, positional construc
 
 ## Configuration
 
-See [the complete example](../examples/multifile/flutter_dom.preview.json). A `preview` list selects 1–60 components. Each entry has a `root`, named `arguments` and/or `positionalArguments`. Arguments are finite primitive JSON values only. A root may be visible from the entry library, or identified as `lib/path.dart::ClassName` in the resolved library graph, including private declarations for local component evaluation.
+See [the complete example](../examples/multifile/flutter_dom.preview.json). A `preview` list selects 1–60 components. Each entry has a `root`, named `arguments` and/or `positionalArguments`. Arguments accept finite primitive JSON values, lists, and explicit project-local widget descriptors (below). Arbitrary model-object maps and executable callbacks are not accepted. A root may be visible from the entry library, or identified as `lib/path.dart::ClassName` in the resolved library graph, including private declarations for local component evaluation.
 
 The compiler renders those original widget bodies inside a responsive preview grid. The grid is configuration-driven preview UI, not a translation of the application's screen layout. Mock data is labelled visibly. Outside preview mode, `arguments` and `positionalArguments` can supply data to a single configured root. No application startup is executed.
 
@@ -27,3 +27,43 @@ The compiler renders those original widget bodies inside a responsive preview gr
 This is a static component preview, not a working whole app. Authentication, routing, provider state, live data and event callbacks remain unsupported outside explicit adapters/islands. Its output size and boundary counts cannot be compared with the full application's build as a like-for-like benchmark.
 
 Keep private preview configuration, build output and reports outside version control. Reusable fixtures in this repository contain only synthetic data.
+
+
+## Composed previews
+
+Widget-valued slots can refer to another original declaration:
+
+```json
+{
+  "root": "InfoPanel",
+  "positionalArguments": ["Delivery status"],
+  "arguments": {
+    "description": "This week",
+    "child": {
+      "widget": "lib/sample_stat.dart::SampleStat",
+      "positionalArguments": ["Completed tasks"],
+      "arguments": {"value": "24"}
+    }
+  }
+}
+```
+
+Descriptors instantiate the referenced declaration through the normal compiler;
+they do not inject HTML or replace its build method. Names must resolve to local
+classes in the selected import graph. The compiler limits input nesting to 16
+levels and input traversal to 2,000 values. A list can supply supported list-valued
+constructor inputs. Unsupported objects or widget behavior still fail explicitly.
+
+Run the independent composed fixture:
+
+```sh
+dart run bin/flutter_dom.dart build --project examples/multifile \
+  --source lib/info_panel.dart --config flutter_dom.composed.json \
+  --resolve-imports --dom-only --output build/composed-preview
+```
+
+Expression-bodied instance getters on supported stateless components are evaluated with instance fields, without
+capturing build-local variables. Cycles and excessive nesting are rejected.
+Primitive/null equality and checked null assertions allow optional content slots.
+Card and Expanded map to approximate CSS; Card shadows, Material theme resolution
+and Flutter constraint/layout parity are not implemented.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compile composed previews with bounded widget-valued inputs, scoped expression getters, primitive/null equality and checked null assertions.
+- Add approximate Card/Expanded CSS rendering and a generic resolved composition fixture.
+
 - Replace two-state enumeration with typed bool/int expression bindings, dependency-based updates, guarded integer arithmetic and native conditional button enablement.
 - Add a shared session-counter demo and Dart/JavaScript runtime parity tests. The typed backend currently rejects conditional CSS formerly accepted by boolean enumeration.
 

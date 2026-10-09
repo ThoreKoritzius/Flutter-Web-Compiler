@@ -120,3 +120,19 @@ Boolean DOM-diff tests and the old implementation were replaced by expression
 and runtime tests. Reactive CSS and structural widget changes are explicitly
 unsupported by this typed backend; static styling remains available. This does
 not establish general Dart, lifecycle, provider or whole-application conversion.
+
+## Composed static components — 2026-10-09
+
+78 tests pass and Dart/Flutter fixture analysis are clean. New coverage checks
+original nested widget declarations selected through preview configuration,
+lexically scoped getter evaluation, null assertions, absent optional content,
+getter recursion/unsupported bodies, descriptor validation and nesting limits,
+positive Expanded flex, and Card radius/border validation. The independent
+multi-file InfoPanel/SampleStat composition passes a resolved CLI build; CI now
+runs it alongside the existing fixtures. The selected composed preview was
+visually checked at the normal browser size and 390 px phone width.
+
+The catalog artifact benchmark was rerun under ignored
+`build/composition-benchmarks/`. Existing historical benchmark snapshots were not
+changed. These checks establish configured read-only composition with approximate
+CSS, not application startup, data loading, provider state or full-page parity.

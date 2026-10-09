@@ -31,6 +31,7 @@ A standalone CLI is the least coupled starting point. An IDE extension can surfa
 2. Extend the implemented same-file constants, collection `if` and spreads to collection `for`, then `Wrap` and constrained responsive layout.
 3. Add native links and a small controlled form/event contract with interaction parity tests.
 4. Extend the implemented local-state expression slice with controlled forms and lifecycle contracts before broad Provider/Riverpod compatibility.
+5. For actual feature slices, prioritize StatefulWidget constructor inputs, bounded model/collection evaluation and structural list updates. Composed static cards now work with original widget bodies and explicit inputs; they do not prove feature-level behavior.
 
 Image assets and static tables are implemented. Styling remains an approximate CSS mapping, not a translation of arbitrary Material themes.
 
