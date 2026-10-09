@@ -32,8 +32,8 @@ void main() {
     ).querySelector('[data-dom-view]')!.outerHtml;
     expect(initial, contains('Collapsed'));
     expect(initial, isNot(contains('Expanded')));
-    expect(initial, contains('data-dom-next="true"'));
-    expect(result.html, contains('data-dom-bindings='));
+    expect(initial, contains('data-dom-action="0"'));
+    expect(result.html, contains('data-dom-program='));
     expect(result.html, isNot(contains('<template')));
     expect(result.nativeRuntime, isNot(contains('replaceChildren')));
     expect(result.nativeRuntime, isNot(contains('.focus(')));
@@ -51,7 +51,7 @@ void main() {
       parse(result.html).querySelector('[data-dom-view]')!.text,
       contains('Expanded'),
     );
-    expect(result.html, isNot(contains('data-dom-next="true"')));
+    expect(result.html, contains('&quot;literal&quot;,false'));
   });
 
   test('unsupported state behavior fails instead of being dropped', () {
@@ -78,7 +78,7 @@ void main() {
       ),
       source.replaceFirst(
         'bool expanded = false;',
-        'bool expanded = false; bool other = true;',
+        'bool expanded = false; double other = 1.5;',
       ),
       source.replaceFirst(
         "Text(expanded ? 'Expanded' : 'Collapsed')",

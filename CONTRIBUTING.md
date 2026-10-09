@@ -4,7 +4,7 @@ This project is experimental. Help establish correctness and useful boundaries b
 
 ## Development
 
-Use Dart 3.11.4 and Flutter 3.41.6 to reproduce the checked-in baseline. The package minimum is Dart 3.8; other SDK combinations are not yet certified.
+Use Dart 3.11.4 and Flutter 3.41.6 to reproduce the checked-in baseline. Runtime parity tests also require Node.js (CI uses Node 22). The package minimum is Dart 3.8; other SDK combinations are not yet certified.
 
 ```sh
 dart pub get

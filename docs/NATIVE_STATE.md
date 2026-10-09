@@ -1,44 +1,60 @@
-# Native boolean state
+# Native local state
 
-This first reactive subset compiles the original widget AST, without a
-widget-specific adapter or rewritten Dart fixture. It enumerates two boolean
-states at build time, validates both widget trees, and derives text/attribute bindings. The output contains one initial DOM tree
-and escaped JSON binding data. A shared JavaScript listener patches only changed
-values; it does not replace elements, inject HTML, or restore focus manually.
-It is finite-state specialization, **not general Dart-to-JavaScript translation**.
+The compiler lowers supported Dart expressions into typed, serializable data.
+It builds the widget tree once, emits initial HTML and an expression program,
+and updates dependent text/button bindings with a shared JavaScript interpreter.
+It does not enumerate states, emit alternate HTML trees, evaluate source strings,
+or use widget-specific adapters. Static pages still need no JavaScript.
 
-Supported:
-- A direct StatefulWidget with no inputs, only an optional unnamed key constructor.
+## Supported subset
+
+- A direct StatefulWidget with no constructor inputs except an optional key.
 - An expression-body createState returning a zero-argument direct State class.
-- Exactly one mutable bool field initialized to true or false.
-- A build method using the existing static widget/expression subset.
-- TextButton, OutlinedButton and ElevatedButton with a child and onPressed.
-- Callbacks shaped like `() => setState(() => expanded = !expanded)`,
-  or assignment to a boolean literal. Null onPressed produces a disabled button.
-- Multiple sibling instances with isolated state. Browser-native keyboard
-  activation; existing buttons and keyboard focus survive updates.
+- 1–16 mutable bool/int fields with literal initializers (negative ints allowed).
+- Initialized final/const build locals and supported stateless descendants,
+  including reactive String/int/bool constructor inputs.
+- Reactive Text strings: interpolation, string concatenation, same-type primitive
+  conditionals, integer `+`, `-`, `*`, comparisons and equality, boolean `!`,
+  `&&`, `||`, and unary integer negation.
+- TextButton, OutlinedButton and ElevatedButton callbacks shaped like
+  `() => setState(() => count++)`, `count--`, `count += 2`, `count -= 1`, or
+  `count = expression`. Exactly one assignment per synchronous arrow callback.
+- Conditional button enablement: `count > 0 ? callback : null` (or the reverse).
+- Independent sibling instances, native mouse/keyboard activation, and existing
+  elements retained during updates. Disabling a focused button follows browser
+  behavior and can remove focus.
 
-Lifecycle methods, helpers, mixins, providers, widget inputs, nested state,
-controllers, arbitrary callbacks and asynchronous work fail explicitly.
-Adapters, Flutter islands and MaterialApp context/theme rebuilding inside state
-are also rejected.
-Static descendants are supported; callbacks declared inside those descendants
-cannot capture the parent's state implicitly.
+Each binding records its field dependencies. An event evaluates its assignment
+and affected bindings against a candidate state before committing. Integer
+arithmetic stays within ±9,007,199,254,740,991 for Dart/JavaScript agreement.
+Overflow cancels the update and shows an accessible error status. Expressions
+are bounded to 4,096 expanded nodes and depth 64 to avoid exponential growth
+from repeated local expressions. This is a bounded interpreter, not arbitrary
+Dart execution or a complete implementation of Dart numeric semantics.
 
-Both analyzed states contribute to boundary counts. Only one tree is emitted;
-binding metadata stores values that differ between states. Initial state is
-readable without JavaScript; interaction requires the small runtime. Reload
-resets state. All three button classes currently share browser button styling.
-The two states must have the same element types and child structure. Structural
-changes fail with a diagnostic directing users to a fixed tree or an island.
-Text (including empty text), styles and disabled/event attributes may change.
-Existing elements remain in place; selection inside modified text may still
-change. This does not implement Flutter element identity or key reconciliation.
+## Explicit gaps
 
-Two variants are intentionally bounded: extending this technique to many
-independent fields causes exponential output growth. The next general solution
-needs typed state/expression IR and dependency tracking without enumeration;
-providers, routing and platform services remain separate work.
+Lifecycle methods, helpers, mixins, providers, nested state, widget inputs to
+StatefulWidget, controllers, arbitrary callbacks, block callbacks and async work
+are rejected. Adapters, Flutter islands and MaterialApp context/theme rebuilding
+inside state are also rejected. Callbacks declared inside stateless descendants
+cannot implicitly capture a parent's state; pass a supported callback instead.
 
-Run the example using the command in the main README. Its Flutter and native
-targets use `examples/multifile/lib/period_selector.dart`, with synthetic totals.
+The current typed backend binds text and button enablement. State-dependent
+widget structure, layout/styles, string state fields, doubles, division, lists,
+forms and general navigation remain unsupported. The earlier boolean DOM-diff
+backend was removed; conditional styling formerly accepted through enumeration
+now fails explicitly until CSS bindings receive typed support. Static styles
+continue to work. No Flutter element/key reconciliation or provider bridge is
+implemented. Reload resets state; modified text can lose its selection.
+
+## Demo and validation
+
+Use the native-state command in the main README. Both Flutter and DOM targets use
+`examples/multifile/lib/period_selector.dart`: a period toggle and session counter
+with derived minutes and conditional decrement enablement. Values are synthetic.
+
+Tests compare Dart and JavaScript expression results, exercise the actual shipped
+runtime with DOM test doubles, verify dependency filtering and instance isolation,
+and reject unsafe operations. Browser checks cover mouse, keyboard and disabled
+button behavior. Node.js is required for the runtime parity tests (CI uses 22).

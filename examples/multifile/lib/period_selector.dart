@@ -12,6 +12,7 @@ class PeriodSelector extends StatefulWidget {
 
 class _PeriodSelectorState extends State<PeriodSelector> {
   bool monthly = false;
+  int sessions = 0;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -34,6 +35,23 @@ class _PeriodSelectorState extends State<PeriodSelector> {
         ),
         const SizedBox(height: 8),
         const Text('Sample data'),
+        const SizedBox(height: 24),
+        Text('Sessions: $sessions'),
+        Text('Active minutes: ${sessions * 15}'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            OutlinedButton(
+              onPressed: sessions > 0 ? () => setState(() => sessions--) : null,
+              child: const Text('Remove session'),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: () => setState(() => sessions++),
+              child: const Text('Add session'),
+            ),
+          ],
+        ),
       ],
     ),
   );

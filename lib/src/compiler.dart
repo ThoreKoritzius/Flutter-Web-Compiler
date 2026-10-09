@@ -3,7 +3,7 @@
 
 import 'dart:convert';
 import 'chart.dart';
-import 'state_dom.dart';
+import 'reactivity.dart';
 import 'painter.dart';
 import 'project.dart';
 import 'analysis_environment.dart';
@@ -37,11 +37,6 @@ class _Call {
   final List<Object?> positional;
   final Map<String, Object?> named;
   final int line;
-}
-
-class _StateAction {
-  _StateAction(this.target);
-  final bool target;
 }
 
 class _StaticObject {
@@ -81,6 +76,26 @@ class FlutterDomCompiler {
   }
 
   Compilation compile(
+    String source,
+    Map<String, dynamic> config, {
+    bool domOnly = false,
+    ResolvedProject? resolved,
+    Expression? entryExpression,
+  }) {
+    try {
+      return _compile(
+        source,
+        config,
+        domOnly: domOnly,
+        resolved: resolved,
+        entryExpression: entryExpression,
+      );
+    } on ArgumentError catch (error) {
+      throw CompileException(error.message.toString());
+    }
+  }
+
+  Compilation _compile(
     String source,
     Map<String, dynamic> config, {
     bool domOnly = false,
@@ -136,7 +151,7 @@ class FlutterDomCompiler {
     var filterCount = 0;
     var darkTheme = false;
     var reactiveCount = 0;
-    String? activeStateField;
+    ReactiveFrame? frame;
     var evaluatingState = false;
     final stack = <String>[];
     var scope = <String, Object?>{};
@@ -242,9 +257,8 @@ class FlutterDomCompiler {
       if (--evaluationBudget < 0)
         fail('Static evaluation budget exceeded.', line);
       if (expression is FunctionExpression) {
-        final field = activeStateField;
         final outer = expression.body;
-        if (field == null ||
+        if (frame == null ||
             !evaluatingState ||
             expression.parameters?.parameters.isNotEmpty == true ||
             outer is! ExpressionFunctionBody ||
@@ -254,31 +268,44 @@ class FlutterDomCompiler {
         if (call is! MethodInvocation ||
             call.target != null ||
             call.methodName.name != 'setState' ||
-            call.argumentList.arguments.length != 1) {
-          fail('Events require () => setState(() => field = !field).');
-        }
+            call.argumentList.arguments.length != 1)
+          fail('Events require () => setState(() => state update).');
         final callback = call.argumentList.arguments.single;
         if (callback is! FunctionExpression ||
             callback.parameters?.parameters.isNotEmpty == true ||
             callback.body is! ExpressionFunctionBody ||
             callback.body.isAsynchronous)
           fail('Unsupported setState body.');
-        final assignment = (callback.body as ExpressionFunctionBody).expression;
-        if (assignment is! AssignmentExpression ||
-            assignment.operator.lexeme != '=' ||
-            assignment.leftHandSide is! SimpleIdentifier ||
-            (assignment.leftHandSide as SimpleIdentifier).name != field) {
-          fail('setState supports assignment to the boolean state field only.');
+        final update = (callback.body as ExpressionFunctionBody).expression;
+        Expression? target;
+        Object? rhs;
+        if (update is AssignmentExpression) {
+          target = update.leftHandSide;
+          final op = update.operator.lexeme;
+          if (!['=', '+=', '-='].contains(op))
+            fail('Unsupported state assignment $op.');
+          rhs = value(update.rightHandSide);
+          if (op != '=')
+            rhs = ReactiveValue.operation(op[0], [value(target), rhs]);
+        } else if (update is PostfixExpression || update is PrefixExpression) {
+          final operand = update is PostfixExpression
+              ? update.operand
+              : (update as PrefixExpression).operand;
+          final op = update is PostfixExpression
+              ? update.operator.lexeme
+              : (update as PrefixExpression).operator.lexeme;
+          if (!['++', '--'].contains(op)) fail('Unsupported state update $op.');
+          target = operand;
+          rhs = ReactiveValue.operation(op[0], [value(operand), 1]);
         }
-        final rhs = assignment.rightHandSide;
-        if (rhs is! BooleanLiteral &&
-            !(rhs is PrefixExpression &&
-                rhs.operator.lexeme == '!' &&
-                rhs.operand is SimpleIdentifier &&
-                (rhs.operand as SimpleIdentifier).name == field)) {
-          fail('State assignment requires true, false, or !field.');
-        }
-        return _StateAction(value(rhs) as bool);
+        if (target is! SimpleIdentifier ||
+            !frame!.initial.containsKey(target.name))
+          fail('setState must assign a declared local state field.');
+        final expressionValue = ReactiveValue.of(rhs);
+        if (expressionValue.type !=
+            ReactiveValue.literal(frame!.initial[target.name]).type)
+          fail('State assignment type does not match ${target.name}.');
+        return ReactiveAction(target.name, expressionValue);
       }
       if (expression is SimpleStringLiteral) return expression.value;
       if (expression is AdjacentStrings) {
@@ -289,6 +316,25 @@ class FlutterDomCompiler {
         return value(expression.expression);
       if (expression is ConditionalExpression) {
         final condition = value(expression.condition);
+        if (condition is ReactiveValue) {
+          final yes = value(expression.thenExpression),
+              no = value(expression.elseExpression);
+          if (condition.type != 'bool')
+            fail('Reactive conditions require bool.');
+          if ((yes is ReactiveAction && no == null) ||
+              (yes == null && no is ReactiveAction)) {
+            final action = (yes ?? no) as ReactiveAction;
+            final enabled = yes == null
+                ? ReactiveValue.operation('!', [condition])
+                : condition;
+            return ReactiveAction(
+              action.field,
+              action.value,
+              enabled: ReactiveValue.operation('&&', [enabled, action.enabled]),
+            );
+          }
+          return ReactiveValue.operation('choose', [condition, yes, no]);
+        }
         if (condition is! bool)
           fail('Static condition must be a boolean.', line);
         return value(
@@ -296,26 +342,41 @@ class FlutterDomCompiler {
         );
       }
       if (expression is StringInterpolation) {
-        return expression.elements.map((element) {
+        final parts = expression.elements.map((element) {
           if (element is InterpolationString) return element.value;
           final part = value((element as InterpolationExpression).expression);
-          if (part == null || part is String || part is num || part is bool) {
+          if (part is ReactiveValue)
+            return ReactiveValue.operation('string', [part]);
+          if (part == null || part is String || part is num || part is bool)
             return part.toString();
-          }
-          fail('Only static primitive values may be interpolated.', line);
-        }).join();
+          fail('Only primitive values may be interpolated.', line);
+        }).toList();
+        if (parts.any((part) => part is ReactiveValue)) {
+          return parts.fold<ReactiveValue>(
+            ReactiveValue.literal(''),
+            (result, part) => ReactiveValue.operation('+', [result, part]),
+          );
+        }
+        return parts.join();
       }
       if (expression is BinaryExpression) {
         final op = expression.operator.lexeme;
         final a = value(expression.leftOperand);
+        if (a is ReactiveValue)
+          return ReactiveValue.operation(op, [
+            a,
+            value(expression.rightOperand),
+          ]);
         if (op == '&&' || op == '||') {
           if (a is! bool) fail('Boolean operator requires booleans.', line);
           if (op == '&&' && !a || op == '||' && a) return a;
           final b = value(expression.rightOperand);
+          if (b is ReactiveValue) return ReactiveValue.operation(op, [a, b]);
           if (b is! bool) fail('Boolean operator requires booleans.', line);
           return b;
         }
         final b = value(expression.rightOperand);
+        if (b is ReactiveValue) return ReactiveValue.operation(op, [a, b]);
         if (op == '+' && a is String && b is String) return a + b;
         if (a is! num || b is! num)
           fail('Arithmetic requires static numbers.', line);
@@ -376,6 +437,8 @@ class FlutterDomCompiler {
       }
       if (expression is PrefixExpression && expression.operator.lexeme == '!') {
         final operand = value(expression.operand);
+        if (operand is ReactiveValue)
+          return ReactiveValue.operation('!', [operand]);
         if (operand is bool) return !operand;
         fail('Static ! requires a boolean.', line);
       }
@@ -386,6 +449,8 @@ class FlutterDomCompiler {
       }
       if (expression is PrefixExpression && expression.operator.lexeme == '-') {
         final operand = value(expression.operand);
+        if (operand is ReactiveValue)
+          return ReactiveValue.operation('negate', [operand]);
         if (operand is num) return -operand;
       }
       if (expression is ListLiteral) {
@@ -622,8 +687,7 @@ class FlutterDomCompiler {
           ? node.extendsClause?.superclass.name2.lexeme
           : resolved.superclass(node);
       if (base == 'StatefulWidget' && stateBindings == null) {
-        if (activeStateField != null)
-          fail('Nested native state is not supported yet.');
+        if (frame != null) fail('Nested native state is not supported yet.');
         check(invocation ?? _Call(name, [], {}, 1), {});
         if (node.withClause != null ||
             node.implementsClause != null ||
@@ -684,42 +748,42 @@ class FlutterDomCompiler {
             'Native State supports build only; lifecycle, mixins and helpers require an island.',
           );
         }
-        final fields = state.members.whereType<FieldDeclaration>().toList();
-        if (fields.length != 1 ||
-            fields.single.isStatic ||
-            fields.single.fields.isFinal ||
-            fields.single.fields.lateKeyword != null ||
-            fields.single.fields.type?.toSource() != 'bool' ||
-            fields.single.fields.variables.length != 1 ||
-            fields.single.fields.variables.single.initializer
-                is! BooleanLiteral) {
-          fail(
-            'Native State currently requires exactly one bool field with a literal initializer.',
-          );
-        }
-        final field = fields.single.fields.variables.single;
-        final initial = (field.initializer as BooleanLiteral).value;
-        final id = reactiveCount++;
-        activeStateField = field.name.lexeme;
-        try {
-          final variants = <bool, String>{};
-          for (final stateValue in [false, true]) {
-            variants[stateValue] = buildClass(stateName, null, {
-              field.name.lexeme: stateValue,
-            });
-          }
-          try {
-            return bindBooleanDom(
-              variants[false]!,
-              variants[true]!,
-              initial,
-              id,
+        final initial = <String, Object>{};
+        for (final declaration in state.members.whereType<FieldDeclaration>()) {
+          final type = declaration.fields.type?.toSource();
+          if (declaration.isStatic ||
+              declaration.fields.isFinal ||
+              declaration.fields.lateKeyword != null ||
+              !['bool', 'int'].contains(type))
+            fail(
+              'Native state fields must be mutable bool or int with literal initializers.',
             );
-          } on ArgumentError catch (error) {
-            fail(error.message.toString());
+          for (final field in declaration.fields.variables) {
+            final initializer = field.initializer;
+            if (initializer is! BooleanLiteral &&
+                initializer is! IntegerLiteral &&
+                !(initializer is PrefixExpression &&
+                    initializer.operator.lexeme == '-' &&
+                    initializer.operand is IntegerLiteral))
+              fail('Native state requires literal initializers.');
+            final item = value(initializer!);
+            if (ReactiveValue.literal(item).type != type)
+              fail('State initializer type mismatch.');
+            initial[field.name.lexeme] = item as Object;
           }
+        }
+        if (initial.isEmpty || initial.length > 16)
+          fail('Native state requires 1–16 bool/int fields.');
+        final id = reactiveCount++;
+        frame = ReactiveFrame(initial);
+        try {
+          final html = buildClass(stateName, null, {
+            for (final entry in initial.entries)
+              entry.key: ReactiveValue.field(entry.key, entry.value),
+          });
+          return frame!.wrap(html, id);
         } finally {
-          activeStateField = null;
+          frame = null;
         }
       }
       if (stateBindings == null && base != 'StatelessWidget') {
@@ -825,7 +889,10 @@ class FlutterDomCompiler {
           final item = bindings[name];
           if (item == null && declaredType.endsWith('?')) continue;
           final type = declaredType.replaceAll('?', '');
-          if (type == 'double' && item is num) {
+          if (item is ReactiveValue) {
+            if (item.type != type)
+              fail('Constructor field $name requires $declaredType.');
+          } else if (type == 'double' && item is num) {
             bindings[name] = item.toDouble();
           } else if (type == 'double' ||
               type == 'int' && item is! int ||
@@ -886,7 +953,7 @@ class FlutterDomCompiler {
       try {
         final localNames = <String>{};
         for (final local in locals) {
-          if (local.name.lexeme == activeStateField)
+          if (frame?.initial.containsKey(local.name.lexeme) == true)
             fail('Locals must not shadow the native state field.');
           if (!localNames.add(local.name.lexeme))
             fail('Duplicate local ${local.name.lexeme}.');
@@ -908,10 +975,10 @@ class FlutterDomCompiler {
       if (call.origin != null) currentNode = call.origin;
       final n = call.named;
       counts.update(call.name, (count) => count + 1, ifAbsent: () => 1);
-      if (activeStateField != null &&
+      if (frame != null &&
           (nativeAdapters.containsKey(call.name) ||
               islandConfig.containsKey(call.name)))
-        fail('Native state variants cannot contain adapters or islands yet.');
+        fail('Native state cannot contain adapters or islands yet.');
       if (nativeAdapters.containsKey(call.name)) {
         if (!classes.containsKey(call.name))
           fail('Adapter widget must exist in the source file.');
@@ -1013,12 +1080,17 @@ class FlutterDomCompiler {
         case 'OutlinedButton':
           check(call, {'onPressed', 'child'});
           final action = n['onPressed'];
-          if (activeStateField == null ||
-              action != null && action is! _StateAction)
+          if (frame == null || action != null && action is! ReactiveAction)
             fail('Buttons require a supported native state callback.');
-          return '<button type="button" ${action == null ? 'disabled' : 'data-dom-next="${(action as _StateAction).target}"'}>${render(n['child'])}</button>';
+          if (action == null)
+            return '<button type="button" disabled>${render(n['child'])}</button>';
+          final nativeAction = action as ReactiveAction;
+          final actionId = frame!.action(nativeAction);
+          final enabledId = frame!.bind('enabled', nativeAction.enabled);
+          final enabled = nativeAction.enabled.evaluate(frame!.initial) == true;
+          return '<button type="button" data-dom-action="$actionId" data-dom-enabled="$enabledId" ${enabled ? '' : 'disabled'}>${render(n['child'])}</button>';
         case 'MaterialApp':
-          if (activeStateField != null)
+          if (frame != null)
             fail(
               'Native state cannot rebuild MaterialApp theme or application context.',
             );
@@ -1093,8 +1165,16 @@ class FlutterDomCompiler {
           return '<div class="table-scroll"><table><thead><tr>$header</tr></thead><tbody>$body</tbody></table></div>';
         case 'Text':
           check(call, {'style', 'textAlign', 'maxLines'}, 1);
-          if (call.positional.single is! String)
-            fail('Text requires a literal string.', call.line);
+          final text = call.positional.single;
+          if (text is! String &&
+              !(text is ReactiveValue && text.type == 'String'))
+            fail('Text requires a string.', call.line);
+          final textId = text is ReactiveValue
+              ? frame!.bind('text', text)
+              : null;
+          final initialText = text is ReactiveValue
+              ? text.evaluate(frame!.initial) as String
+              : text as String;
           final key = n['key'];
           final heading = key is _Call ? headings[key.positional.single] : null;
           if (heading != null &&
@@ -1122,7 +1202,7 @@ class FlutterDomCompiler {
             if (align == null) fail('Unsupported text alignment.');
             style += ';text-align:$align';
           }
-          return '<$tag style="$style">${_escape(call.positional.single as String)}</$tag>';
+          return '<$tag${textId == null ? "" : ' data-dom-text="$textId"'} style="$style">${_escape(initialText)}</$tag>';
         case 'Column':
         case 'Row':
           check(call, {
@@ -1270,19 +1350,19 @@ class FlutterDomCompiler {
       'nativeFilterInstances': filterCount,
       'nativeStateInstances': reactiveCount,
       'stateStrategy':
-          'Targeted DOM bindings derived from two boolean builds; no Dart-to-JS translation',
+          'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,
       'rendering': reactiveCount == 0
           ? 'static HTML; approximate CSS layout'
-          : 'HTML with targeted boolean-state bindings; approximate CSS layout',
+          : 'HTML with reactive expression bindings; approximate CSS layout',
       'limitations': [
         if (resolved == null)
           'Single source file'
         else
           'Project-local declarations; external widget packages unsupported',
-        'Static data and constructor fields; native state limited to one boolean per instance',
+        'Local bool/int state and typed expression subset only',
         if (reactiveCount > 0)
-          'Boundary counts include both analyzed states; stable DOM structure required',
+          'State tree compiled once; state-dependent widget structure is unsupported',
         'One explicit island',
         'No state bridge to Flutter islands',
         'No Flutter layout parity guarantee',

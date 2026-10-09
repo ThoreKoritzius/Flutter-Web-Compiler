@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replace two-state enumeration with typed bool/int expression bindings, dependency-based updates, guarded integer arithmetic and native conditional button enablement.
+- Add a shared session-counter demo and Dart/JavaScript runtime parity tests. The typed backend currently rejects conditional CSS formerly accepted by boolean enumeration.
+
 - Replace boolean-state HTML templates with targeted text/attribute patches that preserve existing elements and keyboard focus. Reject structural state changes explicitly.
 
 - Add a bounded native boolean StatefulWidget subset, HTML buttons and a shared event runtime.

@@ -97,3 +97,26 @@ HTML templates. Browser click and Enter checks update both totals and labels
 while preserving keyboard focus without runtime focus restoration.
 The compiler still evaluates both boolean states; general reactive expression
 lowering and providers remain unimplemented. No performance benchmark was rerun.
+
+## Typed local-state expressions — 2026-10-09
+
+73 tests pass; Dart and Flutter fixture analysis are clean. The state tree is now
+compiled once. Coverage includes multi-field state, derived/interpolated text,
+reactive stateless constructor inputs, dependency filtering, disabled guards,
+instance isolation, escaping, short-circuit evaluation, safe-integer boundaries
+(including host multiplication overflow), and bounded expression expansion.
+Node-based tests run the emitted JavaScript and compare it with Dart evaluation.
+Runtime overflow leaves both state and bound content unchanged and shows status.
+
+The shared fixture builds through resolved imports. Browser checks exercised
+mouse and Enter increments/decrements, derived minutes, disabling at zero, and
+period changes independent of the counter. The updated demo has 22 visited
+boundaries and 10.7 KiB initial uncompressed HTML/CSS/JS; this is artifact size,
+not browser timing. The catalog artifact benchmark was rerun successfully with
+raw results under ignored `build/expression-benchmarks/`; published historical
+benchmark snapshots and performance claims were not changed.
+
+Boolean DOM-diff tests and the old implementation were replaced by expression
+and runtime tests. Reactive CSS and structural widget changes are explicitly
+unsupported by this typed backend; static styling remains available. This does
+not establish general Dart, lifecycle, provider or whole-application conversion.

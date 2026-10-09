@@ -200,7 +200,7 @@ Future<void> main(List<String> arguments) async {
     );
     if ((compiled.report['nativeStateInstances'] as int) > 0) {
       stdout.writeln(
-        '  Native state       ${compiled.report['nativeStateInstances']} boolean instance(s) · both analyzed states counted',
+        '  Native state       ${compiled.report['nativeStateInstances']} instance(s) · typed bindings · single build',
       );
     }
     stdout.writeln(
