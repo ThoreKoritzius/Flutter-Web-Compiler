@@ -1,0 +1,11 @@
+/// Small explicit set of schematic icon shapes. These are semantic CSS/SVG
+/// approximations, not extracted Material font outlines.
+const nativeIconShapes = <String, String>{
+  'favorite':
+      '<path d="M12 21C10 19 3 14 3 8a4.5 4.5 0 0 1 9-1 4.5 4.5 0 0 1 9 1c0 6-7 11-9 13Z"/>',
+  'bedtime': '<path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/>',
+  'directions_walk':
+      '<circle cx="13" cy="4" r="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m7 12 3-4 4 1 3 4h3M11 9l-1 7-4 6m4-7 5 3v4"/>',
+  'monitor_heart_rounded':
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M2 5h20v14H2zM2 12h5l2-4 4 9 2-5h7"/>',
+};

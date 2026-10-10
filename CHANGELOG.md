@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compile bounded static build if/else/return blocks and null coalescing.
+- Resolve project-local static const class fields, including prefixed imports.
+- Add uniform decoration borders, explicit color/icon inputs and a small schematic SVG Icon subset.
+- Add an independent summary fixture and CI build.
+
 - Lower bounded pure instance expression helpers on widgets/models, with isolated parameters/defaults and resolved method identity.
 - Support reactive scalar derivation through State helpers; report helper evaluations and exercise original row/format helpers in the records fixture.
 

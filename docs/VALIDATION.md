@@ -183,3 +183,21 @@ verification confirms duration labels, mouse expansion and keyboard collapse.
 The required artifact benchmark completes successfully; existing published
 performance/SEO measurements remain unchanged. Helpers lower original expressions
 during compilation; this does not demonstrate arbitrary runtime Dart execution.
+
+
+## Static build branches and visual inputs — 2026-10-10
+
+94 tests pass; Dart analysis and the real Flutter multifile fixture analysis
+are clean. New cases cover static early returns, nested scope, rejected visited
+statements, uniform borders, SVG icon semantics, visual descriptors and resolved
+prefixed class constants with forward references. The independent summary fixture
+builds DOM-only and is included in CI. The required artifact benchmark succeeds.
+Historical performance/SEO claims are unchanged.
+
+A local external-app evaluation also compiles original read-only metric widget
+bodies with explicit synthetic inputs/theme, no adapters, engine or JavaScript.
+Its separate Flutter Web counterpart uses the same original widget declarations
+and mock values. Both browser targets render the metric labels, values and
+footnotes. Private evaluation source, harness, configuration and results are
+excluded from Git. This is component preview composition, not the original page
+layout, startup, live data or navigation. SVG glyphs and CSS remain approximate.

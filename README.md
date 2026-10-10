@@ -162,7 +162,7 @@ The current implementation directly evaluates a restricted static AST subset, pl
 
 ## Source and configuration
 
-Supported layout includes `MaterialApp(home:)`, `Scaffold(body:)`, `SingleChildScrollView`, `Text`, `Row`, `Column`, `Padding`, `Container`, `SizedBox` and `Center`, with restricted arguments. Local stateless widgets can pass static data through named final constructor fields and literal defaults. Builds must return a single expression. See the [compatibility contract](docs/COMPATIBILITY.md).
+Supported layout includes `MaterialApp(home:)`, `Scaffold(body:)`, `SingleChildScrollView`, `Text`, `Row`, `Column`, `Padding`, `Container`, `SizedBox` and `Center`, with restricted arguments. Local stateless widgets can pass static data through named final constructor fields and literal defaults. Builds support expression bodies and bounded static if/return blocks. See the [compatibility contract](docs/COMPATIBILITY.md).
 
 ```dart
 class Label extends StatelessWidget {
@@ -263,3 +263,19 @@ Open http://localhost:8113. For the same Flutter implementation, run
 `flutter run -d chrome -t lib/record_list.dart` from `examples/multifile`.
 These are synthetic static inputs, not live model loading. See the
 [exact state contract](docs/NATIVE_STATE.md) for unsupported behavior.
+
+
+### Static branches, borders and icons
+
+The independent [summary panel](examples/multifile/lib/summary_panel.dart) tests
+static early return, typed visual inputs, uniform borders and native SVG icons:
+
+```sh
+dart run bin/flutter_dom.dart build --project examples/multifile \
+  --source lib/summary_panel.dart --config flutter_dom.summary.json \
+  --resolve-imports --dom-only --output build/summary-panel
+```
+
+For Flutter, run `flutter run -d chrome -t lib/summary_panel.dart` from
+`examples/multifile`. SVG icons use a small explicit schematic subset; see the
+[compatibility contract](docs/COMPATIBILITY.md#static-build-branches-and-visual-primitives).

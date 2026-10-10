@@ -501,4 +501,22 @@ class Label extends StatelessWidget {
       await expectLater(compile(), throwsA(isA<CompileException>()));
     },
   );
+  test(
+    'resolved static class constants preserve identity and forward references',
+    () async {
+      write('lib/page.dart', r"""
+import 'package:flutter/widgets.dart';
+import 'tokens.dart' as t;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text('Gap ${t.Tokens.gap}');
+}
+""");
+      write(
+        'lib/tokens.dart',
+        'abstract final class Tokens { static const gap = base * 2; static const base = 6; }',
+      );
+      expect((await compile()).html, contains('Gap 12'));
+    },
+  );
 }

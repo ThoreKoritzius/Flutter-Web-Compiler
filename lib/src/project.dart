@@ -111,6 +111,16 @@ class ResolvedProject {
                   '${p.relative(unit.path, from: model.directory)}::${declaration.name.lexeme}';
               model.classes[key] = declaration;
               model._symbols[declaration.declaredFragment!.element] = key;
+              for (final field
+                  in declaration.members.whereType<FieldDeclaration>()) {
+                if (!field.isStatic || !field.fields.isConst) continue;
+                for (final variable in field.fields.variables) {
+                  if (variable.initializer == null) continue;
+                  final fieldKey = '$key.${variable.name.lexeme}';
+                  model.constants[fieldKey] = variable.initializer!;
+                  model._symbols[variable.declaredFragment!.element] = fieldKey;
+                }
+              }
             } else if (declaration is TopLevelVariableDeclaration &&
                 declaration.variables.isConst) {
               for (final variable in declaration.variables.variables) {

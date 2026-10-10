@@ -123,3 +123,15 @@ shared static operation budget. Static/top-level helpers, higher-order functions
 closures and general statement/control-flow lowering remain unsupported.
 `pureHelperInvocations` reports compiler evaluations, not browser event calls.
 The records fixture uses its original `_recordRow` and `formatDuration` helpers.
+
+
+## Static visual inputs and early-return builds
+
+Visual constructor inputs accept explicit `{"color":"#ef747c"}` and
+`{"icon":"favorite"}` descriptors. Icon names must belong to the small
+[schematic SVG subset](COMPATIBILITY.md#static-build-branches-and-visual-primitives).
+These configure inputs, not substitute widget implementations. Build blocks
+can select static if/else returns; unselected branches are not rendered or
+classified. Mutable state conditions still require supported reactive collection
+bindings. This permits read-only component slices with optional interaction absent,
+without implying that their tapped/navigation branch compiles.

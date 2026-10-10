@@ -1,0 +1,10 @@
+{
+  "root": "SummaryPanel",
+  "title": "Native summary panel",
+  "theme": "dark",
+  "arguments": {"icon": {"icon": "favorite"}, "color": {"color": "#ef747c"}, "title": "Service status", "value": "Ready"},
+  "staticTheme": {
+    "textTheme": {"titleLarge": {"fontSize": 30}},
+    "colorScheme": {"surfaceContainerHighest": "#242831", "outlineVariant": "#596275"}
+  }
+}

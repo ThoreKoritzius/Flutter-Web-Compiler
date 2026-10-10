@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'chart.dart';
+import 'icons.dart';
 import 'reactivity.dart';
 import 'painter.dart';
 import 'project.dart';
@@ -219,6 +220,18 @@ class FlutterDomCompiler {
 
     _StaticColor color(Object? input) {
       if (input is _StaticColor) return input;
+      if (input is _Call &&
+          input.name == 'Color' &&
+          input.positional.length == 1 &&
+          input.named.isEmpty) {
+        final argb = input.positional.single;
+        if (argb is! int || argb < 0 || argb > 0xffffffff)
+          fail('Color requires a static ARGB integer.');
+        return _StaticColor(
+          '#${(argb & 0xffffff).toRadixString(16).padLeft(6, '0')}',
+          ((argb >> 24) & 255) / 255,
+        );
+      }
       if (input is! String || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(input)) {
         fail('Static theme colors require six-digit hex values.');
       }
@@ -425,6 +438,11 @@ class FlutterDomCompiler {
       if (expression is BinaryExpression) {
         final op = expression.operator.lexeme;
         final a = value(expression.leftOperand);
+        if (op == '??') {
+          if (a is ReactiveValue)
+            fail('Reactive null coalescing is unsupported.', line);
+          return a ?? value(expression.rightOperand);
+        }
         if (a is ReactiveValue)
           return ReactiveValue.operation(op, [
             a,
@@ -513,6 +531,8 @@ class FlutterDomCompiler {
       }
       final constantName = resolved != null && expression is Identifier
           ? resolved.symbol(expression.element)
+          : resolved != null && expression is PropertyAccess
+          ? resolved.symbol(expression.propertyName.element)
           : expression is SimpleIdentifier
           ? expression.name
           : null;
@@ -1325,6 +1345,72 @@ class FlutterDomCompiler {
       }
     };
 
+    Object? evaluateBuild(FunctionBody body) {
+      if (body.isAsynchronous) fail('Native build must be synchronous.');
+      if (body is ExpressionFunctionBody) return value(body.expression);
+      if (body is! BlockFunctionBody)
+        fail('Build requires an expression or bounded block.');
+      var localNames = <String>{};
+      ({bool returned, Object? value}) execute(Statement statement) {
+        currentNode = statement;
+        if (--evaluationBudget < 0) fail('Static statement budget exceeded.');
+        if (statement is ReturnStatement) {
+          if (statement.expression == null) fail('Build must return a widget.');
+          return (returned: true, value: value(statement.expression!));
+        }
+        if (statement is VariableDeclarationStatement) {
+          final variables = statement.variables;
+          if (!(variables.isFinal || variables.isConst) ||
+              variables.lateKeyword != null)
+            fail('Build locals must be initialized final/const values.');
+          for (final variable in variables.variables) {
+            if (variable.initializer == null ||
+                !localNames.add(variable.name.lexeme) ||
+                frame?.initial.containsKey(variable.name.lexeme) == true)
+              fail(
+                'Build locals must be initialized and cannot duplicate locals or shadow state fields.',
+              );
+            scope[variable.name.lexeme] = value(variable.initializer!);
+          }
+          return (returned: false, value: null);
+        }
+        if (statement is IfStatement) {
+          if (statement.caseClause != null)
+            fail('Statement patterns are unsupported.');
+          final condition = value(statement.expression);
+          if (condition is! bool)
+            fail('Statement if requires a static boolean.');
+          final selected = condition
+              ? statement.thenStatement
+              : statement.elseStatement;
+          return selected == null
+              ? (returned: false, value: null)
+              : execute(selected);
+        }
+        if (statement is Block) {
+          final previous = scope;
+          final previousNames = localNames;
+          localNames = {};
+          scope = {...previous};
+          try {
+            for (final child in statement.statements) {
+              final result = execute(child);
+              if (result.returned) return result;
+            }
+            return (returned: false, value: null);
+          } finally {
+            scope = previous;
+            localNames = previousNames;
+          }
+        }
+        fail('Unsupported build statement: ${statement.runtimeType}.');
+      }
+
+      final result = execute(body.block);
+      if (!result.returned) fail('Build did not return a widget.');
+      return result.value;
+    }
+
     late String Function(Object?) render;
     String buildClass(
       String name, [
@@ -1461,32 +1547,6 @@ class FlutterDomCompiler {
       );
       if (methods.length != 1) fail('$name needs one build method.');
       final body = methods.single.body;
-      if (stateBindings != null && body.isAsynchronous)
-        fail('Native build must be synchronous.');
-      Expression? expression;
-      final locals = <VariableDeclaration>[];
-      if (body is ExpressionFunctionBody) expression = body.expression;
-      if (body is BlockFunctionBody && body.block.statements.isNotEmpty) {
-        final statements = body.block.statements;
-        if (statements.last is ReturnStatement) {
-          expression = (statements.last as ReturnStatement).expression;
-          for (final statement in statements.take(statements.length - 1)) {
-            if (statement is! VariableDeclarationStatement ||
-                !(statement.variables.isFinal || statement.variables.isConst) ||
-                statement.variables.lateKeyword != null ||
-                statement.variables.variables.any(
-                  (v) => v.initializer == null,
-                )) {
-              fail(
-                '$name.build supports only initialized final/const locals followed by return.',
-              );
-            }
-            locals.addAll(statement.variables.variables);
-          }
-        }
-      }
-      if (expression == null)
-        fail('$name.build must contain a return expression.');
       stack.add(name);
       final previous = scope;
       final previousFields = instanceFields;
@@ -1514,15 +1574,7 @@ class FlutterDomCompiler {
       scope = {...bindings};
       instanceFields = bindings;
       try {
-        final localNames = <String>{};
-        for (final local in locals) {
-          if (frame?.initial.containsKey(local.name.lexeme) == true)
-            fail('Locals must not shadow the native state field.');
-          if (!localNames.add(local.name.lexeme))
-            fail('Duplicate local ${local.name.lexeme}.');
-          scope[local.name.lexeme] = value(local.initializer!);
-        }
-        return render(value(expression));
+        return render(evaluateBuild(body));
       } finally {
         scope = previous;
         instanceFields = previousFields;
@@ -1736,8 +1788,28 @@ class FlutterDomCompiler {
             }).join()}</tr>';
           }).join();
           return '<div class="table-scroll"><table><thead><tr>$header</tr></thead><tbody>$body</tbody></table></div>';
+        case 'Icon':
+          check(call, {'size', 'color', 'semanticLabel'}, 1);
+          final icon = call.positional.single;
+          final name = icon is String && icon.startsWith('Icons.')
+              ? icon.substring(6)
+              : null;
+          final shape = nativeIconShapes[name];
+          if (shape == null) fail('Unsupported native icon $icon.');
+          final size = pixels(n['size'] ?? 24);
+          final label = n['semanticLabel'];
+          if (label != null && label is! String)
+            fail('Icon label must be static text.');
+          final cssColor = n['color'] == null
+              ? 'currentColor'
+              : color(n['color']).css;
+          return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+              '${label == null ? 'aria-hidden="true"' : 'role="img" aria-label="${_escape(label as String)}"'} '
+              'style="width:$size;height:$size;flex-shrink:0;color:$cssColor" fill="currentColor">$shape</svg>';
         case 'Text':
-          check(call, {'style', 'textAlign', 'maxLines'}, 1);
+          check(call, {'style', 'textAlign', 'maxLines', 'overflow'}, 1);
+          if (n['overflow'] != null && n['overflow'] != 'TextOverflow.ellipsis')
+            fail('Only TextOverflow.ellipsis is supported.');
           final text = call.positional.single;
           if (text is! String &&
               !(text is ReactiveValue && text.type == 'String'))
@@ -1867,7 +1939,16 @@ class FlutterDomCompiler {
             final decoration = n['decoration'];
             if (decoration is! _Call || decoration.name != 'BoxDecoration')
               fail('Expected BoxDecoration.');
-            check(decoration, {'color', 'borderRadius'});
+            check(decoration, {'color', 'borderRadius', 'border'});
+            final border = decoration.named['border'];
+            if (border != null) {
+              if (border is! _Call || border.name != 'Border.all')
+                fail('Only Border.all is supported.');
+              check(border, {'color', 'width'});
+              styles.add(
+                'border:${pixels(border.named['width'] ?? 1)} solid ${color(border.named['color']).css}',
+              );
+            }
             if (decoration.named['color'] != null)
               styles.add('background:${color(decoration.named['color']).css}');
             final radius = decoration.named['borderRadius'];
@@ -1905,6 +1986,13 @@ class FlutterDomCompiler {
           input is bool ||
           input is num && input.isFinite)
         return input;
+      if (input is Map && input.keys.length == 1 && input['color'] is String)
+        return color(input['color']);
+      if (input is Map && input.keys.length == 1 && input['icon'] is String) {
+        if (!nativeIconShapes.containsKey(input['icon']))
+          fail('Unsupported configured icon.');
+        return 'Icons.${input['icon']}';
+      }
       if (input is List)
         return input.map((v) => configuredValue(v, depth + 1)).toList();
       if (input is Map &&

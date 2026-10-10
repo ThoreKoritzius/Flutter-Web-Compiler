@@ -6,7 +6,7 @@ This document describes implemented behavior. The roadmap is not part of the com
 
 - Default mode: one Dart source file selected with `--source` (default `lib/main.dart`). Opt-in resolved project mode is described below.
 - Local classes directly extending `StatelessWidget`.
-- A return expression in `build`, either arrow syntax or a block with initialized `final`/`const` locals followed by one return. Mutable/late locals, side-effect statements and control-flow statements remain unsupported.
+- A synchronous build expression, or a bounded block with initialized final/const locals, nested blocks, static if/else and return. Mutable/late locals, side effects, loops, statement patterns and runtime-dependent statement conditions remain unsupported. Only selected static branches are evaluated.
 - Literal strings, adjacent strings, numbers, booleans, null and literal lists.
 - Same-file top-level `const` values (including forward references), boolean `!`, list `if`/`else`, list spreads and null-aware spreads. Only selected branches are evaluated.
 - Named or positional `this.field` parameters bound to final instance fields, including required inputs and supported static defaults. `super.key` is allowed.
@@ -202,3 +202,21 @@ Resolved calls must select the current instance/model method. State helpers can
 lower supported reactive scalar expressions; mutations and event callback creation
 inside helpers fail. No helper source is injected into JavaScript. See the
 [exact subset](COMPONENT_PREVIEWS.md#pure-instance-helpers).
+
+
+### Static build branches and visual primitives
+
+Build blocks can return early through static if/else. Block-local values are
+isolated; this is compile-time branch selection, not dynamic DOM control flow.
+Null coalescing short-circuits for static values. Resolved analysis includes
+project-local static const class fields, including prefixed imports and forward
+references, under existing constant cycle/budget checks.
+
+BoxDecoration supports uniform Border.all. TextOverflow.ellipsis is accepted
+with the existing approximate browser line clamping. Icon emits inline SVG for
+a small explicit schematic subset: favorite, bedtime, directions_walk and
+monitor_heart_rounded. Unsupported icon names fail. These are semantic shapes,
+not original Material font outlines or pixel-equivalent glyphs. Decorative icons
+are hidden from accessibility; semanticLabel produces a labelled SVG. No fonts,
+JavaScript or engine are needed. Six-digit color and supported icon descriptors
+can supply explicit visual constructor inputs.
