@@ -52,10 +52,16 @@ class _GuardedChildren {
 }
 
 class _StaticObject {
-  _StaticObject(this.fields, {this.model, this.getters = const {}});
+  _StaticObject(
+    this.fields, {
+    this.model,
+    this.getters = const {},
+    this.methods = const {},
+  });
   final Map<String, Object?> fields;
   final String? model;
   final Map<String, Expression> getters;
+  final Map<String, MethodDeclaration> methods;
 }
 
 class _StaticColor {
@@ -172,6 +178,10 @@ class FlutterDomCompiler {
     var scope = <String, Object?>{};
     var instanceFields = <String, Object?>{};
     var instanceGetters = <String, Expression>{};
+    var instanceMethods = <String, MethodDeclaration>{};
+    late Object? Function(MethodDeclaration, ArgumentList, _StaticObject?)
+    invokeHelper;
+    var helperCount = 0;
     final evaluatingGetters = <(Map<String, Object?>, String)>[];
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
@@ -285,7 +295,16 @@ class FlutterDomCompiler {
         PrefixedIdentifier n => scope.containsKey(n.prefix.name),
         PropertyAccess n => staticReceiver(n.target),
         MethodInvocation n =>
-          n.methodName.name == 'of' || staticReceiver(n.target),
+          n.methodName.name == 'of' ||
+              staticReceiver(n.target) ||
+              n.target == null &&
+                  (instanceMethods.containsKey(n.methodName.name) ||
+                      classes[n.methodName.name]?.extendsClause == null &&
+                          classes.containsKey(n.methodName.name)),
+        InstanceCreationExpression n => classes.containsKey(
+          resolved?.constructor(n) ?? n.constructorName.toSource(),
+        ),
+        ParenthesizedExpression n => staticReceiver(n.expression),
         ListLiteral _ => true,
         _ => false,
       };
@@ -509,7 +528,9 @@ class FlutterDomCompiler {
         final previous = scope;
         final previousFields = instanceFields;
         final previousGetters = instanceGetters;
+        final previousMethods = instanceMethods;
         instanceGetters = {};
+        instanceMethods = {};
         instanceFields = {};
         scope = {}; // Top-level initializers cannot capture widget fields.
         try {
@@ -518,6 +539,7 @@ class FlutterDomCompiler {
           scope = previous;
           instanceFields = previousFields;
           instanceGetters = previousGetters;
+          instanceMethods = previousMethods;
           resolving.removeLast();
         }
       }
@@ -648,12 +670,46 @@ class FlutterDomCompiler {
         }
         return items;
       }
+      Object? cachedMethodTarget;
+      var methodTargetKnown = false;
+      Object? methodTarget(Expression target) {
+        if (!methodTargetKnown) {
+          cachedMethodTarget = value(target);
+          methodTargetKnown = true;
+        }
+        return cachedMethodTarget;
+      }
+
+      if (expression is MethodInvocation) {
+        final name = expression.methodName.name;
+        if ((expression.target == null ||
+                expression.target is ThisExpression) &&
+            (expression.target is ThisExpression || !scope.containsKey(name)) &&
+            instanceMethods.containsKey(name)) {
+          final method = instanceMethods[name]!;
+          if (resolved != null &&
+              expression.methodName.element != method.declaredFragment?.element)
+            fail('Helper call must resolve to the current instance method.');
+          return invokeHelper(method, expression.argumentList, null);
+        }
+        if (expression.target != null && staticReceiver(expression.target)) {
+          final target = methodTarget(expression.target!);
+          if (target is _StaticObject && target.methods.containsKey(name)) {
+            final method = target.methods[name]!;
+            if (resolved != null &&
+                expression.methodName.element !=
+                    method.declaredFragment?.element)
+              fail('Helper call must resolve to the model instance method.');
+            return invokeHelper(method, expression.argumentList, target);
+          }
+        }
+      }
       if (expression is MethodInvocation &&
           expression.target != null &&
           staticReceiver(expression.target)) {
         final method = expression.methodName.name;
         if (['take', 'skip', 'toList', 'join'].contains(method)) {
-          final target = value(expression.target!);
+          final target = methodTarget(expression.target!);
           if (target is! List) fail('Static $method requires a list.', line);
           final args = expression.argumentList.arguments;
           if (method == 'toList') {
@@ -712,7 +768,7 @@ class FlutterDomCompiler {
         }
         if (expression.target != null &&
             ['copyWith', 'withValues'].contains(method)) {
-          final target = value(expression.target!);
+          final target = methodTarget(expression.target!);
           final args = <String, Object?>{};
           for (final arg in expression.argumentList.arguments) {
             if (arg is! NamedExpression)
@@ -871,6 +927,46 @@ class FlutterDomCompiler {
       return css.join(';');
     }
 
+    void validateInput(
+      TypeAnnotation? annotation,
+      Object? input,
+      String label,
+    ) {
+      if (annotation is! NamedType) return;
+      if (input == null && annotation.question != null) return;
+      final primitiveType = annotation.name2.lexeme;
+      if (input is ReactiveValue && input.type != primitiveType)
+        fail('$label requires ${annotation.toSource()}.');
+      if (input is! ReactiveValue &&
+          (primitiveType == 'String' && input is! String ||
+              primitiveType == 'int' && input is! int ||
+              primitiveType == 'bool' && input is! bool ||
+              ['double', 'num'].contains(primitiveType) && input is! num))
+        fail('$label requires ${annotation.toSource()}.');
+      if (primitiveType == 'List' && input is! List)
+        fail('$label requires a list.');
+      if (annotation.name2.lexeme == 'List' &&
+          annotation.typeArguments?.arguments.length == 1 &&
+          input is List) {
+        for (final entry in input) {
+          validateInput(
+            annotation.typeArguments!.arguments.single,
+            entry,
+            label,
+          );
+        }
+        return;
+      }
+      final identity = resolved == null
+          ? annotation.name2.lexeme
+          : resolved.symbol(annotation.element2);
+      final model = classes[identity];
+      if (model != null &&
+          model.extendsClause == null &&
+          (input is! _StaticObject || input.model != identity))
+        fail('$label requires model ${annotation.toSource()}.');
+    }
+
     Map<String, Object?> bindFields(
       ClassDeclaration node,
       String name,
@@ -922,8 +1018,10 @@ class FlutterDomCompiler {
         final previous = scope;
         final defaultFields = instanceFields;
         final defaultGetters = instanceGetters;
+        final defaultMethods = instanceMethods;
         instanceFields = {};
         instanceGetters = {};
+        instanceMethods = {};
         scope = {};
         try {
           for (final wrapped in constructor.parameters.parameters) {
@@ -967,6 +1065,7 @@ class FlutterDomCompiler {
           scope = previous;
           instanceFields = defaultFields;
           instanceGetters = defaultGetters;
+          instanceMethods = defaultMethods;
         }
         if (call.positional.length > position)
           fail('$name has too many positional arguments.', call.line);
@@ -978,45 +1077,11 @@ class FlutterDomCompiler {
           final name = field.name.lexeme;
           if (!bindings.containsKey(name) || declaredType == null) continue;
           final item = bindings[name];
-          void validateModel(TypeAnnotation annotation, Object? input) {
-            if (annotation is! NamedType) return;
-            if (input == null && annotation.question != null) return;
-            final primitiveType = annotation.name2.lexeme;
-            if (input is! ReactiveValue &&
-                (primitiveType == 'String' && input is! String ||
-                    primitiveType == 'int' && input is! int ||
-                    primitiveType == 'bool' && input is! bool ||
-                    ['double', 'num'].contains(primitiveType) && input is! num))
-              fail(
-                'Constructor field $name requires ${annotation.toSource()}.',
-              );
-            if (primitiveType == 'List' && input is! List)
-              fail('Constructor field $name requires a list.');
-            if (annotation.name2.lexeme == 'List' &&
-                annotation.typeArguments?.arguments.length == 1 &&
-                input is List) {
-              for (final entry in input) {
-                validateModel(
-                  annotation.typeArguments!.arguments.single,
-                  entry,
-                );
-              }
-              return;
-            }
-            final identity = resolved == null
-                ? annotation.name2.lexeme
-                : resolved.symbol(annotation.element2);
-            final model = classes[identity];
-            if (model != null &&
-                model.extendsClause == null &&
-                (input is! _StaticObject || input.model != identity))
-              fail(
-                'Constructor field $name requires model ${annotation.toSource()}.',
-              );
-          }
-
-          if (declaration.fields.type != null)
-            validateModel(declaration.fields.type!, item);
+          validateInput(
+            declaration.fields.type,
+            item,
+            'Constructor field $name',
+          );
           if (item == null && declaredType.endsWith('?')) continue;
           final type = declaredType.replaceAll('?', '');
           if (type.startsWith('List<')) {
@@ -1072,14 +1137,15 @@ class FlutterDomCompiler {
           ) ||
           node.members.whereType<MethodDeclaration>().any(
             (m) =>
-                !m.isGetter ||
+                m.isSetter ||
                 m.isStatic ||
+                m.typeParameters != null ||
                 m.body is! ExpressionFunctionBody ||
                 m.body.isAsynchronous,
           ) ||
           node.members.whereType<FieldDeclaration>().any((m) => m.isStatic))
         fail(
-          'Models support plain final fields and pure expression getters only.',
+          'Models support plain final fields and pure expression getters/helpers only.',
         );
       constructingModels.add(call.name);
       try {
@@ -1125,9 +1191,14 @@ class FlutterDomCompiler {
         return _StaticObject(
           fields,
           model: call.name,
+          methods: {
+            for (final m in node.members.whereType<MethodDeclaration>())
+              if (!m.isGetter) m.name.lexeme: m,
+          },
           getters: {
             for (final m in node.members.whereType<MethodDeclaration>())
-              m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
+              if (m.isGetter)
+                m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
           },
         );
       } finally {
@@ -1142,11 +1213,13 @@ class FlutterDomCompiler {
       final previous = scope;
       final previousFields = instanceFields;
       final previousGetters = instanceGetters;
+      final previousMethods = instanceMethods;
       final previousState = evaluatingState;
       activeModelGetters.add(key);
       scope = {...object.fields};
       instanceFields = object.fields;
       instanceGetters = object.getters;
+      instanceMethods = object.methods;
       evaluatingState = false;
       try {
         return value(object.getters[name]!);
@@ -1154,8 +1227,101 @@ class FlutterDomCompiler {
         scope = previous;
         instanceFields = previousFields;
         instanceGetters = previousGetters;
+        instanceMethods = previousMethods;
         evaluatingState = previousState;
         activeModelGetters.removeLast();
+      }
+    };
+
+    final activeHelpers = <(Map<String, Object?>, MethodDeclaration)>[];
+    invokeHelper = (method, arguments, receiver) {
+      if (method.isStatic ||
+          method.isSetter ||
+          method.typeParameters != null ||
+          method.body is! ExpressionFunctionBody ||
+          method.body.isAsynchronous)
+        fail(
+          'Helpers require synchronous non-generic instance expression bodies.',
+        );
+      final fields = receiver?.fields ?? instanceFields;
+      final key = (fields, method);
+      if (activeHelpers.contains(key) ||
+          activeHelpers.length >= 64 ||
+          --evaluationBudget < 0)
+        fail('Recursive or excessive helper invocation.');
+      final positional = <Object?>[];
+      final named = <String, Object?>{};
+      for (final argument in arguments.arguments) {
+        if (argument is NamedExpression) {
+          final name = argument.name.label.name;
+          if (named.containsKey(name)) fail('Duplicate helper argument $name.');
+          named[name] = value(argument.expression);
+        } else
+          positional.add(value(argument));
+      }
+      final previous = scope;
+      final previousFields = instanceFields;
+      final previousGetters = instanceGetters;
+      final previousMethods = instanceMethods;
+      final previousState = evaluatingState;
+      activeHelpers.add(key);
+      try {
+        final parameters = <String, Object?>{};
+        final allowed = <String>{};
+        var index = 0;
+        // Defaults cannot capture a caller or instance.
+        scope = {};
+        instanceFields = {};
+        instanceGetters = {};
+        instanceMethods = {};
+        evaluatingState = false;
+        for (final wrapped in method.parameters!.parameters) {
+          final parameter = wrapped is DefaultFormalParameter
+              ? wrapped.parameter
+              : wrapped;
+          if (parameter is! SimpleFormalParameter || parameter.name == null)
+            fail('Helpers support simple parameters only.');
+          final name = parameter.name!.lexeme;
+          if (wrapped.isNamed) allowed.add(name);
+          final provided = wrapped.isNamed
+              ? named.containsKey(name)
+              : index < positional.length;
+          final Object? input;
+          if (provided)
+            input = wrapped.isNamed ? named[name] : positional[index];
+          else if (wrapped.isRequiredNamed || wrapped.isRequiredPositional)
+            fail('Missing helper argument $name.');
+          else
+            input =
+                wrapped is DefaultFormalParameter &&
+                    wrapped.defaultValue != null
+                ? value(wrapped.defaultValue!)
+                : null;
+          if (!wrapped.isNamed) index++;
+          validateInput(parameter.type, input, 'Helper argument $name');
+          parameters[name] =
+              parameter.type is NamedType &&
+                  (parameter.type as NamedType).name2.lexeme == 'double' &&
+                  input is num
+              ? input.toDouble()
+              : input;
+        }
+        if (positional.length > index ||
+            named.keys.any((name) => !allowed.contains(name)))
+          fail('Unsupported helper arguments.');
+        instanceFields = fields;
+        instanceGetters = receiver?.getters ?? previousGetters;
+        instanceMethods = receiver?.methods ?? previousMethods;
+        scope = {...fields, ...parameters};
+        helperCount++;
+        return value((method.body as ExpressionFunctionBody).expression);
+      } finally {
+        scope = previous;
+        instanceFields = previousFields;
+        instanceGetters = previousGetters;
+        instanceMethods = previousMethods;
+        evaluatingState = previousState;
+        activeHelpers.removeLast();
       }
     };
 
@@ -1210,19 +1376,37 @@ class FlutterDomCompiler {
               (m) => m is! FieldDeclaration && m is! MethodDeclaration,
             ) ||
             state.members.whereType<MethodDeclaration>().any(
-              (m) => m.name.lexeme != 'build',
+              (m) =>
+                  m.name.lexeme != 'build' &&
+                  (m.isGetter ||
+                      m.isSetter ||
+                      m.isStatic ||
+                      m.typeParameters != null ||
+                      m.body is! ExpressionFunctionBody ||
+                      m.body.isAsynchronous ||
+                      [
+                        'initState',
+                        'dispose',
+                        'didUpdateWidget',
+                        'didChangeDependencies',
+                        'deactivate',
+                        'activate',
+                        'reassemble',
+                      ].contains(m.name.lexeme)),
             )) {
           fail(
-            'Native State supports build only; lifecycle, mixins and helpers require an island.',
+            'Native State supports build and pure expression helpers; lifecycle and mixins require an island.',
           );
         }
         final initial = <String, Object>{};
         final previousScope = scope;
         final previousFields = instanceFields;
         final previousGetters = instanceGetters;
+        final previousMethods = instanceMethods;
         scope = {'widget': _StaticObject(widgetInputs)};
         instanceFields = {};
         instanceGetters = {};
+        instanceMethods = {};
         try {
           for (final declaration
               in state.members.whereType<FieldDeclaration>()) {
@@ -1247,6 +1431,7 @@ class FlutterDomCompiler {
           scope = previousScope;
           instanceFields = previousFields;
           instanceGetters = previousGetters;
+          instanceMethods = previousMethods;
         }
         if (initial.isEmpty || initial.length > 16)
           fail('Native state requires 1–16 bool/int fields.');
@@ -1307,6 +1492,7 @@ class FlutterDomCompiler {
       final previousFields = instanceFields;
       final previousEvaluation = evaluatingState;
       final previousGetters = instanceGetters;
+      final previousMethods = instanceMethods;
       instanceGetters = {
         for (final method in node.members.whereType<MethodDeclaration>())
           if (method.isGetter &&
@@ -1315,6 +1501,14 @@ class FlutterDomCompiler {
               !method.body.isAsynchronous)
             method.name.lexeme:
                 (method.body as ExpressionFunctionBody).expression,
+      };
+      instanceMethods = {
+        for (final method in node.members.whereType<MethodDeclaration>())
+          if (!method.isGetter &&
+              !method.isSetter &&
+              !method.isStatic &&
+              method.name.lexeme != 'build')
+            method.name.lexeme: method,
       };
       evaluatingState = stateBindings != null;
       scope = {...bindings};
@@ -1334,6 +1528,7 @@ class FlutterDomCompiler {
         instanceFields = previousFields;
         evaluatingState = previousEvaluation;
         instanceGetters = previousGetters;
+        instanceMethods = previousMethods;
         stack.removeLast();
       }
     }
@@ -1808,6 +2003,7 @@ class FlutterDomCompiler {
       'nativeStateInstances': reactiveCount,
       'nativeConditionalGroups': conditionalGroupCount,
       'staticModelInstances': modelCount,
+      'pureHelperInvocations': helperCount,
       'stateStrategy':
           'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,

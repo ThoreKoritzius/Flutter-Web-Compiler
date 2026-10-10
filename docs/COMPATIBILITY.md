@@ -192,3 +192,13 @@ Nested lists/models use declaration identity checks; getters evaluate in isolate
 instance scope. The records fixture exercises imported models through resolved
 analysis. This is bounded static evaluation, not a runtime model/serialization
 bridge. See [the exact contract](COMPONENT_PREVIEWS.md#typed-static-models).
+
+
+### Pure expression helpers
+
+Supported instance methods on widgets/models evaluate the original AST with
+isolated parameter/field scope, argument validation and bounded recursion checks.
+Resolved calls must select the current instance/model method. State helpers can
+lower supported reactive scalar expressions; mutations and event callback creation
+inside helpers fail. No helper source is injected into JavaScript. See the
+[exact subset](COMPONENT_PREVIEWS.md#pure-instance-helpers).

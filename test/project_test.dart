@@ -149,7 +149,7 @@ import 'package:flutter/widgets.dart';
 class Page extends StatelessWidget {
  const Page();
  Widget build(BuildContext context) => unsupported();
- Widget unsupported() => Text('runtime');
+ Widget unsupported() { return Text('runtime'); }
 }
 ''');
       await expectLater(
@@ -470,7 +470,7 @@ class Label extends StatelessWidget {
       );
       write(
         'lib/model.dart',
-        "class Entry { const Entry(this.title); final String title; String get label => title + '!'; }",
+        "class Entry { const Entry(this.title); final String title; String format({String suffix = '!'}) => title + suffix; String get label => format(); }",
       );
       write(
         'lib/other.dart',

@@ -167,3 +167,19 @@ Browser checks confirm the derived duration labels and native expand/collapse.
 
 The required artifact benchmark also completes successfully; prior published
 performance/SEO claims are unchanged.
+
+
+## Pure instance helpers — 2026-10-10
+
+90 tests pass; Dart and real Flutter fixture analysis are clean. Helper coverage
+includes widget/model/state expressions, caller-argument versus instance scope,
+named defaults, annotated model inputs, recursion, rejected mutations/block/async
+bodies and imported resolved calls. The prior unsupported-helper diagnostic test
+now uses a block body, since its former expression body is supported.
+
+The records fixture now calls original row and duration-format helpers with
+18/18 visited boundaries, zero adapters/island and 8.9 KiB initial files. Browser
+verification confirms duration labels, mouse expansion and keyboard collapse.
+The required artifact benchmark completes successfully; existing published
+performance/SEO measurements remain unchanged. Helpers lower original expressions
+during compilation; this does not demonstrate arbitrary runtime Dart execution.

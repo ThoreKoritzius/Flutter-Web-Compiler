@@ -2,5 +2,6 @@ class RecordEntry {
   const RecordEntry(this.title, {required this.minutes});
   final String title;
   final int minutes;
-  String get label => '$title · $minutes min';
+  String formatDuration({String unit = 'min'}) => '$minutes $unit';
+  String get label => '$title · ${formatDuration()}';
 }

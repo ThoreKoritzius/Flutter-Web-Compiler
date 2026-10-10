@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Lower bounded pure instance expression helpers on widgets/models, with isolated parameters/defaults and resolved method identity.
+- Support reactive scalar derivation through State helpers; report helper evaluations and exercise original row/format helpers in the records fixture.
+
 - Evaluate original plain immutable model constructors, scoped expression getters and explicit model inputs; validate imported model identity in fields/lists.
 - Upgrade the shared records fixture to imported typed model data without adapters.
 

@@ -91,15 +91,35 @@ Inputs can instantiate an original project-local data declaration:
 This evaluates the original constructor through the same bounded binder used by
 Dart constructor expressions. Models must be plain classes with explicitly typed
 final fields, one unnamed field-formal constructor and optional synchronous
-expression getters. Primitive values, lists and nested supported models are
+expression getters/helpers. Primitive values, lists and nested supported models are
 accepted; annotated local model identity is checked, including list elements.
 Getters use instance scope and cannot capture enclosing widget/build locals.
 Construction and getter recursion are bounded. Reports include
 `staticModelInstances`, which counts evaluated instances rather than DOM boundaries.
 
-Inheritance, mixins, generic model classes, methods, constructor bodies/initializer
+Inheritance, mixins, generic model classes, arbitrary methods, constructor bodies/initializer
 lists, factories, mutable fields, generated serializers, DateTime and external
 model classes remain unsupported. No application startup or serialization code
 is executed. Models are compile-time snapshots, not mutable client-side state.
 The [records fixture](../examples/multifile/lib/record_list.dart) uses an imported
 model in both Flutter and DOM, with explicit synthetic values in configuration.
+
+
+## Pure instance helpers
+
+Supported widget/model instance methods with synchronous expression bodies can
+be called during compilation. Helpers accept simple positional/named parameters
+and static defaults. Arguments evaluate in caller scope; the body sees instance
+fields and its parameters, without capturing build locals. Primitive/list/model
+parameter annotations use the input validator; this is not a complete Dart type
+checker. Supported model receivers preserve resolved method identity. Helper
+results can be primitive values, model snapshots or supported widget constructors.
+
+State helpers can derive typed reactive text from bool/int values and return
+static widget constructions. Their bodies cannot create event callbacks or perform
+state mutation. Called helpers reject async/block bodies, generic methods,
+recursion, assignments and unsupported calls. Depth is bounded to 64 and uses the
+shared static operation budget. Static/top-level helpers, higher-order functions,
+closures and general statement/control-flow lowering remain unsupported.
+`pureHelperInvocations` reports compiler evaluations, not browser event calls.
+The records fixture uses its original `_recordRow` and `formatDuration` helpers.

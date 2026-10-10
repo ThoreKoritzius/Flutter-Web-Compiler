@@ -38,6 +38,8 @@ class RecordList extends StatefulWidget {
 class _RecordListState extends State<RecordList> {
   late bool expanded = widget.initiallyExpanded;
 
+  Widget _recordRow(RecordEntry item) => Text(item.label);
+
   @override
   Widget build(BuildContext context) {
     final shown = expanded
@@ -60,7 +62,7 @@ class _RecordListState extends State<RecordList> {
               ),
               const SizedBox(height: 16),
               for (final item in shown) ...[
-                Text(item.label),
+                _recordRow(item),
                 const SizedBox(height: 12),
               ],
               if (widget.items.length > widget.visibleCount)

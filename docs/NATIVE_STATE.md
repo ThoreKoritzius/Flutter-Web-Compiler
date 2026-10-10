@@ -42,7 +42,7 @@ Dart execution or a complete implementation of Dart numeric semantics.
 
 ## Explicit gaps
 
-Lifecycle methods, helpers, mixins, providers, nested state, controllers,
+Lifecycle methods, arbitrary helpers, mixins, providers, nested state, controllers,
 arbitrary callbacks, block callbacks and async work
 are rejected. Adapters, Flutter islands and MaterialApp context/theme rebuilding
 inside state are also rejected. Callbacks declared inside stateless descendants
@@ -51,6 +51,9 @@ cannot implicitly capture a parent's state; pass a supported callback instead.
 The typed backend binds text, button enablement and retained collection visibility.
 Other state-dependent widget structure, layout/styles, string state fields, doubles,
 division, mutable/runtime-loaded lists, forms and general navigation remain unsupported.
+Synchronous expression helpers can derive reactive values or widget constructors;
+they cannot perform mutations or create event callbacks. See the
+[pure helper contract](COMPONENT_PREVIEWS.md#pure-instance-helpers).
 Constructor inputs cannot change after initialization; didUpdateWidget is unsupported.
 Hidden groups retain their DOM and have no mount/dispose semantics. Reports count
 all compiled branches and expose `nativeConditionalGroups`, not visible-row coverage. The earlier boolean DOM-diff
