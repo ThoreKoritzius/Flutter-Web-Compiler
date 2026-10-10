@@ -178,6 +178,17 @@ List length, emptiness, first/last, take/skip, toList and primitive join are bou
 static operations. Reactive collection if/else and for-in over two conditionally
 selected static lists emit retained visibility groups. A common primitive prefix
 is emitted once. This does not support mutable lists, runtime data fetching,
-model-object constructors or keyed reconciliation. Both branches must compile.
+arbitrary model behavior or keyed reconciliation. Bounded local model constructors
+are now supported as described below. Both branches must compile.
 Boundary counts include hidden branches; `nativeConditionalGroups` counts groups,
 not screens or percentage of application behavior. See [native state](NATIVE_STATE.md).
+
+
+### Immutable model snapshots
+
+Original plain project-local data constructors with final typed fields and pure
+expression getters can be evaluated from Dart source or explicit `model` inputs.
+Nested lists/models use declaration identity checks; getters evaluate in isolated
+instance scope. The records fixture exercises imported models through resolved
+analysis. This is bounded static evaluation, not a runtime model/serialization
+bridge. See [the exact contract](COMPONENT_PREVIEWS.md#typed-static-models).

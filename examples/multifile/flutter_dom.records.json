@@ -1,10 +1,56 @@
 {
   "root": "RecordList",
-  "title": "Records · native collection state",
+  "title": "Records \u00b7 native collection state",
   "theme": "dark",
   "arguments": {
     "title": "Recent deliveries",
-    "items": ["Design review", "Documentation", "Release notes", "Accessibility audit", "Integration checks"],
+    "items": [
+      {
+        "model": "RecordEntry",
+        "positionalArguments": [
+          "Design review"
+        ],
+        "arguments": {
+          "minutes": 30
+        }
+      },
+      {
+        "model": "RecordEntry",
+        "positionalArguments": [
+          "Documentation"
+        ],
+        "arguments": {
+          "minutes": 45
+        }
+      },
+      {
+        "model": "RecordEntry",
+        "positionalArguments": [
+          "Release notes"
+        ],
+        "arguments": {
+          "minutes": 20
+        }
+      },
+      {
+        "model": "RecordEntry",
+        "positionalArguments": [
+          "Accessibility audit"
+        ],
+        "arguments": {
+          "minutes": 60
+        }
+      },
+      {
+        "model": "RecordEntry",
+        "positionalArguments": [
+          "Integration checks"
+        ],
+        "arguments": {
+          "minutes": 40
+        }
+      }
+    ],
     "visibleCount": 2
   }
 }

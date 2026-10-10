@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Evaluate original plain immutable model constructors, scoped expression getters and explicit model inputs; validate imported model identity in fields/lists.
+- Upgrade the shared records fixture to imported typed model data without adapters.
+
 - Bind static StatefulWidget constructor inputs through widget fields and pure local-state initializers.
 - Compile bounded collection for-in/list operations and conditional static collections with retained native visibility groups.
 - Add a shared Flutter/native records fixture, runtime visibility tests and CI compilation.

@@ -3,18 +3,19 @@
 The compiler lowers supported Dart expressions into typed, serializable data.
 It builds the widget tree once, emits initial HTML and an expression program,
 and updates dependent text/button/visibility bindings with a shared JavaScript interpreter.
-It does not enumerate states, enumerate alternate state trees, evaluate source strings,
+It does not enumerate states, evaluate source strings,
 or use widget-specific adapters. Static pages still need no JavaScript.
 
 ## Supported subset
 
 - A direct StatefulWidget with supported final constructor inputs, including static
-  primitive lists. `widget.field` reads an immutable input snapshot.
+  primitive/model lists. `widget.field` reads an immutable input snapshot.
 - An expression-body createState returning a zero-argument direct State class.
 - 1–16 mutable bool/int fields with explicit, supported pure initializers.
   Lazy `late` initialization from static `widget.field` inputs is supported.
 - Initialized final/const build locals and supported stateless descendants,
-  including reactive String/int/bool constructor inputs.
+  including reactive String/int/bool constructor inputs. Static model snapshots
+  can supply fields and pure getters; model objects themselves are not reactive.
 - Reactive Text strings: interpolation, string concatenation, same-type primitive
   conditionals, integer `+`, `-`, `*`, comparisons and equality, boolean `!`,
   `&&`, `||`, and unary integer negation.

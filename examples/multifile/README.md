@@ -18,3 +18,10 @@ This is a parser fixture, not a new visual showcase. It uses the same documented
 Run `dart run bin/flutter_dom.dart inspect --project examples/multifile --resolve-imports` to check both parameterless roots and actual constructor calls in the resolved web graph. `Heading` needs a title in isolation, but its real call with `content.title` compiles.
 
 The separate [sample_stat.dart](lib/sample_stat.dart) fixture and [preview configuration](flutter_dom.preview.json) demonstrate local static calculations, positional fields and explicit theme snapshots. See the [preview guide](../../docs/COMPONENT_PREVIEWS.md).
+
+
+The [records fixture](lib/record_list.dart) uses an imported immutable
+[RecordEntry](lib/record_entry.dart), supplied static model data, pure getters and
+native expand/collapse. The main README has the native build and Flutter run
+commands. This is a separate bounded state fixture; it does not broaden support
+to arbitrary application logic.

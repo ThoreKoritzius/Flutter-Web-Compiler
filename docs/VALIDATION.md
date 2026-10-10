@@ -152,3 +152,18 @@ rows and keyboard collapse to two, with the button retained. The same source is
 valid Flutter. This is a synthetic records fixture, not a live application feature.
 The artifact benchmark command also passes; historical showcase performance/SEO
 measurements above were not rerun or updated by this change.
+
+
+## Immutable model inputs — 2026-10-10
+
+87 tests pass and `dart analyze` is clean. New tests cover configured and source
+constructors, nested models, isolated getter scope, recursive/unsupported behavior
+and imported same-name model identity rejection. The real Flutter multifile fixture
+passes `flutter analyze`. The resolved DOM-only records fixture now uses imported
+RecordEntry fields/getters, with 18/18 visited boundaries, one state owner, five
+static model instances, zero adapters/island and 8.9 KiB initial files. These are
+synthetic snapshot inputs and artifact sizes, not whole-app or performance scores.
+Browser checks confirm the derived duration labels and native expand/collapse.
+
+The required artifact benchmark also completes successfully; prior published
+performance/SEO claims are unchanged.

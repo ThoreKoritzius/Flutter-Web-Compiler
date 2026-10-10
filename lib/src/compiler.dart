@@ -52,8 +52,10 @@ class _GuardedChildren {
 }
 
 class _StaticObject {
-  _StaticObject(this.fields);
+  _StaticObject(this.fields, {this.model, this.getters = const {}});
   final Map<String, Object?> fields;
+  final String? model;
+  final Map<String, Expression> getters;
 }
 
 class _StaticColor {
@@ -170,7 +172,7 @@ class FlutterDomCompiler {
     var scope = <String, Object?>{};
     var instanceFields = <String, Object?>{};
     var instanceGetters = <String, Expression>{};
-    final evaluatingGetters = <String>[];
+    final evaluatingGetters = <(Map<String, Object?>, String)>[];
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
     for (final declaration
@@ -249,9 +251,15 @@ class FlutterDomCompiler {
       });
     }
 
+    late _StaticObject Function(_Call) instantiateModel;
+    late Object? Function(_StaticObject, String) modelGetter;
+    var modelCount = 0;
+
     Object? property(Object? target, String name) {
       if (target is _StaticObject && target.fields.containsKey(name))
         return target.fields[name];
+      if (target is _StaticObject && target.getters.containsKey(name))
+        return modelGetter(target, name);
       if (target is List) {
         if (name == 'length') return target.length;
         if (name == 'isEmpty') return target.isEmpty;
@@ -461,14 +469,15 @@ class FlutterDomCompiler {
           ? expression.propertyName.name
           : null;
       if (getterName != null && instanceGetters.containsKey(getterName)) {
-        if (evaluatingGetters.contains(getterName) ||
+        final getterKey = (instanceFields, getterName);
+        if (evaluatingGetters.contains(getterKey) ||
             evaluatingGetters.length >= 64)
           fail('Recursive or excessively nested getter $getterName.', line);
         final previous = scope;
         scope = {
           ...instanceFields,
         }; // Getters cannot capture build-local variables.
-        evaluatingGetters.add(getterName);
+        evaluatingGetters.add(getterKey);
         try {
           return value(instanceGetters[getterName]!);
         } finally {
@@ -737,11 +746,8 @@ class FlutterDomCompiler {
         }
       }
       if (expression is PrefixedIdentifier &&
-          scope.containsKey(expression.prefix.name)) {
-        return property(
-          scope[expression.prefix.name],
-          expression.identifier.name,
-        );
+          staticReceiver(expression.prefix)) {
+        return property(value(expression.prefix), expression.identifier.name);
       }
       if (expression is PropertyAccess &&
           expression.target is! ThisExpression &&
@@ -784,7 +790,11 @@ class FlutterDomCompiler {
             positional.add(value(argument));
           }
         }
-        return _Call(name, positional, named, line, expression);
+        final call = _Call(name, positional, named, line, expression);
+        if (classes[name] case final node?) {
+          if (node.extendsClause == null) return instantiateModel(call);
+        }
+        return call;
       }
       fail(
         'Expected a static literal or supported constructor; found '
@@ -968,6 +978,45 @@ class FlutterDomCompiler {
           final name = field.name.lexeme;
           if (!bindings.containsKey(name) || declaredType == null) continue;
           final item = bindings[name];
+          void validateModel(TypeAnnotation annotation, Object? input) {
+            if (annotation is! NamedType) return;
+            if (input == null && annotation.question != null) return;
+            final primitiveType = annotation.name2.lexeme;
+            if (input is! ReactiveValue &&
+                (primitiveType == 'String' && input is! String ||
+                    primitiveType == 'int' && input is! int ||
+                    primitiveType == 'bool' && input is! bool ||
+                    ['double', 'num'].contains(primitiveType) && input is! num))
+              fail(
+                'Constructor field $name requires ${annotation.toSource()}.',
+              );
+            if (primitiveType == 'List' && input is! List)
+              fail('Constructor field $name requires a list.');
+            if (annotation.name2.lexeme == 'List' &&
+                annotation.typeArguments?.arguments.length == 1 &&
+                input is List) {
+              for (final entry in input) {
+                validateModel(
+                  annotation.typeArguments!.arguments.single,
+                  entry,
+                );
+              }
+              return;
+            }
+            final identity = resolved == null
+                ? annotation.name2.lexeme
+                : resolved.symbol(annotation.element2);
+            final model = classes[identity];
+            if (model != null &&
+                model.extendsClause == null &&
+                (input is! _StaticObject || input.model != identity))
+              fail(
+                'Constructor field $name requires model ${annotation.toSource()}.',
+              );
+          }
+
+          if (declaration.fields.type != null)
+            validateModel(declaration.fields.type!, item);
           if (item == null && declaredType.endsWith('?')) continue;
           final type = declaredType.replaceAll('?', '');
           if (type.startsWith('List<')) {
@@ -1002,6 +1051,113 @@ class FlutterDomCompiler {
       }
       return bindings;
     }
+
+    final constructingModels = <String>[];
+    instantiateModel = (_Call call) {
+      final node = classes[call.name]!;
+      currentNode = node;
+      if (--evaluationBudget < 0 ||
+          constructingModels.length >= 64 ||
+          constructingModels.contains(call.name))
+        fail('Recursive or excessive model construction.');
+      if (node.extendsClause != null ||
+          node.withClause != null ||
+          node.implementsClause != null ||
+          node.typeParameters != null ||
+          node.members.any(
+            (m) =>
+                m is! FieldDeclaration &&
+                m is! ConstructorDeclaration &&
+                m is! MethodDeclaration,
+          ) ||
+          node.members.whereType<MethodDeclaration>().any(
+            (m) =>
+                !m.isGetter ||
+                m.isStatic ||
+                m.body is! ExpressionFunctionBody ||
+                m.body.isAsynchronous,
+          ) ||
+          node.members.whereType<FieldDeclaration>().any((m) => m.isStatic))
+        fail(
+          'Models support plain final fields and pure expression getters only.',
+        );
+      constructingModels.add(call.name);
+      try {
+        bool supportedData(Object? item) =>
+            item == null ||
+            item is String ||
+            item is bool ||
+            item is num && item.isFinite ||
+            item is _StaticObject && item.model != null ||
+            item is List && item.every(supportedData);
+        bool supportedType(TypeAnnotation? type) {
+          if (type is! NamedType) return false;
+          if ([
+            'String',
+            'int',
+            'double',
+            'bool',
+            'num',
+          ].contains(type.name2.lexeme))
+            return true;
+          if (type.name2.lexeme == 'List')
+            return type.typeArguments?.arguments.length == 1 &&
+                supportedType(type.typeArguments!.arguments.single);
+          final identity = resolved == null
+              ? type.name2.lexeme
+              : resolved.symbol(type.element2);
+          return classes[identity]?.extendsClause == null &&
+              classes.containsKey(identity);
+        }
+
+        if (node.members.whereType<FieldDeclaration>().any(
+          (f) => !supportedType(f.fields.type),
+        ))
+          fail(
+            'Model fields require explicit supported primitive, list or local model types.',
+          );
+        final fields = bindFields(node, call.name, call);
+        if (!fields.values.every(supportedData))
+          fail('Model inputs require static primitive/list/model values.');
+        if (fields.values.any((v) => v is ReactiveValue || v is ReactiveAction))
+          fail('Model inputs must be static.');
+        modelCount++;
+        return _StaticObject(
+          fields,
+          model: call.name,
+          getters: {
+            for (final m in node.members.whereType<MethodDeclaration>())
+              m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
+          },
+        );
+      } finally {
+        constructingModels.removeLast();
+      }
+    };
+    final activeModelGetters = <(_StaticObject, String)>[];
+    modelGetter = (object, name) {
+      final key = (object, name);
+      if (activeModelGetters.contains(key) || activeModelGetters.length >= 64)
+        fail('Recursive or excessively nested model getter $name.');
+      final previous = scope;
+      final previousFields = instanceFields;
+      final previousGetters = instanceGetters;
+      final previousState = evaluatingState;
+      activeModelGetters.add(key);
+      scope = {...object.fields};
+      instanceFields = object.fields;
+      instanceGetters = object.getters;
+      evaluatingState = false;
+      try {
+        return value(object.getters[name]!);
+      } finally {
+        scope = previous;
+        instanceFields = previousFields;
+        instanceGetters = previousGetters;
+        evaluatingState = previousState;
+        activeModelGetters.removeLast();
+      }
+    };
 
     late String Function(Object?) render;
     String buildClass(
@@ -1557,20 +1713,28 @@ class FlutterDomCompiler {
       if (input is List)
         return input.map((v) => configuredValue(v, depth + 1)).toList();
       if (input is Map &&
-          input['widget'] is String &&
+          (input['widget'] is String || input['model'] is String) &&
+          !(input.containsKey('widget') && input.containsKey('model')) &&
           input.keys.every(
-            (key) =>
-                ['widget', 'arguments', 'positionalArguments'].contains(key),
+            (key) => [
+              'widget',
+              'model',
+              'arguments',
+              'positionalArguments',
+            ].contains(key),
           )) {
-        final name =
-            resolved?.root(input['widget'] as String) ??
-            input['widget'] as String;
+        final reference = (input['model'] ?? input['widget']) as String;
+        final name = resolved?.root(reference) ?? reference;
         if (!classes.containsKey(name))
           fail('Preview widget must name a project-local class.');
-        return configuredCall(name, input, depth + 1);
+        final call = configuredCall(name, input, depth + 1);
+        if (input.containsKey('model')) return instantiateModel(call);
+        if (classes[name]!.extendsClause == null)
+          fail('Widget descriptors must reference widget classes.');
+        return call;
       }
       fail(
-        'Preview inputs require finite primitives, lists or explicit project-local widget descriptors.',
+        'Preview inputs require finite primitives, lists or explicit project-local widget/model descriptors.',
       );
     }
 
@@ -1643,6 +1807,7 @@ class FlutterDomCompiler {
       'nativeFilterInstances': filterCount,
       'nativeStateInstances': reactiveCount,
       'nativeConditionalGroups': conditionalGroupCount,
+      'staticModelInstances': modelCount,
       'stateStrategy':
           'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,

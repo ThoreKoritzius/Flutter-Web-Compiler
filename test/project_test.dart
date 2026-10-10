@@ -461,4 +461,44 @@ class Label extends StatelessWidget {
       expect(sites['entries'], hasLength(1000));
     },
   );
+  test(
+    'imported models preserve constructor and annotated field identities',
+    () async {
+      write(
+        'lib/main.dart',
+        "import 'package:flutter/widgets.dart'; import 'page.dart'; void main() => runApp(Page());",
+      );
+      write(
+        'lib/model.dart',
+        "class Entry { const Entry(this.title); final String title; String get label => title + '!'; }",
+      );
+      write(
+        'lib/other.dart',
+        "class Entry { const Entry(this.title); final String title; }",
+      );
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+import 'model.dart' as m;
+import 'other.dart' as o;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Label(items: [m.Entry('Imported')]);
+}
+class Label extends StatelessWidget {
+ const Label({required this.items}); final List<m.Entry> items;
+ Widget build(BuildContext context) => Column(children: [for (final item in items) Text(item.label)]);
+}
+""");
+      final result = await compile();
+      expect(result.html, contains('Imported!'));
+      final file = File(p.join(directory.path, 'lib/page.dart'));
+      file.writeAsStringSync(
+        file.readAsStringSync().replaceFirst(
+          "m.Entry('Imported')",
+          "o.Entry('Wrong')",
+        ),
+      );
+      await expectLater(compile(), throwsA(isA<CompileException>()));
+    },
+  );
 }

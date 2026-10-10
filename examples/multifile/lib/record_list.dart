@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'record_entry.dart';
 
 void main() => runApp(
   const MaterialApp(
@@ -6,11 +7,11 @@ void main() => runApp(
       body: RecordList(
         title: 'Recent deliveries',
         items: [
-          'Design review',
-          'Documentation',
-          'Release notes',
-          'Accessibility audit',
-          'Integration checks',
+          RecordEntry('Design review', minutes: 30),
+          RecordEntry('Documentation', minutes: 45),
+          RecordEntry('Release notes', minutes: 20),
+          RecordEntry('Accessibility audit', minutes: 60),
+          RecordEntry('Integration checks', minutes: 40),
         ],
       ),
     ),
@@ -26,7 +27,7 @@ class RecordList extends StatefulWidget {
     this.initiallyExpanded = false,
   });
   final String title;
-  final List<String> items;
+  final List<RecordEntry> items;
   final int visibleCount;
   final bool initiallyExpanded;
 
@@ -59,7 +60,7 @@ class _RecordListState extends State<RecordList> {
               ),
               const SizedBox(height: 16),
               for (final item in shown) ...[
-                Text(item),
+                Text(item.label),
                 const SizedBox(height: 12),
               ],
               if (widget.items.length > widget.visibleCount)

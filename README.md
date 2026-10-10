@@ -247,7 +247,8 @@ read-only compositions without rewriting widget bodies. See the
 
 The [records fixture](examples/multifile/lib/record_list.dart) compiles original
 StatefulWidget inputs, `widget.field`, collection for-in and a conditional static
-list into DOM. Show all / Show fewer retains existing rows and uses native buttons.
+list into DOM. An imported immutable model supplies typed fields and pure getters.
+Show all / Show fewer retains existing rows and uses native buttons.
 No adapter or Flutter engine is involved.
 
 ```sh

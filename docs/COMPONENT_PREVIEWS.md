@@ -13,7 +13,7 @@ The fixture is ordinary Flutter source. Its local variables, positional construc
 
 ## Configuration
 
-See [the complete example](../examples/multifile/flutter_dom.preview.json). A `preview` list selects 1–60 components. Each entry has a `root`, named `arguments` and/or `positionalArguments`. Arguments accept finite primitive JSON values, lists, and explicit project-local widget descriptors (below). Arbitrary model-object maps and executable callbacks are not accepted. A root may be visible from the entry library, or identified as `lib/path.dart::ClassName` in the resolved library graph, including private declarations for local component evaluation.
+See [the complete example](../examples/multifile/flutter_dom.preview.json). A `preview` list selects 1–60 components. Each entry has a `root`, named `arguments` and/or `positionalArguments`. Arguments accept finite primitive JSON values, lists, and explicit project-local widget/model descriptors (below). Untyped object maps and executable callbacks are not accepted. A root may be visible from the entry library, or identified as `lib/path.dart::ClassName` in the resolved library graph, including private declarations for local component evaluation.
 
 The compiler renders those original widget bodies inside a responsive preview grid. The grid is configuration-driven preview UI, not a translation of the application's screen layout. Mock data is labelled visibly. Outside preview mode, `arguments` and `positionalArguments` can supply data to a single configured root. No application startup is executed.
 
@@ -73,5 +73,33 @@ and Flutter constraint/layout parity are not implemented.
 Supported StatefulWidget roots can also receive explicit primitive/list inputs.
 The state runtime reads an immutable `widget.field` snapshot, not application
 startup or provider data. See [records configuration](../examples/multifile/flutter_dom.records.json)
-and [the native state contract](NATIVE_STATE.md). Lifecycle and model objects
-remain unsupported.
+and [the native state contract](NATIVE_STATE.md). Lifecycle and arbitrary model behavior remain unsupported.
+
+
+## Typed static models
+
+Inputs can instantiate an original project-local data declaration:
+
+```json
+{
+  "model": "RecordEntry",
+  "positionalArguments": ["Design review"],
+  "arguments": {"minutes": 30}
+}
+```
+
+This evaluates the original constructor through the same bounded binder used by
+Dart constructor expressions. Models must be plain classes with explicitly typed
+final fields, one unnamed field-formal constructor and optional synchronous
+expression getters. Primitive values, lists and nested supported models are
+accepted; annotated local model identity is checked, including list elements.
+Getters use instance scope and cannot capture enclosing widget/build locals.
+Construction and getter recursion are bounded. Reports include
+`staticModelInstances`, which counts evaluated instances rather than DOM boundaries.
+
+Inheritance, mixins, generic model classes, methods, constructor bodies/initializer
+lists, factories, mutable fields, generated serializers, DateTime and external
+model classes remain unsupported. No application startup or serialization code
+is executed. Models are compile-time snapshots, not mutable client-side state.
+The [records fixture](../examples/multifile/lib/record_list.dart) uses an imported
+model in both Flutter and DOM, with explicit synthetic values in configuration.
