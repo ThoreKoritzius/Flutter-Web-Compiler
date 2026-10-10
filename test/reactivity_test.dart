@@ -166,6 +166,31 @@ class Label extends StatelessWidget {
     },
   );
 
+  test('runtime changes conditional visibility without replacing nodes', () {
+    final input = counterSource.replaceFirst(
+      "Text(verbose ? 'Details' : '')",
+      "if (verbose) Text('Details')",
+    );
+    final output = Process.runSync('node', [
+      '-e',
+      _runtimeHarness +
+          reactiveRuntime +
+          r"""
+const f = fixture();
+const binding = f.p.bindings.find(b => b.kind === 'visible');
+const group = f.nodes.get('[data-dom-visible="' + binding.id + '"]');
+assert.equal(group.hidden, true);
+press(f, 2);
+assert.equal(group.hidden, false);
+press(f, 2);
+assert.equal(group.hidden, true);
+assert.equal(f.nodes.get('[data-dom-visible="' + binding.id + '"]'), group);
+""",
+      jsonEncode(program(input)),
+    ]);
+    expect(output.exitCode, 0, reason: '${output.stdout}\n${output.stderr}');
+  });
+
   test('Dart and JS expression evaluators agree, including short circuiting', () {
     final n = ReactiveValue.field('n', 0),
         flag = ReactiveValue.field('flag', false);
@@ -224,6 +249,7 @@ function fixture() {
       get disabled() {return this._disabled;},
       set disabled(value) {this._disabled = value; this.writes++;}};
     if (binding.kind === 'enabled') node._disabled = !initial;
+    if (binding.kind === 'visible') node.hidden = !initial;
     nodes.set('[data-dom-' + binding.kind + '="' + binding.id + '"]', node);
   }
   const buttons = p.actions.map((action, id) => ({dataset: {domAction: String(id)},

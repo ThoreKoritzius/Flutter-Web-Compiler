@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind static StatefulWidget constructor inputs through widget fields and pure local-state initializers.
+- Compile bounded collection for-in/list operations and conditional static collections with retained native visibility groups.
+- Add a shared Flutter/native records fixture, runtime visibility tests and CI compilation.
+
 - Compile composed previews with bounded widget-valued inputs, scoped expression getters, primitive/null equality and checked null assertions.
 - Add approximate Card/Expanded CSS rendering and a generic resolved composition fixture.
 

@@ -81,7 +81,7 @@ class Child extends StatelessWidget {
         page('', 'Column(children: [...null])'),
         page('', 'Column(children: [...1])'),
         page('', 'Column(children: [if (1) Text("bad")])'),
-        page('', 'Column(children: [for (final x in []) Text("bad")])'),
+        page('', 'Column(children: [for (var x = 0; x < 1; x++) Text("bad")])'),
       ]) {
         expect(
           () => compiler.compile(source, {}),

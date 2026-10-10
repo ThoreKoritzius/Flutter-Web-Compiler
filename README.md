@@ -4,7 +4,7 @@
 
 An experimental Dart CLI that compiles a supported subset of existing Flutter UI into HTML and CSS, while retaining explicit interactive regions as lazy-loaded Flutter web islands.
 
-**Early research prototype, not a drop-in Flutter Web replacement.** It does not yet compile arbitrary applications or provide a native DOM state runtime.
+**Early research prototype, not a drop-in Flutter Web replacement.** It does not yet compile arbitrary applications or provide a complete native DOM state runtime.
 
 [Quick start](#quick-start) · [Comparison](#compared-with-flutter-web) · [Benchmarks](#benchmarks) · [Compatibility](docs/COMPATIBILITY.md) · [Roadmap](docs/PLAN.md) · [Contributing](CONTRIBUTING.md)
 
@@ -241,3 +241,23 @@ Preview configuration can pass another project-local widget into a `child` slot.
 Simple instance getters, optional content, Card and Expanded now support richer
 read-only compositions without rewriting widget bodies. See the
 [composed preview example](docs/COMPONENT_PREVIEWS.md#composed-previews).
+
+
+### Native records with constructor inputs
+
+The [records fixture](examples/multifile/lib/record_list.dart) compiles original
+StatefulWidget inputs, `widget.field`, collection for-in and a conditional static
+list into DOM. Show all / Show fewer retains existing rows and uses native buttons.
+No adapter or Flutter engine is involved.
+
+```sh
+dart run bin/flutter_dom.dart build --project examples/multifile \
+  --source lib/record_list.dart --config flutter_dom.records.json \
+  --resolve-imports --dom-only --output build/record-list
+python3 -m http.server 8113 --bind 127.0.0.1 --directory build/record-list
+```
+
+Open http://localhost:8113. For the same Flutter implementation, run
+`flutter run -d chrome -t lib/record_list.dart` from `examples/multifile`.
+These are synthetic static inputs, not live model loading. See the
+[exact state contract](docs/NATIVE_STATE.md) for unsupported behavior.

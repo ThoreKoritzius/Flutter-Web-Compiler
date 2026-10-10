@@ -148,7 +148,7 @@ An explicit `staticTheme` snapshot enables Theme.of, selected textTheme/colorSch
 The [component preview guide](COMPONENT_PREVIEWS.md) documents configuration-driven composition and static constructor arguments. Reports distinguish `componentPreview` and `staticThemeProvided`; neither proves general application compatibility. Inspector runs without these snapshots remain conservative.
 
 
-Native local bool/int state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts visit the state tree once. Typed expressions update dependent text and button enablement without state enumeration; state-dependent structure and styling are rejected.
+Native local bool/int state is an explicit exception to static-only compilation. See [the exact subset](NATIVE_STATE.md). Inspection now labels accepted results “native”, because acceptance can include this small runtime. Boundary counts visit the state tree once. Typed expressions update dependent text, button enablement and bounded collection visibility without state enumeration. Other state-dependent structure and styling are rejected.
 
 
 ### Composed widgets and static getters
@@ -167,3 +167,17 @@ radii and BorderSide with explicit color and optional nonnegative width. Margin
 uses supported EdgeInsets forms; color uses the existing static-color contract.
 Defaults use lightweight CSS colors/radius rather than resolving Material themes.
 Elevation, clipping, ink effects and exact Flutter constraints remain unsupported.
+
+
+### Bounded collections and stateful inputs
+
+Final constructor inputs now bind into supported StatefulWidget instances through
+`widget.field`; bool/int state can initialize from static input expressions.
+Static collection for-in supports declared variables and isolated loop scope.
+List length, emptiness, first/last, take/skip, toList and primitive join are bounded
+static operations. Reactive collection if/else and for-in over two conditionally
+selected static lists emit retained visibility groups. A common primitive prefix
+is emitted once. This does not support mutable lists, runtime data fetching,
+model-object constructors or keyed reconciliation. Both branches must compile.
+Boundary counts include hidden branches; `nativeConditionalGroups` counts groups,
+not screens or percentage of application behavior. See [native state](NATIVE_STATE.md).

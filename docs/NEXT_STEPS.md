@@ -6,7 +6,7 @@ The practical product is an additional web build target for document-oriented pa
 
 1. **Resolved, multi-file Dart analysis.** Opt-in project analysis now resolves project-local imports, symbols, exports and parts. Complete generic/type semantics and imported adapter/island boundaries before broadening the compatibility claim. Keep source locations and actionable diagnostics in an intermediate representation.
 2. **Layout semantics.** Flutter constraints, intrinsic sizing, scrolling, slivers, text measurement and CSS layout are different models. Publish supported mappings and test them across viewport sizes. Exact pixel fidelity would undermine much of the advantage of using the browser's layout engine.
-3. **State and lifecycle.** `setState`, element identity/keys, inherited context, providers, controllers, disposal, effects and asynchronous rebuilding need a coherent DOM runtime. A typed local bool/int expression subset now compiles once and updates dependent text/button bindings (see NATIVE_STATE.md). Next add bounded block callbacks, controlled inputs and typed CSS bindings, then address stateful inputs and lifecycle before provider integrations. Do not translate arbitrary callbacks by substituting strings.
+3. **State and lifecycle.** `setState`, element identity/keys, inherited context, providers, controllers, disposal, effects and asynchronous rebuilding need a coherent DOM runtime. A typed local bool/int expression subset now compiles once and updates dependent text/button bindings (see NATIVE_STATE.md). Stateful primitive/list inputs and bounded conditional collection visibility are implemented. Next add typed immutable model inputs and pure helper lowering, then bounded block callbacks, controlled inputs and lifecycle contracts before provider integrations. Do not translate arbitrary callbacks by substituting strings.
 4. **Application boundaries.** Routing, URLs, hydration, API calls, authentication, plugin initialization and state crossing between DOM and Flutter islands need explicit contracts. Server-rendered data must agree with client state without exposing server-only values.
 5. **Packages and platform behavior.** A Dart package may compile to JavaScript and still require Flutter rendering or platform channels. Maintain tested support by capability, SDK version and package integration; fail visibly outside it.
 
@@ -28,10 +28,10 @@ A standalone CLI is the least coupled starting point. An IDE extension can surfa
 ## Immediate coverage priorities after images and tables
 
 1. Build on resolved project-local definitions: extend isolated call-site checks into supported local data flow, formalize source spans and lower into a typed intermediate representation.
-2. Extend the implemented same-file constants, collection `if` and spreads to collection `for`, then `Wrap` and constrained responsive layout.
+2. Build on constants, collection if/spreads and bounded for-in; add Wrap and constrained responsive layout.
 3. Add native links and a small controlled form/event contract with interaction parity tests.
 4. Extend the implemented local-state expression slice with controlled forms and lifecycle contracts before broad Provider/Riverpod compatibility.
-5. For actual feature slices, prioritize StatefulWidget constructor inputs, bounded model/collection evaluation and structural list updates. Composed static cards now work with original widget bodies and explicit inputs; they do not prove feature-level behavior.
+5. For actual feature slices, prioritize typed immutable model evaluation and pure helper methods. StatefulWidget constructor inputs, bounded static lists and retained collection visibility now work. Composed static cards now work with original widget bodies and explicit inputs; they do not prove feature-level behavior.
 
 Image assets and static tables are implemented. Styling remains an approximate CSS mapping, not a translation of arbitrary Material themes.
 

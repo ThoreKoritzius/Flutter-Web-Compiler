@@ -1,0 +1,10 @@
+{
+  "root": "RecordList",
+  "title": "Records · native collection state",
+  "theme": "dark",
+  "arguments": {
+    "title": "Recent deliveries",
+    "items": ["Design review", "Documentation", "Release notes", "Accessibility audit", "Integration checks"],
+    "visibleCount": 2
+  }
+}

@@ -24,7 +24,8 @@ The compiler renders those original widget bodies inside a responsive preview gr
 - `Theme.of(context)` reads this snapshot only when it is explicitly configured. Missing slots fail; actual ThemeData, inherited themes, brightness changes and theme extensions are not inferred.
 - TextStyle `copyWith` supports those properties and retains prior values for null arguments. Static colors support `withValues(alpha:)` only.
 
-This is a static component preview, not a working whole app. Authentication, routing, provider state, live data and event callbacks remain unsupported outside explicit adapters/islands. Its output size and boundary counts cannot be compared with the full application's build as a like-for-like benchmark.
+This is a static component preview, not a working whole app. Authentication, routing, provider state, live data and general event callbacks remain unsupported. The bounded native
+state subset supports explicit synchronous local actions. Its output size and boundary counts cannot be compared with the full application's build as a like-for-like benchmark.
 
 Keep private preview configuration, build output and reports outside version control. Reusable fixtures in this repository contain only synthetic data.
 
@@ -67,3 +68,10 @@ capturing build-local variables. Cycles and excessive nesting are rejected.
 Primitive/null equality and checked null assertions allow optional content slots.
 Card and Expanded map to approximate CSS; Card shadows, Material theme resolution
 and Flutter constraint/layout parity are not implemented.
+
+
+Supported StatefulWidget roots can also receive explicit primitive/list inputs.
+The state runtime reads an immutable `widget.field` snapshot, not application
+startup or provider data. See [records configuration](../examples/multifile/flutter_dom.records.json)
+and [the native state contract](NATIVE_STATE.md). Lifecycle and model objects
+remain unsupported.

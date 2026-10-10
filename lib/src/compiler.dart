@@ -39,6 +39,18 @@ class _Call {
   final int line;
 }
 
+class _ConditionalList {
+  _ConditionalList(this.condition, this.yes, this.no);
+  final ReactiveValue condition;
+  final List<Object?> yes, no;
+}
+
+class _GuardedChildren {
+  _GuardedChildren(this.condition, this.children);
+  final ReactiveValue condition;
+  final List<Object?> children;
+}
+
 class _StaticObject {
   _StaticObject(this.fields);
   final Map<String, Object?> fields;
@@ -151,6 +163,7 @@ class FlutterDomCompiler {
     var filterCount = 0;
     var darkTheme = false;
     var reactiveCount = 0;
+    var conditionalGroupCount = 0;
     ReactiveFrame? frame;
     var evaluatingState = false;
     final stack = <String>[];
@@ -239,17 +252,36 @@ class FlutterDomCompiler {
     Object? property(Object? target, String name) {
       if (target is _StaticObject && target.fields.containsKey(name))
         return target.fields[name];
+      if (target is List) {
+        if (name == 'length') return target.length;
+        if (name == 'isEmpty') return target.isEmpty;
+        if (name == 'isNotEmpty') return target.isNotEmpty;
+        if (name == 'first' || name == 'last') {
+          if (target.isEmpty)
+            fail('Cannot read $name from an empty static list.');
+          return name == 'first' ? target.first : target.last;
+        }
+      }
       fail('Unsupported or missing static property $name.');
     }
 
-    bool staticReceiver(Expression? node) => switch (node) {
-      SimpleIdentifier n => scope.containsKey(n.name),
-      PrefixedIdentifier n => scope.containsKey(n.prefix.name),
-      PropertyAccess n => staticReceiver(n.target),
-      MethodInvocation n =>
-        n.methodName.name == 'of' || staticReceiver(n.target),
-      _ => false,
-    };
+    bool staticReceiver(Expression? node) {
+      if (node is Identifier) {
+        final key =
+            resolved?.symbol(node.element) ??
+            (node is SimpleIdentifier ? node.name : node.toSource());
+        if (constants.containsKey(key)) return true;
+      }
+      return switch (node) {
+        SimpleIdentifier n => scope.containsKey(n.name),
+        PrefixedIdentifier n => scope.containsKey(n.prefix.name),
+        PropertyAccess n => staticReceiver(n.target),
+        MethodInvocation n =>
+          n.methodName.name == 'of' || staticReceiver(n.target),
+        ListLiteral _ => true,
+        _ => false,
+      };
+    }
 
     Object? value(Expression expression) {
       currentNode = expression;
@@ -335,6 +367,8 @@ class FlutterDomCompiler {
               enabled: ReactiveValue.operation('&&', [enabled, action.enabled]),
             );
           }
+          if (yes is List && no is List)
+            return _ConditionalList(condition, yes, no);
           return ReactiveValue.operation('choose', [condition, yes, no]);
         }
         if (condition is! bool)
@@ -498,7 +532,16 @@ class FlutterDomCompiler {
       }
       if (expression is ListLiteral) {
         final items = <Object?>[];
-        void append(CollectionElement element) {
+        late void Function(CollectionElement) append;
+        void guarded(ReactiveValue condition, void Function() generate) {
+          final start = items.length;
+          generate();
+          final children = items.sublist(start);
+          items.removeRange(start, items.length);
+          items.add(_GuardedChildren(condition, children));
+        }
+
+        append = (CollectionElement element) {
           if (--evaluationBudget < 0)
             fail('Static evaluation budget exceeded.', line);
           if (element is Expression) {
@@ -508,6 +551,15 @@ class FlutterDomCompiler {
               fail('Collection if-case patterns are not supported.', line);
             }
             final condition = value(element.expression);
+            if (condition is ReactiveValue && condition.type == 'bool') {
+              guarded(condition, () => append(element.thenElement));
+              if (element.elseElement != null)
+                guarded(
+                  ReactiveValue.operation('!', [condition]),
+                  () => append(element.elseElement!),
+                );
+              return;
+            }
             if (condition is! bool)
               fail('Collection condition must be a boolean.', line);
             if (condition) {
@@ -515,6 +567,57 @@ class FlutterDomCompiler {
             } else if (element.elseElement != null) {
               append(element.elseElement!);
             }
+          } else if (element is ForElement) {
+            final parts = element.forLoopParts;
+            if (element.awaitKeyword != null ||
+                parts is! ForEachPartsWithDeclaration)
+              fail(
+                'Collections support synchronous for-in with a declared variable only.',
+                line,
+              );
+            final iterable = value(parts.iterable);
+            void iterate(List<Object?> input) {
+              final previous = scope;
+              try {
+                for (final item in input) {
+                  scope = {...previous, parts.loopVariable.name.lexeme: item};
+                  append(element.body);
+                }
+              } finally {
+                scope = previous;
+              }
+            }
+
+            if (iterable is _ConditionalList) {
+              var shared = 0;
+              while (shared < iterable.yes.length &&
+                  shared < iterable.no.length) {
+                final a = iterable.yes[shared], b = iterable.no[shared];
+                if (!identical(a, b) &&
+                    !(a.runtimeType == b.runtimeType &&
+                        (a == null || a is String || a is num || a is bool) &&
+                        a == b))
+                  break;
+                shared++;
+              }
+              iterate(iterable.yes.take(shared).toList());
+              if (shared < iterable.yes.length)
+                guarded(
+                  iterable.condition,
+                  () => iterate(iterable.yes.skip(shared).toList()),
+                );
+              if (shared < iterable.no.length)
+                guarded(
+                  ReactiveValue.operation('!', [iterable.condition]),
+                  () => iterate(iterable.no.skip(shared).toList()),
+                );
+            } else if (iterable is List) {
+              iterate(iterable);
+            } else
+              fail(
+                'Collection for-in requires a static or conditionally selected static list.',
+                line,
+              );
           } else if (element is SpreadElement) {
             final spread = value(element.expression);
             if (spread == null && element.isNullAware) return;
@@ -529,12 +632,54 @@ class FlutterDomCompiler {
               line,
             );
           }
-        }
+        };
 
         for (final element in expression.elements) {
           append(element);
         }
         return items;
+      }
+      if (expression is MethodInvocation &&
+          expression.target != null &&
+          staticReceiver(expression.target)) {
+        final method = expression.methodName.name;
+        if (['take', 'skip', 'toList', 'join'].contains(method)) {
+          final target = value(expression.target!);
+          if (target is! List) fail('Static $method requires a list.', line);
+          final args = expression.argumentList.arguments;
+          if (method == 'toList') {
+            if (args.length > 1 ||
+                args.any(
+                  (a) =>
+                      a is! NamedExpression ||
+                      a.name.label.name != 'growable' ||
+                      value(a.expression) is! bool,
+                ))
+              fail('toList supports optional static growable only.', line);
+            return List<Object?>.of(target);
+          }
+          if (method == 'join') {
+            if (args.length > 1 || args.any((a) => a is NamedExpression))
+              fail('join accepts one static separator.', line);
+            final separator = args.isEmpty ? '' : value(args.single);
+            if (separator is! String ||
+                target.any(
+                  (v) => v != null && v is! String && v is! num && v is! bool,
+                ))
+              fail(
+                'join requires primitive data and a static string separator.',
+                line,
+              );
+            return target.join(separator);
+          }
+          if (args.length != 1 || args.single is NamedExpression)
+            fail('$method needs a static count.', line);
+          final count = value(args.single);
+          if (count is! int || count < 0)
+            fail('$method count must be a nonnegative static integer.', line);
+          return (method == 'take' ? target.take(count) : target.skip(count))
+              .toList();
+        }
       }
       if (expression is MethodInvocation) {
         final method = expression.methodName.name;
@@ -716,127 +861,14 @@ class FlutterDomCompiler {
       return css.join(';');
     }
 
-    late String Function(Object?) render;
-    String buildClass(
-      String name, [
+    Map<String, Object?> bindFields(
+      ClassDeclaration node,
+      String name,
       _Call? invocation,
-      Map<String, Object?>? stateBindings,
-    ]) {
-      final node = classes[name];
-      if (node != null) currentNode = node;
-      if (node == null)
-        fail('Unknown widget $name or unsupported declaration.');
-      final base = resolved == null
-          ? node.extendsClause?.superclass.name2.lexeme
-          : resolved.superclass(node);
-      if (base == 'StatefulWidget' && stateBindings == null) {
-        if (frame != null) fail('Nested native state is not supported yet.');
-        check(invocation ?? _Call(name, [], {}, 1), {});
-        if (node.withClause != null ||
-            node.implementsClause != null ||
-            node.members.whereType<FieldDeclaration>().isNotEmpty ||
-            node.members.whereType<MethodDeclaration>().any(
-              (m) => m.name.lexeme != 'createState',
-            )) {
-          fail(
-            'Native stateful widgets support no inputs, mixins, or extra methods yet.',
-          );
-        }
-        for (final ctor in node.members.whereType<ConstructorDeclaration>()) {
-          if (ctor.name != null ||
-              ctor.factoryKeyword != null ||
-              ctor.initializers.isNotEmpty ||
-              ctor.body is! EmptyFunctionBody ||
-              ctor.parameters.parameters.any((p) {
-                final parameter = p is DefaultFormalParameter ? p.parameter : p;
-                return parameter is! SuperFormalParameter ||
-                    parameter.name.lexeme != 'key' ||
-                    p is DefaultFormalParameter && p.defaultValue != null;
-              })) {
-            fail(
-              'Native stateful widgets support only an unnamed key constructor.',
-            );
-          }
-        }
-        final creators = node.members.whereType<MethodDeclaration>().toList();
-        if (creators.length != 1 ||
-            creators.single.body is! ExpressionFunctionBody)
-          fail('createState must directly return a State constructor.');
-        final creation =
-            (creators.single.body as ExpressionFunctionBody).expression;
-        final stateCall = value(creation);
-        if (stateCall is! _Call ||
-            stateCall.named.isNotEmpty ||
-            stateCall.positional.isNotEmpty ||
-            !classes.containsKey(stateCall.name))
-          fail(
-            'createState must directly return a zero-argument State constructor.',
-          );
-        final stateName = stateCall.name;
-        final state = classes[stateName];
-        if (state == null ||
-            state.withClause != null ||
-            state.implementsClause != null ||
-            (resolved == null
-                    ? state.extendsClause?.superclass.name2.lexeme
-                    : resolved.superclass(state)) !=
-                'State' ||
-            state.members.any(
-              (m) => m is! FieldDeclaration && m is! MethodDeclaration,
-            ) ||
-            state.members.whereType<MethodDeclaration>().any(
-              (m) => m.name.lexeme != 'build',
-            )) {
-          fail(
-            'Native State supports build only; lifecycle, mixins and helpers require an island.',
-          );
-        }
-        final initial = <String, Object>{};
-        for (final declaration in state.members.whereType<FieldDeclaration>()) {
-          final type = declaration.fields.type?.toSource();
-          if (declaration.isStatic ||
-              declaration.fields.isFinal ||
-              declaration.fields.lateKeyword != null ||
-              !['bool', 'int'].contains(type))
-            fail(
-              'Native state fields must be mutable bool or int with literal initializers.',
-            );
-          for (final field in declaration.fields.variables) {
-            final initializer = field.initializer;
-            if (initializer is! BooleanLiteral &&
-                initializer is! IntegerLiteral &&
-                !(initializer is PrefixExpression &&
-                    initializer.operator.lexeme == '-' &&
-                    initializer.operand is IntegerLiteral))
-              fail('Native state requires literal initializers.');
-            final item = value(initializer!);
-            if (ReactiveValue.literal(item).type != type)
-              fail('State initializer type mismatch.');
-            initial[field.name.lexeme] = item as Object;
-          }
-        }
-        if (initial.isEmpty || initial.length > 16)
-          fail('Native state requires 1–16 bool/int fields.');
-        final id = reactiveCount++;
-        frame = ReactiveFrame(initial);
-        try {
-          final html = buildClass(stateName, null, {
-            for (final entry in initial.entries)
-              entry.key: ReactiveValue.field(entry.key, entry.value),
-          });
-          return frame!.wrap(html, id);
-        } finally {
-          frame = null;
-        }
-      }
-      if (stateBindings == null && base != 'StatelessWidget') {
-        fail(
-          '$name must be a StatelessWidget or an explicitly configured Flutter island.',
-        );
-      }
+    ) {
       final fields = node.members
           .whereType<FieldDeclaration>()
-          .where((field) => !field.isStatic && stateBindings == null)
+          .where((field) => !field.isStatic)
           .toList();
       for (final field in fields) {
         if (!field.fields.isFinal ||
@@ -851,7 +883,7 @@ class FlutterDomCompiler {
           .toList();
       if (constructors.length > 1)
         fail('$name supports only one unnamed constructor.');
-      final bindings = <String, Object?>{...?stateBindings};
+      final bindings = <String, Object?>{};
       final call =
           invocation ??
           _Call(
@@ -938,6 +970,15 @@ class FlutterDomCompiler {
           final item = bindings[name];
           if (item == null && declaredType.endsWith('?')) continue;
           final type = declaredType.replaceAll('?', '');
+          if (type.startsWith('List<')) {
+            if (item is! List)
+              fail('Constructor field $name requires $declaredType.');
+            final elementType = type.substring(5, type.length - 1);
+            if (elementType == 'String' && item.any((v) => v is! String) ||
+                elementType == 'int' && item.any((v) => v is! int) ||
+                elementType == 'bool' && item.any((v) => v is! bool))
+              fail('Constructor field $name requires $declaredType elements.');
+          }
           if (item is ReactiveValue) {
             if (item.type != type)
               fail('Constructor field $name requires $declaredType.');
@@ -959,6 +1000,119 @@ class FlutterDomCompiler {
           '$name has fields not initialized by a supported constructor parameter.',
         );
       }
+      return bindings;
+    }
+
+    late String Function(Object?) render;
+    String buildClass(
+      String name, [
+      _Call? invocation,
+      Map<String, Object?>? stateBindings,
+    ]) {
+      final node = classes[name];
+      if (node != null) currentNode = node;
+      if (node == null)
+        fail('Unknown widget $name or unsupported declaration.');
+      final base = resolved == null
+          ? node.extendsClause?.superclass.name2.lexeme
+          : resolved.superclass(node);
+      if (base == 'StatefulWidget' && stateBindings == null) {
+        if (frame != null) fail('Nested native state is not supported yet.');
+        if (node.withClause != null ||
+            node.implementsClause != null ||
+            node.members.whereType<MethodDeclaration>().any(
+              (m) => m.name.lexeme != 'createState',
+            ))
+          fail(
+            'Native stateful widgets support constructor inputs and createState only.',
+          );
+        final widgetInputs = bindFields(node, name, invocation);
+        final creators = node.members.whereType<MethodDeclaration>().toList();
+        if (creators.length != 1 ||
+            creators.single.body is! ExpressionFunctionBody)
+          fail('createState must directly return a State constructor.');
+        final creation =
+            (creators.single.body as ExpressionFunctionBody).expression;
+        final stateCall = value(creation);
+        if (stateCall is! _Call ||
+            stateCall.named.isNotEmpty ||
+            stateCall.positional.isNotEmpty ||
+            !classes.containsKey(stateCall.name))
+          fail(
+            'createState must directly return a zero-argument State constructor.',
+          );
+        final stateName = stateCall.name;
+        final state = classes[stateName];
+        if (state == null ||
+            state.withClause != null ||
+            state.implementsClause != null ||
+            (resolved == null
+                    ? state.extendsClause?.superclass.name2.lexeme
+                    : resolved.superclass(state)) !=
+                'State' ||
+            state.members.any(
+              (m) => m is! FieldDeclaration && m is! MethodDeclaration,
+            ) ||
+            state.members.whereType<MethodDeclaration>().any(
+              (m) => m.name.lexeme != 'build',
+            )) {
+          fail(
+            'Native State supports build only; lifecycle, mixins and helpers require an island.',
+          );
+        }
+        final initial = <String, Object>{};
+        final previousScope = scope;
+        final previousFields = instanceFields;
+        final previousGetters = instanceGetters;
+        scope = {'widget': _StaticObject(widgetInputs)};
+        instanceFields = {};
+        instanceGetters = {};
+        try {
+          for (final declaration
+              in state.members.whereType<FieldDeclaration>()) {
+            final type = declaration.fields.type?.toSource();
+            if (declaration.isStatic ||
+                declaration.fields.isFinal ||
+                !['bool', 'int'].contains(type))
+              fail(
+                'Native state fields must be mutable bool/int with pure initialized values.',
+              );
+            for (final field in declaration.fields.variables) {
+              if (field.initializer == null)
+                fail('Native state needs explicit initializers.');
+              final item = value(field.initializer!);
+              if (item is ReactiveValue ||
+                  ReactiveValue.literal(item).type != type)
+                fail('State initializer must be a static value of type $type.');
+              initial[field.name.lexeme] = item as Object;
+            }
+          }
+        } finally {
+          scope = previousScope;
+          instanceFields = previousFields;
+          instanceGetters = previousGetters;
+        }
+        if (initial.isEmpty || initial.length > 16)
+          fail('Native state requires 1–16 bool/int fields.');
+        final id = reactiveCount++;
+        frame = ReactiveFrame(initial);
+        try {
+          final html = buildClass(stateName, null, {
+            'widget': _StaticObject(widgetInputs),
+            for (final entry in initial.entries)
+              entry.key: ReactiveValue.field(entry.key, entry.value),
+          });
+          return frame!.wrap(html, id);
+        } finally {
+          frame = null;
+        }
+      }
+      if (stateBindings == null && base != 'StatelessWidget') {
+        fail(
+          '$name must be a StatelessWidget or an explicitly configured Flutter island.',
+        );
+      }
+      final bindings = stateBindings ?? bindFields(node, name, invocation);
       if (stack.contains(name))
         fail('Recursive widget expansion: ${[...stack, name].join(' → ')}.');
       final methods = node.members.whereType<MethodDeclaration>().where(
@@ -1029,6 +1183,14 @@ class FlutterDomCompiler {
     }
 
     render = (Object? object) {
+      if (object is _GuardedChildren) {
+        conditionalGroupCount++;
+        if (frame == null)
+          fail('Conditional DOM content requires a native state owner.');
+        final id = frame!.bind('visible', object.condition);
+        final visible = object.condition.evaluate(frame!.initial) == true;
+        return '<div class="dom-branch" data-dom-visible="$id" ${visible ? '' : 'hidden'}>${object.children.map(render).join()}</div>';
+      }
       if (object is! _Call)
         fail('Expected a widget constructor, found $object.');
       final call = object;
@@ -1480,6 +1642,7 @@ class FlutterDomCompiler {
       'nativeAdapterInstances': adapterCount,
       'nativeFilterInstances': filterCount,
       'nativeStateInstances': reactiveCount,
+      'nativeConditionalGroups': conditionalGroupCount,
       'stateStrategy':
           'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,
@@ -1493,7 +1656,7 @@ class FlutterDomCompiler {
           'Project-local declarations; external widget packages unsupported',
         'Local bool/int state and typed expression subset only',
         if (reactiveCount > 0)
-          'State tree compiled once; state-dependent widget structure is unsupported',
+          'State tree compiled once; bounded conditional static collections retained in hidden DOM groups',
         'One explicit island',
         'No state bridge to Flutter islands',
         'No Flutter layout parity guarantee',

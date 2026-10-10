@@ -136,3 +136,19 @@ The catalog artifact benchmark was rerun under ignored
 `build/composition-benchmarks/`. Existing historical benchmark snapshots were not
 changed. These checks establish configured read-only composition with approximate
 CSS, not application startup, data loading, provider state or full-page parity.
+
+
+## Stateful inputs and native collections — 2026-10-10
+
+83 tests pass; `dart analyze` and the real multifile fixture's `flutter analyze`
+pass. Coverage includes constructor/list type checks, input-derived initialization,
+loop scope, shared prefixes, rejected operations and shipped runtime visibility
+updates. The resolved DOM-only records build accepts 18/18 visited boundaries,
+with one state owner, no adapters/island and 8.8 KiB initial files. Counts include
+compiled hidden content and do not represent whole-app coverage.
+
+Browser verification at localhost:8113 confirms mouse expansion from two to five
+rows and keyboard collapse to two, with the button retained. The same source is
+valid Flutter. This is a synthetic records fixture, not a live application feature.
+The artifact benchmark command also passes; historical showcase performance/SEO
+measurements above were not rerun or updated by this change.

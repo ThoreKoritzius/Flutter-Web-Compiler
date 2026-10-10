@@ -226,6 +226,7 @@ document.addEventListener('click', (event) => {
           else binding.node.appendChild(document.createTextNode(value));
         }
       } else if (binding.kind === 'enabled') binding.node.disabled = !value;
+      else if (binding.kind === 'visible') binding.node.hidden = !value;
     }
     status.hidden = true;
   } catch (error) {
