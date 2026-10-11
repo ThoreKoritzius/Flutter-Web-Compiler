@@ -201,3 +201,20 @@ and mock values. Both browser targets render the metric labels, values and
 footnotes. Private evaluation source, harness, configuration and results are
 excluded from Git. This is component preview composition, not the original page
 layout, startup, live data or navigation. SVG glyphs and CSS remain approximate.
+
+## Static collection patterns and read-only inputs — 2026-10-11
+
+97 tests pass and `dart analyze` is clean. New coverage includes scoped final
+pattern bindings, nullable bindings, static guards, rejected mutable/typed
+patterns, unused model serializers, model fields named `key`, opaque callback
+inputs and restricted Align mappings. Callback invocation remains unsupported;
+supplying an opaque callback does not establish native event coverage. The
+required artifact benchmark passes; published performance/SEO claims are unchanged.
+
+A private external-app evaluation compiles an original stateful records card's
+empty branch and original model getter with synthetic inputs: 21/21 visited
+boundaries, zero adapters/island and 9.1 KiB initial files. The state runtime is
+emitted. Browser verification confirms the empty-state and derived coverage text.
+These counts apply only to the selected branch; populated records, activity
+navigation and full-app startup are not validated. Private inputs and artifacts
+remain excluded from Git.

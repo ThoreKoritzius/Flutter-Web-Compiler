@@ -220,3 +220,25 @@ not original Material font outlines or pixel-equivalent glyphs. Decorative icons
 are hidden from accessibility; semanticLabel produces a labelled SVG. No fonts,
 JavaScript or engine are needed. Six-digit color and supported icon descriptors
 can supply explicit visual constructor inputs.
+
+
+### Static nullable patterns and opaque callback inputs
+
+Collection if-case supports a final untyped variable, an optional null-check
+pattern and a static boolean when guard. Bindings exist only in the matched
+branch/guard, and else branches use the enclosing scope. Typed, destructuring,
+mutable and reactive patterns remain unsupported. Statement patterns are unchanged.
+
+Models may declare unused static methods such as serializers; those declarations
+are excluded from the instance method table and never executed. Their presence
+does not certify serializer support. Calling them remains unsupported. Model
+fields named key are ordinary fields rather than Flutter ValueKey arguments.
+
+Explicit `{"callback":"openItem"}` inputs represent opaque external callback
+references. A supplied callback can remain unused by the selected static branch;
+invocation fails without a native event bridge. It is not a no-op or translated
+callback. Reports expose externalCallbackInputs and this limitation. Counts of
+accepted boundaries therefore do not certify interaction behavior.
+
+Align supports center, centerLeft and centerRight with a child, mapped to CSS
+flex alignment. The schematic Icon subset also includes emoji_events_outlined.

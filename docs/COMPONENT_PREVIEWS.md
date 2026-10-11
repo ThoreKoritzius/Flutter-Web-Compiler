@@ -99,8 +99,8 @@ Construction and getter recursion are bounded. Reports include
 
 Inheritance, mixins, generic model classes, arbitrary methods, constructor bodies/initializer
 lists, factories, mutable fields, generated serializers, DateTime and external
-model classes remain unsupported. No application startup or serialization code
-is executed. Models are compile-time snapshots, not mutable client-side state.
+model classes remain unsupported. Unused static serializers may remain declared, but are never bound or executed.
+No application startup or serialization code is executed. Models are compile-time snapshots, not mutable client-side state.
 The [records fixture](../examples/multifile/lib/record_list.dart) uses an imported
 model in both Flutter and DOM, with explicit synthetic values in configuration.
 
@@ -135,3 +135,10 @@ can select static if/else returns; unselected branches are not rendered or
 classified. Mutable state conditions still require supported reactive collection
 bindings. This permits read-only component slices with optional interaction absent,
 without implying that their tapped/navigation branch compiles.
+
+
+Required callback inputs may be supplied as explicit opaque references, for
+example `{"callback":"openItem"}`, when the selected read-only branch does not
+call them. Invoked callbacks fail; no handler is silently replaced. The report
+counts supplied references separately. This permits inspection of an original
+component's empty/read-only state, not a claim that its interactions compile.

@@ -1,6 +1,8 @@
 /// Small explicit set of schematic icon shapes. These are semantic CSS/SVG
 /// approximations, not extracted Material font outlines.
 const nativeIconShapes = <String, String>{
+  'emoji_events_outlined':
+      '<path fill="none" stroke="currentColor" stroke-width="2" d="M7 3h10v6a5 5 0 0 1-10 0zM7 5H3v3a5 5 0 0 0 5 5m9-8h4v3a5 5 0 0 1-5 5m-4 1v6m-5 1h10"/>',
   'favorite':
       '<path d="M12 21C10 19 3 14 3 8a4.5 4.5 0 0 1 9-1 4.5 4.5 0 0 1 9 1c0 6-7 11-9 13Z"/>',
   'bedtime': '<path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/>',

@@ -65,6 +65,11 @@ class _StaticObject {
   final Map<String, MethodDeclaration> methods;
 }
 
+class _ExternalCallback {
+  _ExternalCallback(this.name);
+  final String name;
+}
+
 class _StaticColor {
   _StaticColor(this.hex, [this.alpha = 1]);
   final String hex;
@@ -183,6 +188,7 @@ class FlutterDomCompiler {
     late Object? Function(MethodDeclaration, ArgumentList, _StaticObject?)
     invokeHelper;
     var helperCount = 0;
+    var externalCallbackCount = 0;
     final evaluatingGetters = <(Map<String, Object?>, String)>[];
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
@@ -323,6 +329,7 @@ class FlutterDomCompiler {
       };
     }
 
+    late bool Function(GuardedPattern, Object?) bindPattern;
     Object? value(Expression expression) {
       currentNode = expression;
       final line = (resolved?.unitFor(expression).lineInfo ?? result.lineInfo)
@@ -599,7 +606,19 @@ class FlutterDomCompiler {
             items.add(value(element));
           } else if (element is IfElement) {
             if (element.caseClause != null) {
-              fail('Collection if-case patterns are not supported.', line);
+              final input = value(element.expression);
+              final previous = scope;
+              scope = {...previous};
+              try {
+                if (bindPattern(element.caseClause!.guardedPattern, input)) {
+                  append(element.thenElement);
+                  return;
+                }
+              } finally {
+                scope = previous;
+              }
+              if (element.elseElement != null) append(element.elseElement!);
+              return;
             }
             final condition = value(element.expression);
             if (condition is ReactiveValue && condition.type == 'bool') {
@@ -714,6 +733,9 @@ class FlutterDomCompiler {
         }
         if (expression.target != null && staticReceiver(expression.target)) {
           final target = methodTarget(expression.target!);
+          if (target is _StaticObject &&
+              target.fields[name] is _ExternalCallback)
+            fail('External callback $name has no native event bridge.');
           if (target is _StaticObject && target.methods.containsKey(name)) {
             final method = target.methods[name]!;
             if (resolved != null &&
@@ -882,9 +904,17 @@ class FlutterDomCompiler {
       );
     }
 
-    void check(_Call call, Set<String> named, [int positional = 0]) {
+    void check(
+      _Call call,
+      Set<String> named, [
+      int positional = 0,
+      bool widgetKeys = true,
+    ]) {
       if (call.origin != null) currentNode = call.origin;
-      final unknown = call.named.keys.toSet().difference({...named, 'key'});
+      final unknown = call.named.keys.toSet().difference({
+        ...named,
+        if (widgetKeys) 'key',
+      });
       if (unknown.isNotEmpty || call.positional.length != positional) {
         fail(
           '${call.name}: unsupported arguments ${unknown.join(', ')} '
@@ -892,6 +922,7 @@ class FlutterDomCompiler {
           call.line,
         );
       }
+      if (!widgetKeys) return;
       if (call.named['key'] case final _Call key) {
         if (key.name != 'ValueKey' ||
             key.positional.length != 1 ||
@@ -987,6 +1018,26 @@ class FlutterDomCompiler {
         fail('$label requires model ${annotation.toSource()}.');
     }
 
+    bindPattern = (guarded, input) {
+      if (input is ReactiveValue) fail('Pattern inputs must be static.');
+      var pattern = guarded.pattern;
+      final nullable = pattern is NullCheckPattern;
+      if (pattern is NullCheckPattern) pattern = pattern.pattern;
+      if (pattern is! DeclaredVariablePattern ||
+          pattern.keyword?.lexeme != 'final' ||
+          pattern.type != null)
+        fail(
+          'Patterns support final untyped variable bindings with optional null checks only.',
+        );
+      if (nullable && input == null) return false;
+      scope[pattern.name.lexeme] = input;
+      final guard = guarded.whenClause;
+      if (guard == null) return true;
+      final condition = value(guard.expression);
+      if (condition is! bool) fail('Pattern guard must be a static boolean.');
+      return condition;
+    };
+
     Map<String, Object?> bindFields(
       ClassDeclaration node,
       String name,
@@ -1021,7 +1072,7 @@ class FlutterDomCompiler {
                 .lineNumber,
           );
       if (constructors.isEmpty) {
-        check(call, {});
+        check(call, {}, 0, node.extendsClause != null);
       } else {
         final constructor = constructors.single;
         if (constructor.name != null ||
@@ -1089,7 +1140,12 @@ class FlutterDomCompiler {
         }
         if (call.positional.length > position)
           fail('$name has too many positional arguments.', call.line);
-        check(call, allowed, call.positional.length);
+        check(
+          call,
+          allowed,
+          call.positional.length,
+          node.extendsClause != null,
+        );
       }
       for (final declaration in fields) {
         final declaredType = declaration.fields.type?.toSource();
@@ -1157,11 +1213,11 @@ class FlutterDomCompiler {
           ) ||
           node.members.whereType<MethodDeclaration>().any(
             (m) =>
-                m.isSetter ||
-                m.isStatic ||
-                m.typeParameters != null ||
-                m.body is! ExpressionFunctionBody ||
-                m.body.isAsynchronous,
+                !m.isStatic &&
+                (m.isSetter ||
+                    m.typeParameters != null ||
+                    m.body is! ExpressionFunctionBody ||
+                    m.body.isAsynchronous),
           ) ||
           node.members.whereType<FieldDeclaration>().any((m) => m.isStatic))
         fail(
@@ -1213,11 +1269,11 @@ class FlutterDomCompiler {
           model: call.name,
           methods: {
             for (final m in node.members.whereType<MethodDeclaration>())
-              if (!m.isGetter) m.name.lexeme: m,
+              if (!m.isGetter && !m.isStatic) m.name.lexeme: m,
           },
           getters: {
             for (final m in node.members.whereType<MethodDeclaration>())
-              if (m.isGetter)
+              if (m.isGetter && !m.isStatic)
                 m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
           },
         );
@@ -1881,6 +1937,16 @@ class FlutterDomCompiler {
           }
           return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
               'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
+        case 'Align':
+          check(call, {'alignment', 'child'});
+          final alignment = n['alignment'] ?? 'Alignment.center';
+          final justify = {
+            'Alignment.center': 'center',
+            'Alignment.centerLeft': 'flex-start',
+            'Alignment.centerRight': 'flex-end',
+          }[alignment];
+          if (justify == null) fail('Unsupported Align alignment.');
+          return '<div style="display:flex;align-items:center;justify-content:$justify">${render(n['child'])}</div>';
         case 'Expanded':
           check(call, {'child', 'flex'});
           final flex = n['flex'] ?? 1;
@@ -1986,6 +2052,15 @@ class FlutterDomCompiler {
           input is bool ||
           input is num && input.isFinite)
         return input;
+      if (input is Map &&
+          input.keys.length == 1 &&
+          input['callback'] is String) {
+        final name = input['callback'] as String;
+        if (!RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(name))
+          fail('Invalid callback input name.');
+        externalCallbackCount++;
+        return _ExternalCallback(name);
+      }
       if (input is Map && input.keys.length == 1 && input['color'] is String)
         return color(input['color']);
       if (input is Map && input.keys.length == 1 && input['icon'] is String) {
@@ -2092,6 +2167,7 @@ class FlutterDomCompiler {
       'nativeConditionalGroups': conditionalGroupCount,
       'staticModelInstances': modelCount,
       'pureHelperInvocations': helperCount,
+      'externalCallbackInputs': externalCallbackCount,
       'stateStrategy':
           'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,
@@ -2104,6 +2180,8 @@ class FlutterDomCompiler {
         else
           'Project-local declarations; external widget packages unsupported',
         'Local bool/int state and typed expression subset only',
+        if (externalCallbackCount > 0)
+          'Opaque callback inputs supplied; invocation requires a native event bridge',
         if (reactiveCount > 0)
           'State tree compiled once; bounded conditional static collections retained in hidden DOM groups',
         'One explicit island',

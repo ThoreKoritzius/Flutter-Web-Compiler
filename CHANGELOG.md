@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add bounded static final-variable collection patterns, nullable matching and boolean guards with isolated branch scope.
+- Permit unused static serializer declarations on model snapshots; distinguish model key fields from Flutter keys.
+- Add explicit opaque callback inputs that fail when invoked, a restricted Align mapping and one additional schematic icon.
+
 - Compile bounded static build if/else/return blocks and null coalescing.
 - Resolve project-local static const class fields, including prefixed imports.
 - Add uniform decoration borders, explicit color/icon inputs and a small schematic SVG Icon subset.
