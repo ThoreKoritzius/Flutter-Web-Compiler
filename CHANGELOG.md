@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Lower explicitly configured callback route bridges into native links through original synchronous arrow callbacks; report host navigation separately from widget adapters.
+- Add bounded InkWell navigation links and a schematic chevron icon.
+
 - Add strict calendar date snapshots, bounded DateTime calendar constructors and original year/month/day access with resolved dart:core identity.
 
 - Lower explicitly selected original ThemeExtension constants, plain enum-keyed maps and bounded index operators with a static build-context token.

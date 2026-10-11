@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_dom_compiler/flutter_dom_compiler.dart';
 import 'package:path/path.dart' as p;
+import 'package:html/parser.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -62,6 +63,51 @@ void main() => runApp(const Page());
 ''');
   });
   tearDown(() => directory.deleteSync(recursive: true));
+
+  test(
+    'resolved function-field callbacks lower through explicit local routes',
+    () async {
+      final framework = File(
+        p.join(directory.path, 'framework/lib/widgets.dart'),
+      );
+      write(
+        'framework/lib/widgets.dart',
+        framework.readAsStringSync() +
+            '''
+typedef ValueChanged<T> = void Function(T);
+class InkWell extends Widget { const InkWell({void Function()? onTap, required Widget child}); }
+''',
+      );
+      write('lib/main.dart', "import 'page.dart'; void main() {}\n");
+      write('lib/page.dart', '''
+import 'package:flutter/widgets.dart';
+class Page extends StatelessWidget {
+ const Page({required this.onOpen}); final ValueChanged<String> onOpen;
+ Widget build(BuildContext context) => InkWell(onTap: () => onOpen('mock'), child: Text('Open record'));
+}
+''');
+      final result = await FlutterDomCompiler().compileProject(
+        directory.path,
+        p.join(directory.path, 'lib/main.dart'),
+        {
+          'root': 'Page',
+          'arguments': {
+            'onOpen': {
+              'callback': 'open',
+              'routes': {'mock': 'activities/mock/'},
+            },
+          },
+        },
+        domOnly: true,
+      );
+      expect(
+        parse(result.html).querySelector('a')!.attributes['href'],
+        'activities/mock/',
+      );
+      expect(result.report['nativeNavigationLinks'], 1);
+      expect(result.report['nativeCallbackRouteBridges'], 1);
+    },
+  );
 
   test(
     'resolved dart:core calendar constructors preserve date field reads',

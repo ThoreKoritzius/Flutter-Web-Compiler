@@ -267,3 +267,24 @@ browser targets show matching dates and six-to-eight row expansion followed by
 keyboard collapse. Preview shells and rendering geometry differ; this is content
 and interaction validation rather than pixel parity, whole-app coverage or a
 performance comparison. Activity IDs/callback behavior remain absent.
+
+## Explicit host navigation and mock feature flow — 2026-10-11
+
+110 tests pass and Dart analysis is clean. New tests cover forwarded callback
+fields, resolved function-field invocation, native anchor emission, coexistence
+with local state, rejected async/reactive/missing routes and relative-path
+validation. Focused checks include parent traversal before fragments. The artifact
+benchmark passes; existing browser performance/SEO claims remain unchanged.
+
+A private external-app mock feature flow now serves original overview components,
+the original clickable records list and eight detail previews composed from
+original stateless components. The records build visits 161/161 widget boundaries,
+with zero widget adapters/island, one explicit host route bridge and eight native
+links. All 28 generated links resolve within the local output. Browser checks
+confirm overview navigation, record click, browser back, expansion and keyboard
+activation of a previously hidden record.
+
+The host shell and route map are explicit preview glue. Original async navigation,
+provider data loading and the original detail modal are not compiled. This is a
+working mock feature flow rather than full-app startup or live-data coverage.
+Private application source is unchanged, and configs/output remain Git-ignored.

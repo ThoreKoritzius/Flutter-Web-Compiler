@@ -74,3 +74,9 @@ Tests compare Dart and JavaScript expression results, exercise the actual shippe
 runtime with DOM test doubles, verify dependency filtering and instance isolation,
 and reject unsafe operations. Browser checks cover mouse, keyboard and disabled
 button behavior. Node.js is required for the runtime parity tests (CI uses 22).
+
+
+Explicit host callback route maps now support original synchronous arrow wrappers
+and forwarded callback fields, lowered to browser anchors. They do not mutate
+native state or compile Navigator/provider/async callback bodies. The callback
+route bridge is reported separately; see COMPATIBILITY.md for its exact contract.

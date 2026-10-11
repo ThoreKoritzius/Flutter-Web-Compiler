@@ -203,6 +203,11 @@ Future<void> main(List<String> arguments) async {
         '  Native state       ${compiled.report['nativeStateInstances']} instance(s) · typed bindings · single build',
       );
     }
+    if ((compiled.report['nativeCallbackRouteBridges'] as int? ?? 0) > 0) {
+      stdout.writeln(
+        '  Host navigation    ${compiled.report['nativeCallbackRouteBridges']} explicit route bridge(s) · ${compiled.report['nativeNavigationLinks']} native links',
+      );
+    }
     stdout.writeln(
       '  Initial files      ${(bytes / 1024).toStringAsFixed(1)} KiB (including images)',
     );

@@ -66,8 +66,14 @@ class _StaticObject {
 }
 
 class _ExternalCallback {
-  _ExternalCallback(this.name);
+  _ExternalCallback(this.name, [this.routes]);
   final String name;
+  final Map<String, String>? routes;
+}
+
+class _NativeNavigation {
+  _NativeNavigation(this.href);
+  final String href;
 }
 
 class _StaticContext {}
@@ -207,6 +213,8 @@ class FlutterDomCompiler {
     invokeHelper;
     var helperCount = 0;
     var externalCallbackCount = 0;
+    var callbackRouteBridgeCount = 0;
+    var navigationLinkCount = 0;
     final evaluatingGetters = <(Map<String, Object?>, String)>[];
     String? island;
     final constants = <String, Expression>{...?resolved?.constants};
@@ -487,6 +495,39 @@ class FlutterDomCompiler {
         fail('Static evaluation budget exceeded.', line);
       if (expression is FunctionExpression) {
         final outer = expression.body;
+        if (expression.parameters?.parameters.isEmpty != false &&
+            outer is ExpressionFunctionBody &&
+            !outer.isAsynchronous) {
+          final body = outer.expression;
+          Object? callback;
+          ArgumentList? callbackArguments;
+          if (body is MethodInvocation) {
+            callbackArguments = body.argumentList;
+            if (body.target == null)
+              callback = scope[body.methodName.name];
+            else if (staticReceiver(body.target)) {
+              final target = value(body.target!);
+              if (target is _StaticObject)
+                callback = target.fields[body.methodName.name];
+            }
+          } else if (body is FunctionExpressionInvocation) {
+            callback = value(body.function);
+            callbackArguments = body.argumentList;
+          }
+          if (callback is _ExternalCallback) {
+            if (callback.routes == null)
+              fail(
+                'External callback ${callback.name} has no native event bridge.',
+              );
+            final args = callbackArguments!.arguments;
+            if (args.length != 1 || args.single is NamedExpression)
+              fail('Route callbacks require one static string argument.');
+            final argument = value(args.single);
+            if (argument is! String || !callback.routes!.containsKey(argument))
+              fail('No explicit route for callback argument $argument.');
+            return _NativeNavigation(callback.routes![argument]!);
+          }
+        }
         if (frame == null ||
             !evaluatingState ||
             expression.parameters?.parameters.isNotEmpty == true ||
@@ -2017,6 +2058,10 @@ class FlutterDomCompiler {
         case 'OutlinedButton':
           check(call, {'onPressed', 'child'});
           final action = n['onPressed'];
+          if (action is _NativeNavigation) {
+            navigationLinkCount++;
+            return '<a href="${_escape(action.href)}">${render(n['child'])}</a>';
+          }
           if (frame == null || action != null && action is! ReactiveAction)
             fail('Buttons require a supported native state callback.');
           if (action == null)
@@ -2040,6 +2085,21 @@ class FlutterDomCompiler {
             darkTheme = true;
           }
           return render(n['home']);
+        case 'InkWell':
+          check(call, {'child', 'onTap', 'borderRadius'});
+          final action = n['onTap'];
+          final radius = n['borderRadius'];
+          if (radius != null) {
+            if (radius is! _Call || radius.name != 'BorderRadius.circular')
+              fail('Unsupported InkWell border radius.');
+            check(radius, {}, 1);
+            pixels(radius.positional.single);
+          }
+          if (action == null) return render(n['child']);
+          if (action is! _NativeNavigation)
+            fail('InkWell requires an explicit native route callback.');
+          navigationLinkCount++;
+          return '<a href="${_escape(action.href)}" style="display:block;color:inherit;text-decoration:none;${radius == null ? '' : 'border-radius:${pixels((radius as _Call).positional.single)};'}">${render(n['child'])}</a>';
         case 'Scaffold':
           check(call, {'body'});
           return '<main>${render(n['body'])}</main>';
@@ -2379,13 +2439,35 @@ class FlutterDomCompiler {
         );
       }
       if (input is Map &&
-          input.keys.length == 1 &&
-          input['callback'] is String) {
+          input['callback'] is String &&
+          input.keys.every((k) => ['callback', 'routes'].contains(k))) {
         final name = input['callback'] as String;
         if (!RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(name))
           fail('Invalid callback input name.');
         externalCallbackCount++;
-        return _ExternalCallback(name);
+        Map<String, String>? routes;
+        if (input.containsKey('routes')) {
+          final configured = input['routes'];
+          if (configured is! Map ||
+              configured.isEmpty ||
+              configured.length > 2000)
+            fail('Callback routes require a nonempty string map.');
+          routes = {};
+          for (final entry in configured.entries) {
+            if (entry.key is! String || entry.value is! String)
+              fail('Callback routes require strings.');
+            final href = entry.value as String;
+            if (!RegExp(
+                  r'^[a-zA-Z0-9_./-]+(?:#[a-zA-Z0-9_-]+)?$',
+                ).hasMatch(href) ||
+                href.startsWith('/') ||
+                href.split('#').first.split('/').contains('..'))
+              fail('Callback routes require safe relative local paths.');
+            routes[entry.key as String] = href;
+          }
+          callbackRouteBridgeCount++;
+        }
+        return _ExternalCallback(name, routes);
       }
       if (input is Map && input.keys.length == 1 && input['color'] is String)
         return color(input['color']);
@@ -2496,6 +2578,8 @@ class FlutterDomCompiler {
       'staticDateValues': dateCount,
       'pureHelperInvocations': helperCount,
       'externalCallbackInputs': externalCallbackCount,
+      'nativeCallbackRouteBridges': callbackRouteBridgeCount,
+      'nativeNavigationLinks': navigationLinkCount,
       'stateStrategy':
           'Typed reactive expressions; single build; dependency-based DOM updates',
       'initialFlutterBytes': 0,
@@ -2510,6 +2594,8 @@ class FlutterDomCompiler {
         'Local bool/int state and typed expression subset only',
         if (externalCallbackCount > 0)
           'Opaque callback inputs supplied; invocation requires a native event bridge',
+        if (callbackRouteBridgeCount > 0)
+          'Explicit callback route adapters replace host navigation; original async callback bodies are not compiled',
         if (reactiveCount > 0)
           'State tree compiled once; bounded conditional static collections retained in hidden DOM groups',
         'One explicit island',

@@ -311,3 +311,34 @@ time-of-day, local/UTC conversion, timezone or DST behavior, comparisons, durati
 parsing, formatting APIs or DateTime.now. Snapshot strings must be exactly
 YYYY-MM-DD; time/offset suffixes fail. Date labels are derived from original
 supported field reads and string interpolation, not supplied as preformatted HTML.
+
+
+### Explicit callback route bridges
+
+A host navigation boundary can supply a finite route map:
+
+```json
+{"callback":"openItem","routes":{"item-1":"items/item-1/"}}
+```
+
+Original synchronous zero-argument arrow callbacks that call this field with one
+static string argument lower into a native navigation action. Supported callers
+include direct callback fields and widget callback fields forwarded through
+constructors. InkWell and button widgets can render that action as an anchor.
+Links support normal browser keyboard activation, history and opening another tab.
+InkWell without onTap renders read-only content; ink effects and other InkWell
+callbacks remain unsupported.
+
+Routes must be explicitly listed, local relative paths with optional simple
+fragments, and cannot contain parent traversal, schemes or absolute paths. At
+most 2,000 routes may be supplied. Missing routes and reactive/non-string arguments
+fail. Arbitrary callback bodies, async work, providers and Flutter Navigator are
+not translated. The route map is a host adapter contract, not evidence that the
+original application navigation body was compiled. Opaque callbacks without a
+route map still fail if invoked.
+
+Reports expose nativeCallbackRouteBridges and nativeNavigationLinks; the CLI
+prints host navigation separately. nativeAdapterInstances continues to count
+widget adapters. Visited widget boundaries cannot establish callback or whole-app
+coverage. The host must build and serve the listed target pages. Native links do
+not require the state runtime, though a page with setState controls still emits it.
