@@ -288,3 +288,18 @@ The host shell and route map are explicit preview glue. Original async navigatio
 provider data loading and the original detail modal are not compiled. This is a
 working mock feature flow rather than full-app startup or live-data coverage.
 Private application source is unchanged, and configs/output remain Git-ignored.
+
+
+## Immutable map snapshots
+
+The full compiler suite has **115 passing tests**, and `dart analyze` passes.
+New cases cover typed model maps, missing-key fallback, explicit map descriptors,
+rejection of callbacks/nonfinite values, nested type mismatches, unused factory
+declarations and rejected factory invocation. Resolved tests check imported model
+identity inside map values. The required artifact benchmark completes under
+ignored `build/map-benchmarks/`; historical browser timing/SEO claims are unchanged.
+
+This permits original static components to read supplied dashboard-shaped models.
+It does not compile JSON factory bodies, async repositories, providers or screen
+startup. Preview layout remains an explicit host composition around original
+components, rather than conversion of the original full screen.

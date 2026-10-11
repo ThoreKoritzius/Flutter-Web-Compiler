@@ -1234,6 +1234,16 @@ class FlutterDomCompiler {
               primitiveType == 'bool' && input is! bool ||
               ['double', 'num'].contains(primitiveType) && input is! num))
         fail('$label requires ${annotation.toSource()}.');
+      if (primitiveType == 'Map') {
+        final types = annotation.typeArguments?.arguments;
+        if (input is! Map || types?.length != 2)
+          fail('$label requires an explicitly typed static map.');
+        for (final entry in input.entries) {
+          validateInput(types![0], entry.key, '$label key');
+          validateInput(types[1], entry.value, '$label value');
+        }
+        return;
+      }
       if (primitiveType == 'List' && input is! List)
         fail('$label requires a list.');
       if (annotation.name2.lexeme == 'List' &&
@@ -1298,8 +1308,10 @@ class FlutterDomCompiler {
           );
         }
       }
+      // Named factories are declarations only; snapshot construction never calls them.
       final constructors = node.members
           .whereType<ConstructorDeclaration>()
+          .where((c) => !(c.name != null && c.factoryKeyword != null))
           .toList();
       if (constructors.length > 1)
         fail('$name supports only one unnamed constructor.');
@@ -1510,7 +1522,15 @@ class FlutterDomCompiler {
             item is num && item.isFinite ||
             item is _StaticDate ||
             item is _StaticObject && item.model != null ||
-            item is List && item.every(supportedData);
+            item is List && item.every(supportedData) ||
+            item is Map &&
+                item.entries.every(
+                  (e) =>
+                      (e.key is String ||
+                          e.key is int ||
+                          e.key is _StaticEnum) &&
+                      supportedData(e.value),
+                );
         bool supportedType(TypeAnnotation? type) {
           if (type is! NamedType) return false;
           if (dateType(type)) return true;
@@ -1522,6 +1542,17 @@ class FlutterDomCompiler {
             'num',
           ].contains(type.name2.lexeme))
             return true;
+          if (type.name2.lexeme == 'Map') {
+            final types = type.typeArguments?.arguments;
+            return types?.length == 2 &&
+                types![0] is NamedType &&
+                (['String', 'int'].contains(types[0].toSource()) ||
+                    enumValues.values.contains(
+                      resolved?.symbol((types[0] as NamedType).element2) ??
+                          types[0].toSource(),
+                    )) &&
+                (types[1].toSource() == 'dynamic' || supportedType(types[1]));
+          }
           if (type.name2.lexeme == 'List')
             return type.typeArguments?.arguments.length == 1 &&
                 supportedType(type.typeArguments!.arguments.single);
@@ -1543,10 +1574,10 @@ class FlutterDomCompiler {
                   )),
         ))
           fail(
-            'Model fields require explicit supported primitive, list or local model types.',
+            'Model fields require explicit supported primitive, list, map or local model types.',
           );
         if (!fields.values.every(supportedData))
-          fail('Model inputs require static primitive/list/model values.');
+          fail('Model inputs require static primitive/list/map/model values.');
         if (fields.values.any((v) => v is ReactiveValue || v is ReactiveAction))
           fail('Model inputs must be static.');
         modelCount++;
@@ -2475,6 +2506,15 @@ class FlutterDomCompiler {
         if (!nativeIconShapes.containsKey(input['icon']))
           fail('Unsupported configured icon.');
         return 'Icons.${input['icon']}';
+      }
+      if (input is Map && input.keys.length == 1 && input['map'] is Map) {
+        final entries = input['map'] as Map;
+        if (entries.keys.any((k) => k is! String))
+          fail('Map snapshots require string keys.');
+        return <String, Object?>{
+          for (final entry in entries.entries)
+            entry.key as String: configuredValue(entry.value, depth + 1),
+        };
       }
       if (input is List)
         return input.map((v) => configuredValue(v, depth + 1)).toList();

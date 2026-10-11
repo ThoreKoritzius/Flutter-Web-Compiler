@@ -153,3 +153,19 @@ is an explicit preview input and does not run the application theme setup.
 Use `{"date":"2026-09-21"}` for calendar-only DateTime inputs. Original nullable
 patterns and year/month/day access work; clocks, timezones, durations and other
 DateTime operations remain unsupported. See COMPATIBILITY.md for the exact subset.
+
+
+## Immutable map inputs
+
+Use an explicit `{"map":{"days":6,"complete":true}}` descriptor for model map
+fields. Descriptor keys are strings; values recursively use the same bounded
+primitive/list/map/local-model input contract. Reserved descriptor names inside
+this map remain ordinary keys. `Map<String, dynamic>` permits heterogeneous static
+data, not executable objects or callbacks. Typed map values and nested list/model
+annotations are checked, preserving resolved imported model identity.
+
+Original immutable models may declare unused named factories alongside their
+simple unnamed constructor. Factories are never executed or translated; calling
+them still fails. The unnamed snapshot constructor retains the existing
+final-field, parameter, type and evaluation limits. Native map mutation, factories,
+serializers and network loading are not implemented by this feature.

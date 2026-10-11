@@ -612,6 +612,41 @@ class Label extends StatelessWidget {
     },
   );
   test(
+    'resolved model map values preserve imported declaration identity',
+    () async {
+      write(
+        'lib/model.dart',
+        "class Entry { const Entry(this.title); final String title; }",
+      );
+      write(
+        'lib/other.dart',
+        "class Entry { const Entry(this.title); final String title; }",
+      );
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+import 'model.dart' as m;
+import 'other.dart' as o;
+class Snapshot {
+ const Snapshot(this.entries); final Map<String, m.Entry> entries;
+ factory Snapshot.fromJson(Map<String, dynamic> json) => throw UnimplementedError();
+}
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text(Snapshot({'first': m.Entry('Native')}).entries['first']!.title);
+}
+""");
+      expect((await compile()).html, contains('Native'));
+      final file = File(p.join(directory.path, 'lib/page.dart'));
+      file.writeAsStringSync(
+        file.readAsStringSync().replaceFirst(
+          "m.Entry('Native')",
+          "o.Entry('Wrong')",
+        ),
+      );
+      await expectLater(compile(), throwsA(isA<CompileException>()));
+    },
+  );
+  test(
     'imported models preserve constructor and annotated field identities',
     () async {
       write(

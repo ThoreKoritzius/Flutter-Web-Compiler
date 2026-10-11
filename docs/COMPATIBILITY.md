@@ -342,3 +342,15 @@ prints host navigation separately. nativeAdapterInstances continues to count
 widget adapters. Visited widget boundaries cannot establish callback or whole-app
 coverage. The host must build and serve the listed target pages. Native links do
 not require the state runtime, though a page with setState controls still emits it.
+
+
+### Static model maps and factory declarations
+
+Immutable model snapshots now accept explicitly typed maps with String, int or
+supported enum keys and static primitive/list/map/local-model values. Preview map
+descriptors currently supply string keys only. `dynamic` is allowed as a map value
+annotation; the evaluator still rejects executable/reactive input data. Missing
+map keys return null and original null fallbacks work. Named factory declarations
+may coexist with the supported unnamed snapshot constructor, but invoking a
+factory remains unsupported. The schematic icon subset includes
+`data_usage_rounded`.
