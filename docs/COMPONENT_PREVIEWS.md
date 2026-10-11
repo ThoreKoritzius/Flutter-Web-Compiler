@@ -99,7 +99,7 @@ Construction and getter recursion are bounded. Reports include
 
 Inheritance, mixins, generic model classes, arbitrary methods, constructor bodies/initializer
 lists, factories, mutable fields, generated serializers, DateTime and external
-model classes remain unsupported. Unused static serializers may remain declared, but are never bound or executed.
+model classes remain unsupported. Unused static serializers may remain declared. Invoked static methods must satisfy the bounded expression-helper subset. Unsupported nullable types may have null snapshot values; this does not add non-null type support.
 No application startup or serialization code is executed. Models are compile-time snapshots, not mutable client-side state.
 The [records fixture](../examples/multifile/lib/record_list.dart) uses an imported
 model in both Flutter and DOM, with explicit synthetic values in configuration.

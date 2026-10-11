@@ -180,6 +180,7 @@ class FlutterDomCompiler {
     var conditionalGroupCount = 0;
     ReactiveFrame? frame;
     var evaluatingState = false;
+    var evaluatingStaticHelper = false;
     final stack = <String>[];
     var scope = <String, Object?>{};
     var instanceFields = <String, Object?>{};
@@ -284,6 +285,27 @@ class FlutterDomCompiler {
     late Object? Function(_StaticObject, String) modelGetter;
     var modelCount = 0;
 
+    _StaticObject staticClass(ClassDeclaration node) => _StaticObject(
+      {},
+      methods: {
+        for (final m in node.members.whereType<MethodDeclaration>())
+          if (m.isStatic && !m.isGetter && !m.isSetter) m.name.lexeme: m,
+      },
+      getters: {
+        for (final m in node.members.whereType<MethodDeclaration>())
+          if (m.isStatic &&
+              m.isGetter &&
+              m.typeParameters == null &&
+              m.body is ExpressionFunctionBody &&
+              !m.body.isAsynchronous)
+            m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
+        for (final f in node.members.whereType<FieldDeclaration>())
+          if (f.isStatic && f.fields.isConst)
+            for (final v in f.fields.variables)
+              if (v.initializer != null) v.name.lexeme: v.initializer!,
+      },
+    );
+
     Object? property(Object? target, String name) {
       if (target is _StaticObject && target.fields.containsKey(name))
         return target.fields[name];
@@ -307,7 +329,7 @@ class FlutterDomCompiler {
         final key =
             resolved?.symbol(node.element) ??
             (node is SimpleIdentifier ? node.name : node.toSource());
-        if (constants.containsKey(key)) return true;
+        if (constants.containsKey(key) || classes.containsKey(key)) return true;
       }
       return switch (node) {
         SimpleIdentifier n => scope.containsKey(n.name),
@@ -332,6 +354,11 @@ class FlutterDomCompiler {
     late bool Function(GuardedPattern, Object?) bindPattern;
     Object? value(Expression expression) {
       currentNode = expression;
+      if (evaluatingStaticHelper &&
+          (expression is ThisExpression ||
+              expression is PropertyAccess &&
+                  expression.target is ThisExpression))
+        fail('Static helpers cannot access this.');
       final line = (resolved?.unitFor(expression).lineInfo ?? result.lineInfo)
           .getLocation(expression.offset)
           .lineNumber;
@@ -507,6 +534,13 @@ class FlutterDomCompiler {
           scope.containsKey(expression.name)) {
         return scope[expression.name];
       }
+      final className = expression is Identifier
+          ? resolved?.symbol(expression.element) ?? expression.toSource()
+          : expression is PropertyAccess && resolved != null
+          ? resolved.symbol(expression.propertyName.element)
+          : null;
+      if (className != null && classes.containsKey(className))
+        return staticClass(classes[className]!);
       final getterName = expression is SimpleIdentifier
           ? expression.name
           : expression is PropertyAccess && expression.target is ThisExpression
@@ -1252,13 +1286,19 @@ class FlutterDomCompiler {
               classes.containsKey(identity);
         }
 
+        final fields = bindFields(node, call.name, call);
         if (node.members.whereType<FieldDeclaration>().any(
-          (f) => !supportedType(f.fields.type),
+          (f) =>
+              !supportedType(f.fields.type) &&
+              !(f.fields.type is NamedType &&
+                  (f.fields.type as NamedType).question != null &&
+                  f.fields.variables.every(
+                    (v) => fields[v.name.lexeme] == null,
+                  )),
         ))
           fail(
             'Model fields require explicit supported primitive, list or local model types.',
           );
-        final fields = bindFields(node, call.name, call);
         if (!fields.values.every(supportedData))
           fail('Model inputs require static primitive/list/model values.');
         if (fields.values.any((v) => v is ReactiveValue || v is ReactiveAction))
@@ -1311,14 +1351,11 @@ class FlutterDomCompiler {
 
     final activeHelpers = <(Map<String, Object?>, MethodDeclaration)>[];
     invokeHelper = (method, arguments, receiver) {
-      if (method.isStatic ||
-          method.isSetter ||
+      if (method.isSetter ||
           method.typeParameters != null ||
           method.body is! ExpressionFunctionBody ||
           method.body.isAsynchronous)
-        fail(
-          'Helpers require synchronous non-generic instance expression bodies.',
-        );
+        fail('Helpers require synchronous non-generic expression bodies.');
       final fields = receiver?.fields ?? instanceFields;
       final key = (fields, method);
       if (activeHelpers.contains(key) ||
@@ -1340,6 +1377,7 @@ class FlutterDomCompiler {
       final previousGetters = instanceGetters;
       final previousMethods = instanceMethods;
       final previousState = evaluatingState;
+      final previousStaticHelper = evaluatingStaticHelper;
       activeHelpers.add(key);
       try {
         final parameters = <String, Object?>{};
@@ -1389,6 +1427,7 @@ class FlutterDomCompiler {
         instanceGetters = receiver?.getters ?? previousGetters;
         instanceMethods = receiver?.methods ?? previousMethods;
         scope = {...fields, ...parameters};
+        evaluatingStaticHelper = method.isStatic;
         helperCount++;
         return value((method.body as ExpressionFunctionBody).expression);
       } finally {
@@ -1397,6 +1436,7 @@ class FlutterDomCompiler {
         instanceGetters = previousGetters;
         instanceMethods = previousMethods;
         evaluatingState = previousState;
+        evaluatingStaticHelper = previousStaticHelper;
         activeHelpers.removeLast();
       }
     };

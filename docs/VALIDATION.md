@@ -218,3 +218,17 @@ emitted. Browser verification confirms the empty-state and derived coverage text
 These counts apply only to the selected branch; populated records, activity
 navigation and full-app startup are not validated. Private inputs and artifacts
 remain excluded from Git.
+
+## Static helper resolution — 2026-10-11
+
+100 tests pass and Dart analysis is clean. New cases cover class-qualified static
+expression helpers/getters, nested helper calls, defaults, class constants, caller
+scope isolation, rejected unsafe bodies/arguments and imported duplicate class
+names. Nullable unsupported model field types accept only absent null values;
+non-null snapshots remain rejected. The artifact benchmark passes; no browser
+timing or SEO measurements were updated.
+
+The private populated-records probe now passes model construction and reaches an
+unsupported indexed theme-extension expression. No populated feature output or
+interaction coverage is claimed. The existing verified empty-state demo remains
+the latest original-component browser deliverable.

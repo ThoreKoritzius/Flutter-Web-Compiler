@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compile bounded synchronous static expression helpers and static expression getters, including imported class identity and class constants.
+- Accept unsupported nullable model field types only when their snapshot value is null; non-null values remain rejected.
+
 - Add bounded static final-variable collection patterns, nullable matching and boolean guards with isolated branch scope.
 - Permit unused static serializer declarations on model snapshots; distinguish model key fields from Flutter keys.
 - Add explicit opaque callback inputs that fail when invoked, a restricted Align mapping and one additional schematic icon.

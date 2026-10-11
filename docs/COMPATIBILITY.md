@@ -231,7 +231,7 @@ mutable and reactive patterns remain unsupported. Statement patterns are unchang
 
 Models may declare unused static methods such as serializers; those declarations
 are excluded from the instance method table and never executed. Their presence
-does not certify serializer support. Calling them remains unsupported. Model
+does not certify serializer support. Calls must meet the bounded helper subset below. Model
 fields named key are ordinary fields rather than Flutter ValueKey arguments.
 
 Explicit `{"callback":"openItem"}` inputs represent opaque external callback
@@ -242,3 +242,19 @@ accepted boundaries therefore do not certify interaction behavior.
 
 Align supports center, centerLeft and centerRight with a child, mapped to CSS
 flex alignment. The schematic Icon subset also includes emoji_events_outlined.
+
+
+### Static expression helpers and absent nullable fields
+
+Class-qualified static methods and static expression getters use the same bounded
+AST evaluator as instance helpers. They support synchronous, non-generic expression
+bodies, simple typed parameters, defaults, static constants and calls within their
+class. Resolved imports preserve class identity, including prefixed imports.
+Caller fields and locals are excluded; `this`, blocks, async bodies and arbitrary
+runtime execution remain unsupported. Recursion and evaluation limits still apply.
+Top-level functions, overloaded indexing and theme extensions remain unsupported.
+
+A nullable field of an otherwise unsupported model type may be included only when
+its supplied/default value is null. This lets snapshots represent absent optional
+data without pretending that the underlying type is supported. A non-null value
+still fails. This does not implement DateTime construction or formatting.

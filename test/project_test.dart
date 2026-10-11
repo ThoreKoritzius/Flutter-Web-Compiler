@@ -64,6 +64,35 @@ void main() => runApp(const Page());
   tearDown(() => directory.deleteSync(recursive: true));
 
   test(
+    'imported static helpers and getters preserve resolved class identity',
+    () async {
+      write('lib/labels.dart', '''
+abstract final class Labels {
+ static const suffix = '!';
+ static String get ending => suffix;
+ static String format(String input) => input + ending;
+}
+''');
+      write('lib/other.dart', '''
+abstract final class Labels { static String format(String input) => 'Wrong'; }
+''');
+      write('lib/page.dart', '''
+import 'package:flutter/widgets.dart';
+import 'labels.dart' as a;
+import 'other.dart' as b;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Column(children: [Text(a.Labels.format('Record')), Text(a.Labels.ending), Text(b.Labels.format('Record'))]);
+}
+''');
+      final result = await compile();
+      expect(result.html, contains('Record!'));
+      expect(result.html, contains('Wrong'));
+      expect(result.report['pureHelperInvocations'], 2);
+    },
+  );
+
+  test(
     'imports, exports, prefixes and duplicate short names preserve identity',
     () async {
       write(
