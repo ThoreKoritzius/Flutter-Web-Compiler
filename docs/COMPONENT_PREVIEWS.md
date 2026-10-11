@@ -142,3 +142,9 @@ example `{"callback":"openItem"}`, when the selected read-only branch does not
 call them. Invoked callbacks fail; no handler is silently replaced. The report
 counts supplied references separately. This permits inspection of an original
 component's empty/read-only state, not a claim that its interactions compile.
+
+
+Theme-extension previews can select an original constant using
+`staticTheme.extensions` (see COMPATIBILITY.md). The original palette constructor,
+enum maps and supported expression index operators are interpreted; the snapshot
+is an explicit preview input and does not run the application theme setup.

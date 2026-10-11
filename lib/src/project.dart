@@ -17,6 +17,7 @@ class ResolvedProject {
   final units = <ResolvedUnitResult>[];
   final classes = <String, ClassDeclaration>{};
   final constants = <String, Expression>{};
+  final enumValues = <String, String>{};
   final conditionalDirectives = <Map<String, Object?>>[];
   final _symbols = <Element2, String>{};
   late ResolvedUnitResult entry;
@@ -120,6 +121,17 @@ class ResolvedProject {
                   model.constants[fieldKey] = variable.initializer!;
                   model._symbols[variable.declaredFragment!.element] = fieldKey;
                 }
+              }
+            } else if (declaration is EnumDeclaration &&
+                declaration.members.isEmpty &&
+                declaration.constants.every((c) => c.arguments == null)) {
+              final key =
+                  '${p.relative(unit.path, from: model.directory)}::${declaration.name.lexeme}';
+              model._symbols[declaration.declaredFragment!.element] = key;
+              for (final constant in declaration.constants) {
+                final name = '$key.${constant.name.lexeme}';
+                model.enumValues[name] = key;
+                model._symbols[constant.declaredFragment!.element] = name;
               }
             } else if (declaration is TopLevelVariableDeclaration &&
                 declaration.variables.isConst) {
@@ -259,7 +271,10 @@ class ResolvedProject {
     final local = symbol(type);
     final suffix = node.constructorName.name?.name;
     if (local != null) return suffix == null ? local : '$local.$suffix';
-    if (type.library2.uri.toString().startsWith('package:flutter/')) {
+    if (type.library2.uri.toString().startsWith('package:flutter/') ||
+        type.library2.uri.toString() == 'dart:ui' &&
+            type.name3 == 'Color' &&
+            suffix == null) {
       return '${type.name3}${suffix == null ? '' : '.$suffix'}';
     }
     throw ArgumentError(

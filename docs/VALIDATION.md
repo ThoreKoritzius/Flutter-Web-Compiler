@@ -232,3 +232,21 @@ The private populated-records probe now passes model construction and reaches an
 unsupported indexed theme-extension expression. No populated feature output or
 interaction coverage is claimed. The existing verified empty-state demo remains
 the latest original-component browser deliverable.
+
+## Original theme snapshots and populated records — 2026-10-11
+
+104 tests pass and Dart analysis is clean. New coverage includes source-constant
+theme extensions, typed enum map keys, imported enum/class identity, expression
+index operators, missing snapshots and rejected mutation/invalid bounds. Focused
+checks also cover chained color alpha, read-only Material surfaces and text line
+height. The artifact benchmark passes; historical timing/SEO claims are unchanged.
+
+A private external-app evaluation now compiles the original populated records
+card, original row/style helpers and original palette constant using eight mock
+records with absent dates and activity IDs. It accepts 137/137 visited boundaries,
+with one state owner, one theme-extension snapshot, zero adapters/island and
+19.2 KiB initial files. Browser verification confirms six-to-eight row expansion
+and keyboard collapse with the control retained. This supersedes the prior
+populated-records blocker, but does not establish whole-app coverage, date support,
+activity navigation or live-data behavior. Private inputs and results remain
+Git-ignored; CSS and schematic icons remain approximate.

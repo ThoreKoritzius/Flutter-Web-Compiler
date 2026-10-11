@@ -252,9 +252,45 @@ bodies, simple typed parameters, defaults, static constants and calls within the
 class. Resolved imports preserve class identity, including prefixed imports.
 Caller fields and locals are excluded; `this`, blocks, async bodies and arbitrary
 runtime execution remain unsupported. Recursion and evaluation limits still apply.
-Top-level functions, overloaded indexing and theme extensions remain unsupported.
+Top-level functions remain unsupported. The bounded indexing and explicit theme-extension subset is described below.
 
 A nullable field of an otherwise unsupported model type may be included only when
 its supplied/default value is null. This lets snapshots represent absent optional
 data without pretending that the underlying type is supported. A non-null value
 still fails. This does not implement DateTime construction or formatting.
+
+
+### Explicit theme extensions and static indexing
+
+`staticTheme.extensions` maps a class selector to an original const initializer:
+
+```json
+{
+  "staticTheme": {
+    "extensions": {
+      "lib/theme/palette.dart::Palette": "lib/theme/palette.dart::Palette.dark"
+    }
+  }
+}
+```
+
+The compiler interprets the selected constructor and its original data fields.
+It requires a direct ThemeExtension subclass with the existing final-field,
+unnamed-constructor contract. Unused lifecycle/copy methods are not executed.
+Theme.of(context).extension<T>() requires an explicit matching snapshot; missing
+snapshots fail rather than inferring app theme registration. This does not
+implement inherited context, theme updates, providers or app startup.
+
+Plain enums without members/constructor arguments retain declaration identity.
+Static maps accept string, int or enum keys with plain entries; duplicate keys,
+spread/control-flow entries and map mutation are unsupported. Static list indexing
+requires an in-range integer; missing map keys return null. Original expression
+operator [] methods use the bounded helper evaluator and parameter checks.
+BuildContext arguments carry an opaque static token into helpers; context APIs
+beyond the explicit theme snapshot remain unsupported.
+
+Read-only Material surfaces map color and circular radius to CSS. Container
+accepts finite non-negative min/max width/height BoxConstraints. TextStyle height
+maps to a finite positive CSS line-height. Stretched columns occupy their available
+width. These are approximate layout mappings, not Material elevation, ink effects
+or interaction support. The schematic Icon subset includes timer_outlined.

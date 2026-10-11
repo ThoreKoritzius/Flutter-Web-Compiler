@@ -70,6 +70,18 @@ class _ExternalCallback {
   final String name;
 }
 
+class _StaticContext {}
+
+class _StaticEnum {
+  _StaticEnum(this.identity, this.type);
+  final String identity, type;
+  @override
+  bool operator ==(Object other) =>
+      other is _StaticEnum && identity == other.identity;
+  @override
+  int get hashCode => identity.hashCode;
+}
+
 class _StaticColor {
   _StaticColor(this.hex, [this.alpha = 1]);
   final String hex;
@@ -186,7 +198,7 @@ class FlutterDomCompiler {
     var instanceFields = <String, Object?>{};
     var instanceGetters = <String, Expression>{};
     var instanceMethods = <String, MethodDeclaration>{};
-    late Object? Function(MethodDeclaration, ArgumentList, _StaticObject?)
+    late Object? Function(MethodDeclaration, List<Expression>, _StaticObject?)
     invokeHelper;
     var helperCount = 0;
     var externalCallbackCount = 0;
@@ -250,9 +262,9 @@ class FlutterDomCompiler {
     if (themeConfig != null) {
       if (themeConfig is! Map ||
           themeConfig.keys.any(
-            (k) => !['textTheme', 'colorScheme'].contains(k),
+            (k) => !['textTheme', 'colorScheme', 'extensions'].contains(k),
           )) {
-        fail('staticTheme accepts textTheme and colorScheme only.');
+        fail('staticTheme accepts textTheme, colorScheme and extensions only.');
       }
       if ((themeConfig['colorScheme'] != null &&
               themeConfig['colorScheme'] is! Map) ||
@@ -268,7 +280,7 @@ class FlutterDomCompiler {
         if (entry.value is! Map) fail('Static text styles must be maps.');
         final properties = Map<String, Object?>.from(entry.value as Map);
         if (properties.keys.any(
-          (k) => !['fontSize', 'fontWeight', 'color'].contains(k),
+          (k) => !['fontSize', 'fontWeight', 'color', 'height'].contains(k),
         ))
           fail('Unsupported static text style property.');
         if (properties['color'] != null)
@@ -282,8 +294,29 @@ class FlutterDomCompiler {
     }
 
     late _StaticObject Function(_Call) instantiateModel;
+    late _StaticObject Function(_Call) instantiateExtension;
     late Object? Function(_StaticObject, String) modelGetter;
     var modelCount = 0;
+    final themeExtensions = <String, _StaticObject>{};
+    bool isThemeExtension(ClassDeclaration node) {
+      final type = node.extendsClause?.superclass;
+      if (type?.name2.lexeme != 'ThemeExtension') return false;
+      return resolved == null ||
+          type!.element2?.library2?.uri.toString().startsWith(
+                'package:flutter/',
+              ) ==
+              true;
+    }
+
+    final enumValues = <String, String>{...?resolved?.enumValues};
+    if (resolved == null) {
+      for (final e in result.unit.declarations.whereType<EnumDeclaration>()) {
+        if (e.members.isNotEmpty || e.constants.any((c) => c.arguments != null))
+          continue;
+        for (final c in e.constants)
+          enumValues['${e.name.lexeme}.${c.name.lexeme}'] = e.name.lexeme;
+      }
+    }
 
     _StaticObject staticClass(ClassDeclaration node) => _StaticObject(
       {},
@@ -335,6 +368,7 @@ class FlutterDomCompiler {
         SimpleIdentifier n => scope.containsKey(n.name),
         PrefixedIdentifier n => scope.containsKey(n.prefix.name),
         PropertyAccess n => staticReceiver(n.target),
+        IndexExpression n => staticReceiver(n.target),
         MethodInvocation n =>
           n.methodName.name == 'of' ||
               staticReceiver(n.target) ||
@@ -362,6 +396,44 @@ class FlutterDomCompiler {
       final line = (resolved?.unitFor(expression).lineInfo ?? result.lineInfo)
           .getLocation(expression.offset)
           .lineNumber;
+      final enumName = resolved != null && expression is Identifier
+          ? resolved.symbol(expression.element)
+          : resolved != null && expression is PropertyAccess
+          ? resolved.symbol(expression.propertyName.element)
+          : expression.toSource();
+      if (enumValues.containsKey(enumName))
+        return _StaticEnum(enumName!, enumValues[enumName]!);
+      if (expression is IndexExpression) {
+        final target = value(expression.target!);
+        final index = value(expression.index);
+        if (target is Map) return target[index];
+        if (target is List &&
+            index is int &&
+            index >= 0 &&
+            index < target.length)
+          return target[index];
+        if (target is _StaticObject && target.methods.containsKey('[]')) {
+          return invokeHelper(target.methods['[]']!, [
+            expression.index,
+          ], target);
+        }
+        fail('Unsupported static index target or out-of-range index.', line);
+      }
+      if (expression is SetOrMapLiteral) {
+        if (expression.elements.length > 20000)
+          fail('Static map size limit exceeded.', line);
+        if (expression.elements.any((e) => e is! MapLiteralEntry))
+          fail('Only plain static map entries are supported.', line);
+        final map = <Object?, Object?>{};
+        for (final entry in expression.elements.cast<MapLiteralEntry>()) {
+          final key = value(entry.key);
+          if (key is! String && key is! int && key is! _StaticEnum)
+            fail('Unsupported static map key.', line);
+          if (map.containsKey(key)) fail('Duplicate static map key.', line);
+          map[key] = value(entry.value);
+        }
+        return map;
+      }
       if (--evaluationBudget < 0)
         fail('Static evaluation budget exceeded.', line);
       if (expression is FunctionExpression) {
@@ -763,7 +835,7 @@ class FlutterDomCompiler {
           if (resolved != null &&
               expression.methodName.element != method.declaredFragment?.element)
             fail('Helper call must resolve to the current instance method.');
-          return invokeHelper(method, expression.argumentList, null);
+          return invokeHelper(method, expression.argumentList.arguments, null);
         }
         if (expression.target != null && staticReceiver(expression.target)) {
           final target = methodTarget(expression.target!);
@@ -776,7 +848,11 @@ class FlutterDomCompiler {
                 expression.methodName.element !=
                     method.declaredFragment?.element)
               fail('Helper call must resolve to the model instance method.');
-            return invokeHelper(method, expression.argumentList, target);
+            return invokeHelper(
+              method,
+              expression.argumentList.arguments,
+              target,
+            );
           }
         }
       }
@@ -841,6 +917,22 @@ class FlutterDomCompiler {
           if (expression.argumentList.arguments.length != 1)
             fail('Theme.of expects context.', line);
           return staticTheme;
+        }
+        if (method == 'extension' &&
+            expression.target != null &&
+            identical(methodTarget(expression.target!), staticTheme)) {
+          final types = expression.typeArguments?.arguments;
+          if (types?.length != 1 ||
+              types!.single is! NamedType ||
+              expression.argumentList.arguments.isNotEmpty)
+            fail('Theme.extension requires one named type and no arguments.');
+          final type = types.single as NamedType;
+          final identity = resolved?.symbol(type.element2) ?? type.name2.lexeme;
+          if (!themeExtensions.containsKey(identity))
+            fail(
+              'Theme extension $identity requires an explicit constant snapshot.',
+            );
+          return themeExtensions[identity];
         }
         if (expression.target != null &&
             ['copyWith', 'withValues'].contains(method)) {
@@ -923,7 +1015,9 @@ class FlutterDomCompiler {
           }
         }
         final call = _Call(name, positional, named, line, expression);
+        if (name == 'Color') return color(call);
         if (classes[name] case final node?) {
+          if (isThemeExtension(node)) return instantiateExtension(call);
           if (node.extendsClause == null) return instantiateModel(call);
         }
         return call;
@@ -992,8 +1086,14 @@ class FlutterDomCompiler {
       if (object is! _Call || object.name != 'TextStyle') {
         fail('Expected a TextStyle constructor.');
       }
-      check(object, {'fontSize', 'fontWeight', 'color'});
+      check(object, {'fontSize', 'fontWeight', 'color', 'height'});
       final css = <String>[];
+      if (object.named['height'] != null) {
+        final height = object.named['height'];
+        if (height is! num || !height.isFinite || height <= 0)
+          fail('Text height must be finite and positive.');
+        css.add('line-height:$height');
+      }
       if (object.named['color'] != null)
         css.add('color:${color(object.named['color']).css}');
       if (object.named.containsKey('fontSize')) {
@@ -1020,6 +1120,8 @@ class FlutterDomCompiler {
       if (annotation is! NamedType) return;
       if (input == null && annotation.question != null) return;
       final primitiveType = annotation.name2.lexeme;
+      if (primitiveType == 'BuildContext' && input is! _StaticContext)
+        fail('$label requires the static build context.');
       if (input is ReactiveValue && input.type != primitiveType)
         fail('$label requires ${annotation.toSource()}.');
       if (input is! ReactiveValue &&
@@ -1045,6 +1147,9 @@ class FlutterDomCompiler {
       final identity = resolved == null
           ? annotation.name2.lexeme
           : resolved.symbol(annotation.element2);
+      if (enumValues.values.contains(identity) &&
+          (input is! _StaticEnum || input.type != identity))
+        fail('$label requires enum ${annotation.toSource()}.');
       final model = classes[identity];
       if (model != null &&
           model.extendsClause == null &&
@@ -1228,6 +1333,41 @@ class FlutterDomCompiler {
     }
 
     final constructingModels = <String>[];
+    instantiateExtension = (call) {
+      final node = classes[call.name]!;
+      if (!isThemeExtension(node) ||
+          node.withClause != null ||
+          node.implementsClause != null)
+        fail('Theme snapshots require a direct ThemeExtension subclass.');
+      final fields = bindFields(node, call.name, call);
+      bool data(Object? v) =>
+          v == null ||
+          v is String ||
+          v is bool ||
+          v is num && v.isFinite ||
+          v is _StaticColor ||
+          v is _StaticEnum ||
+          v is List && v.every(data) ||
+          v is Map && v.entries.every((e) => data(e.key) && data(e.value));
+      if (!fields.values.every(data))
+        fail('Theme extension snapshots require static data fields.');
+      return _StaticObject(
+        fields,
+        model: call.name,
+        methods: {
+          for (final m in node.members.whereType<MethodDeclaration>())
+            if (!m.isStatic && !m.isGetter && !m.isSetter) m.name.lexeme: m,
+        },
+        getters: {
+          for (final m in node.members.whereType<MethodDeclaration>())
+            if (!m.isStatic &&
+                m.isGetter &&
+                m.body is ExpressionFunctionBody &&
+                !m.body.isAsynchronous)
+              m.name.lexeme: (m.body as ExpressionFunctionBody).expression,
+        },
+      );
+    };
     instantiateModel = (_Call call) {
       final node = classes[call.name]!;
       currentNode = node;
@@ -1364,7 +1504,7 @@ class FlutterDomCompiler {
         fail('Recursive or excessive helper invocation.');
       final positional = <Object?>[];
       final named = <String, Object?>{};
-      for (final argument in arguments.arguments) {
+      for (final argument in arguments) {
         if (argument is NamedExpression) {
           final name = argument.name.label.name;
           if (named.containsKey(name)) fail('Duplicate helper argument $name.');
@@ -1668,7 +1808,18 @@ class FlutterDomCompiler {
       };
       evaluatingState = stateBindings != null;
       scope = {...bindings};
-      instanceFields = bindings;
+      final context = _StaticContext();
+      for (final parameter
+          in methods.single.parameters?.parameters ?? <FormalParameter>[]) {
+        if (parameter is SimpleFormalParameter &&
+            parameter.type is NamedType &&
+            (parameter.type as NamedType).name2.lexeme == 'BuildContext')
+          scope[parameter.name!.lexeme] = context;
+      }
+      instanceFields = {
+        ...bindings,
+        if (stateBindings != null) 'context': context,
+      };
       try {
         return render(evaluateBuild(body));
       } finally {
@@ -1976,6 +2127,7 @@ class FlutterDomCompiler {
             fail('Only explicit MainAxisSize.min is supported.', call.line);
           }
           return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
+              '${call.name == 'Column' && cross == 'stretch' ? 'width:100%;' : ''}'
               'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
         case 'Align':
           check(call, {'alignment', 'child'});
@@ -2028,6 +2180,7 @@ class FlutterDomCompiler {
         case 'Container':
         case 'SizedBox':
         case 'Center':
+        case 'Material':
           check(call, switch (call.name) {
             'Padding' => {'padding', 'child'},
             'Container' => {
@@ -2036,11 +2189,44 @@ class FlutterDomCompiler {
               'height',
               'child',
               'decoration',
+              'constraints',
             },
+            'Material' => {'color', 'borderRadius', 'child'},
             'SizedBox' => {'width', 'height', 'child'},
             _ => {'child'},
           });
           final styles = <String>[];
+          if (n['constraints'] != null) {
+            final constraints = n['constraints'];
+            if (constraints is! _Call || constraints.name != 'BoxConstraints')
+              fail('Expected BoxConstraints.');
+            check(constraints, {
+              'minHeight',
+              'minWidth',
+              'maxHeight',
+              'maxWidth',
+            });
+            for (final entry in constraints.named.entries) {
+              final css = {
+                'minHeight': 'min-height',
+                'minWidth': 'min-width',
+                'maxHeight': 'max-height',
+                'maxWidth': 'max-width',
+              }[entry.key]!;
+              styles.add('$css:${pixels(entry.value)}');
+            }
+          }
+          if (call.name == 'Material') {
+            if (n['color'] != null)
+              styles.add('background:${color(n['color']).css}');
+            final radius = n['borderRadius'];
+            if (radius != null) {
+              if (radius is! _Call || radius.name != 'BorderRadius.circular')
+                fail('Unsupported Material border radius.');
+              check(radius, {}, 1);
+              styles.add('border-radius:${pixels(radius.positional.single)}');
+            }
+          }
           if (n['decoration'] != null) {
             final decoration = n['decoration'];
             if (decoration is! _Call || decoration.name != 'BoxDecoration')
@@ -2081,6 +2267,29 @@ class FlutterDomCompiler {
           return buildClass(call.name, call);
       }
     };
+
+    final extensionConfig = themeConfig is Map
+        ? themeConfig['extensions']
+        : null;
+    if (extensionConfig != null) {
+      if (extensionConfig is! Map)
+        fail('Static theme extensions must be a map.');
+      for (final entry in extensionConfig.entries) {
+        if (entry.key is! String || entry.value is! String)
+          fail('Theme extensions map class selectors to constant selectors.');
+        final name = resolved?.root(entry.key as String) ?? entry.key as String;
+        final constant = entry.value as String;
+        final expression = constants[constant];
+        if (expression == null)
+          fail('Unknown theme extension constant $constant.');
+        final snapshot = value(expression);
+        if (snapshot is! _StaticObject ||
+            snapshot.model != name ||
+            !isThemeExtension(classes[name]!))
+          fail('Theme extension constant must match its declared class.');
+        themeExtensions[name] = snapshot;
+      }
+    }
 
     var previewInputBudget = 2000;
     late _Call Function(String, Map, int) configuredCall;
@@ -2189,6 +2398,7 @@ class FlutterDomCompiler {
       'root': rootName,
       'componentPreview': previews != null,
       'staticThemeProvided': staticTheme != null,
+      'staticThemeExtensionSnapshots': themeExtensions.length,
       'analysis': resolved == null ? 'single-file syntax' : 'resolved project',
       if (resolved != null)
         'sourceFiles': resolved.units

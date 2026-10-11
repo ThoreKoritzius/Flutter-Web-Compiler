@@ -64,6 +64,62 @@ void main() => runApp(const Page());
   tearDown(() => directory.deleteSync(recursive: true));
 
   test(
+    'resolved extension constants preserve imported enum map identity',
+    () async {
+      final framework = File(
+        p.join(directory.path, 'framework/lib/widgets.dart'),
+      );
+      write(
+        'framework/lib/widgets.dart',
+        framework.readAsStringSync().replaceFirst(
+              'const Text(String value)',
+              'const Text(String value, {TextStyle? style})',
+            ) +
+            '''
+abstract class ThemeExtension<T> { const ThemeExtension(); }
+class Theme {
+ static Theme of(BuildContext context) => Theme();
+ T? extension<T>() => null;
+}
+class Color { const Color(int value); }
+class TextStyle { const TextStyle({Color? color}); }
+''',
+      );
+      write('lib/palette.dart', '''
+import 'package:flutter/widgets.dart';
+enum Slot { primary }
+class Palette extends ThemeExtension<Palette> {
+ const Palette({required this.slots}); final Map<Slot, Color> slots;
+ static const dark = Palette(slots: {Slot.primary: Color(0xff3987e5)});
+ Color operator [](Slot slot) => slots[slot]!;
+ static Palette of(BuildContext context) => Theme.of(context).extension<Palette>()!;
+}
+''');
+      write('lib/page.dart', '''
+import 'package:flutter/widgets.dart'; import 'palette.dart' as a;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Text('Palette', style: TextStyle(color: a.Palette.of(context)[a.Slot.primary]));
+}
+''');
+      final result = await FlutterDomCompiler().compileProject(
+        directory.path,
+        p.join(directory.path, 'lib/main.dart'),
+        {
+          'staticTheme': {
+            'extensions': {
+              'lib/palette.dart::Palette': 'lib/palette.dart::Palette.dark',
+            },
+          },
+        },
+        domOnly: true,
+      );
+      expect(result.html, contains('rgba(57,135,229,1.0)'));
+      expect(result.report['staticThemeExtensionSnapshots'], 1);
+    },
+  );
+
+  test(
     'imported static helpers and getters preserve resolved class identity',
     () async {
       write('lib/labels.dart', '''

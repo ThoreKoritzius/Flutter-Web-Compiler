@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Lower explicitly selected original ThemeExtension constants, plain enum-keyed maps and bounded index operators with a static build-context token.
+- Add read-only Material surfaces, finite BoxConstraints, TextStyle height, stretched column width and a schematic timer icon.
+
 - Compile bounded synchronous static expression helpers and static expression getters, including imported class identity and class constants.
 - Accept unsupported nullable model field types only when their snapshot value is null; non-null values remain rejected.
 
