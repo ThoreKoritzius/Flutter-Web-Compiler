@@ -69,7 +69,7 @@ class S extends State<Page> {
         ),
         source.replaceFirst(
           'String readField() => title;',
-          "String readField() { return title; }",
+          "String readField() { var value = title; return value; }",
         ),
         source.replaceFirst(
           'String readField() => title;',

@@ -209,8 +209,17 @@ class FlutterDomCompiler {
     var instanceFields = <String, Object?>{};
     var instanceGetters = <String, Expression>{};
     var instanceMethods = <String, MethodDeclaration>{};
-    late Object? Function(MethodDeclaration, List<Expression>, _StaticObject?)
+    late Object? Function(AstNode, List<Expression>, _StaticObject?)
     invokeHelper;
+    late Object? Function(FunctionBody) evaluateBuild;
+    final topFunctions = <String, FunctionDeclaration>{...?resolved?.functions};
+    if (resolved == null) {
+      for (final declaration
+          in result.unit.declarations.whereType<FunctionDeclaration>()) {
+        if (!declaration.isGetter && !declaration.isSetter)
+          topFunctions[declaration.name.lexeme] = declaration;
+      }
+    }
     var helperCount = 0;
     var externalCallbackCount = 0;
     var callbackRouteBridgeCount = 0;
@@ -993,6 +1002,20 @@ class FlutterDomCompiler {
       }
 
       if (expression is MethodInvocation) {
+        final identity =
+            resolved?.symbol(expression.methodName.element) ??
+            (resolved == null &&
+                    expression.target == null &&
+                    !scope.containsKey(expression.methodName.name) &&
+                    !instanceMethods.containsKey(expression.methodName.name)
+                ? expression.methodName.name
+                : null);
+        if (topFunctions.containsKey(identity))
+          return invokeHelper(
+            topFunctions[identity]!,
+            expression.argumentList.arguments,
+            null,
+          );
         final name = expression.methodName.name;
         if ((expression.target == null ||
                 expression.target is ThisExpression) &&
@@ -1703,15 +1726,38 @@ class FlutterDomCompiler {
       }
     };
 
-    final activeHelpers = <(Map<String, Object?>, MethodDeclaration)>[];
+    final activeHelpers = <AstNode>[];
     invokeHelper = (method, arguments, receiver) {
-      if (method.isSetter ||
-          method.typeParameters != null ||
-          method.body is! ExpressionFunctionBody ||
-          method.body.isAsynchronous)
-        fail('Helpers require synchronous non-generic expression bodies.');
-      final fields = receiver?.fields ?? instanceFields;
-      final key = (fields, method);
+      final topLevel = method is FunctionDeclaration;
+      final body = switch (method) {
+        MethodDeclaration m => m.body,
+        FunctionDeclaration f => f.functionExpression.body,
+        _ => throw StateError('Unknown helper declaration'),
+      };
+      final parameterList = switch (method) {
+        MethodDeclaration m => m.parameters,
+        FunctionDeclaration f => f.functionExpression.parameters,
+        _ => null,
+      };
+      final generic = switch (method) {
+        MethodDeclaration m => m.typeParameters != null || m.isSetter,
+        FunctionDeclaration f =>
+          f.functionExpression.typeParameters != null ||
+              f.isGetter ||
+              f.isSetter,
+        _ => true,
+      };
+      if (generic ||
+          body.isAsynchronous ||
+          (body is! ExpressionFunctionBody && body is! BlockFunctionBody) ||
+          parameterList == null)
+        fail(
+          'Helpers require synchronous non-generic expressions or bounded blocks.',
+        );
+      final fields = topLevel
+          ? <String, Object?>{}
+          : receiver?.fields ?? instanceFields;
+      final key = method;
       if (activeHelpers.contains(key) ||
           activeHelpers.length >= 64 ||
           --evaluationBudget < 0)
@@ -1743,7 +1789,7 @@ class FlutterDomCompiler {
         instanceGetters = {};
         instanceMethods = {};
         evaluatingState = false;
-        for (final wrapped in method.parameters!.parameters) {
+        for (final wrapped in parameterList.parameters) {
           final parameter = wrapped is DefaultFormalParameter
               ? wrapped.parameter
               : wrapped;
@@ -1778,12 +1824,13 @@ class FlutterDomCompiler {
             named.keys.any((name) => !allowed.contains(name)))
           fail('Unsupported helper arguments.');
         instanceFields = fields;
-        instanceGetters = receiver?.getters ?? previousGetters;
-        instanceMethods = receiver?.methods ?? previousMethods;
+        instanceGetters = topLevel ? {} : receiver?.getters ?? previousGetters;
+        instanceMethods = topLevel ? {} : receiver?.methods ?? previousMethods;
         scope = {...fields, ...parameters};
-        evaluatingStaticHelper = method.isStatic;
+        evaluatingStaticHelper =
+            topLevel || (method as MethodDeclaration).isStatic;
         helperCount++;
-        return value((method.body as ExpressionFunctionBody).expression);
+        return evaluateBuild(body);
       } finally {
         scope = previous;
         instanceFields = previousFields;
@@ -1795,7 +1842,7 @@ class FlutterDomCompiler {
       }
     };
 
-    Object? evaluateBuild(FunctionBody body) {
+    evaluateBuild = (FunctionBody body) {
       if (body.isAsynchronous) fail('Native build must be synchronous.');
       if (body is ExpressionFunctionBody) return value(body.expression);
       if (body is! BlockFunctionBody)
@@ -1837,6 +1884,69 @@ class FlutterDomCompiler {
               ? (returned: false, value: null)
               : execute(selected);
         }
+        if (statement is SwitchStatement) {
+          final input = value(statement.expression);
+          if (input != null &&
+              input is! String &&
+              input is! int &&
+              input is! bool)
+            fail('Static switch requires a primitive selector.');
+          final previous = scope;
+          final previousNames = localNames;
+          scope = {...scope};
+          localNames = {};
+          try {
+            SwitchMember? fallback;
+            var selected = false;
+            for (final member in statement.members) {
+              if (member.labels.isNotEmpty)
+                fail('Switch labels are unsupported.');
+              if (member is SwitchDefault) {
+                fallback = member;
+                continue;
+              }
+              final Expression caseExpression;
+              if (member is SwitchCase) {
+                caseExpression = member.expression;
+              } else if (member is SwitchPatternCase &&
+                  member.guardedPattern.whenClause == null &&
+                  member.guardedPattern.pattern is ConstantPattern) {
+                caseExpression =
+                    (member.guardedPattern.pattern as ConstantPattern)
+                        .expression;
+              } else {
+                fail('Only unguarded constant switch cases are supported.');
+              }
+              final candidate = value(caseExpression);
+              if (candidate != null &&
+                  candidate is! String &&
+                  candidate is! int &&
+                  candidate is! bool)
+                fail('Static switch requires primitive case values.');
+              selected = selected || input == candidate;
+              if (selected && member.statements.isNotEmpty) {
+                for (final child in member.statements) {
+                  final result = execute(child);
+                  if (result.returned) return result;
+                }
+                fail(
+                  'Selected switch case must return; fallthrough is unsupported.',
+                );
+              }
+            }
+            if (fallback != null) {
+              for (final child in fallback.statements) {
+                final result = execute(child);
+                if (result.returned) return result;
+              }
+              fail('Selected switch default must return.');
+            }
+            return (returned: false, value: null);
+          } finally {
+            scope = previous;
+            localNames = previousNames;
+          }
+        }
         if (statement is Block) {
           final previous = scope;
           final previousNames = localNames;
@@ -1859,7 +1969,7 @@ class FlutterDomCompiler {
       final result = execute(body.block);
       if (!result.returned) fail('Build did not return a widget.');
       return result.value;
-    }
+    };
 
     late String Function(Object?) render;
     String buildClass(

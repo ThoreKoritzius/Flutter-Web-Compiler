@@ -299,7 +299,7 @@ import 'package:flutter/widgets.dart';
 class Page extends StatelessWidget {
  const Page();
  Widget build(BuildContext context) => unsupported();
- Widget unsupported() { return Text('runtime'); }
+ Widget unsupported() { var text = 'runtime'; return Text(text); }
 }
 ''');
       await expectLater(
@@ -359,16 +359,9 @@ class Page extends f.StatelessWidget {
  f.Widget build(f.BuildContext context) => Text('Incorrect');
 }
 """);
-      await expectLater(
-        compile(),
-        throwsA(
-          isA<CompileException>().having(
-            (e) => e.message,
-            'diagnostic',
-            contains('Function/method calls'),
-          ),
-        ),
-      );
+      final result = await compile();
+      expect(result.html, contains('Different'));
+      expect(result.html, isNot(contains('Incorrect')));
     },
   );
   test('private entry roots resolve in their own library', () async {
@@ -662,6 +655,30 @@ class Page extends StatelessWidget {
     expect(result.html, contains('0: Run'));
     expect(result.html, contains('1: Walk'));
   });
+  test(
+    'resolved prefixed top-level helpers preserve library identity and recursion limits',
+    () async {
+      write(
+        'lib/labels.dart',
+        "String label(String value) { final result = value + '!'; return result; }",
+      );
+      write('lib/other.dart', "String label(String value) => 'Other';");
+      write('lib/page.dart', """
+import 'package:flutter/widgets.dart';
+import 'labels.dart' as a;
+import 'other.dart' as b;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) => Column(children:[Text(a.label('Native')), Text(b.label('Native'))]);
+}
+""");
+      final result = await compile();
+      expect(result.html, contains('Native!'));
+      expect(result.html, contains('Other'));
+      write('lib/labels.dart', "String label(String value) => label(value);");
+      await expectLater(compile(), throwsA(isA<CompileException>()));
+    },
+  );
   test(
     'imported models preserve constructor and annotated field identities',
     () async {

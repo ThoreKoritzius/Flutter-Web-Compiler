@@ -370,3 +370,21 @@ This is compile-time expansion, not a general Dart loop runtime. Reactive bounds
 counter mutation in the body, descending/stepped loops, multiple counters,
 statement loops and await loops remain unsupported. Widget mappings, helper
 calls and callback bodies inside rows retain their separate support limits.
+
+
+### Resolved pure functions and bounded helper statements
+
+Project-local top-level function calls now preserve declaration identity across
+imports, prefixes and exports. Supported functions are synchronous, non-generic
+and use simple parameters with bounded defaults. Top-level functions run in an
+isolated scope containing arguments and project constants, with no caller locals
+or instance fields. Recursion and excessive depth/operations are rejected.
+
+Top-level, widget-instance and static helpers support expression bodies or bounded
+blocks: initialized final/const locals, static if/else, nested blocks, returns and
+primitive constant-case switches. Grouped empty cases and default returns work;
+selected nonempty cases must return. Switch patterns/guards, labels, break/continue,
+mutation, statement loops and asynchronous execution remain unsupported. Model
+getters and instance methods still require expression bodies at model construction.
+This interprets supported logic at compile time; it does not provide an async or
+provider runtime. See COMPONENT_PREVIEWS.md for the contract.

@@ -319,3 +319,19 @@ read original model properties through indexed lists. Unsupported loop shapes,
 counter-dependent/reactive bounds, mutation and excessive expansion fail closed.
 This supports compile-time collection expansion, not live list updates or a
 complete activity screen.
+
+
+## Resolved top-level and bounded block helpers
+
+All **124 tests** pass, `dart analyze` passes, and the required artifact benchmark
+completes under ignored `build/helper-benchmarks/`. Tests cover default arguments,
+caller-scope isolation, final locals, static branches, grouped constant switch
+returns, case-local scope restoration, recursion and unsupported operations.
+Resolved fixtures preserve prefixed function identity across duplicate short names;
+a local function named Text executes its original body rather than being mistaken
+for Flutter's Text constructor. Unsupported statement diagnostics retain their
+original source location. Historical timing/SEO claims remain unchanged.
+
+These are bounded compile-time helper evaluations. Numeric method formatting,
+model-based navigation callbacks, async repositories and provider startup remain
+separate gaps; the full feature-screen compatibility claim is unchanged.

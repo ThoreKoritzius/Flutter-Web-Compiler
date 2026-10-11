@@ -40,7 +40,7 @@ class Page extends StatelessWidget {
         source.replaceFirst("repeat(value, count) + ending", "format(value)"),
         source.replaceFirst(
           "=> repeat(value, count) + ending;",
-          "{ return value; }",
+          "{ var mutable = value; return mutable; }",
         ),
         source.replaceFirst(
           "=> repeat(value, count) + ending;",

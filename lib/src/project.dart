@@ -17,6 +17,7 @@ class ResolvedProject {
   final units = <ResolvedUnitResult>[];
   final classes = <String, ClassDeclaration>{};
   final constants = <String, Expression>{};
+  final functions = <String, FunctionDeclaration>{};
   final enumValues = <String, String>{};
   final conditionalDirectives = <Map<String, Object?>>[];
   final _symbols = <Element2, String>{};
@@ -122,6 +123,13 @@ class ResolvedProject {
                   model._symbols[variable.declaredFragment!.element] = fieldKey;
                 }
               }
+            } else if (declaration is FunctionDeclaration &&
+                !declaration.isGetter &&
+                !declaration.isSetter) {
+              final key =
+                  '${p.relative(unit.path, from: model.directory)}::${declaration.name.lexeme}';
+              model.functions[key] = declaration;
+              model._symbols[declaration.declaredFragment!.element] = key;
             } else if (declaration is EnumDeclaration &&
                 declaration.members.isEmpty &&
                 declaration.constants.every((c) => c.arguments == null)) {

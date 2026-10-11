@@ -117,9 +117,9 @@ results can be primitive values, model snapshots or supported widget constructor
 
 State helpers can derive typed reactive text from bool/int values and return
 static widget constructions. Their bodies cannot create event callbacks or perform
-state mutation. Called helpers reject async/block bodies, generic methods,
+state mutation. Called helpers reject async bodies, unsupported statements, generic methods,
 recursion, assignments and unsupported calls. Depth is bounded to 64 and uses the
-shared static operation budget. Static/top-level helpers, higher-order functions,
+shared static operation budget. Top-level/static helpers and bounded blocks now work as described below. Higher-order functions,
 closures and general statement/control-flow lowering remain unsupported.
 `pureHelperInvocations` reports compiler evaluations, not browser event calls.
 The records fixture uses its original `_recordRow` and `formatDuration` helpers.
@@ -169,3 +169,22 @@ simple unnamed constructor. Factories are never executed or translated; calling
 them still fails. The unnamed snapshot constructor retains the existing
 final-field, parameter, type and evaluation limits. Native map mutation, factories,
 serializers and network loading are not implemented by this feature.
+
+
+## Pure top-level and block helpers
+
+Project-local top-level functions now retain resolved library identity, including
+prefixed imports and duplicate short names. Function arguments/defaults are bound
+in an isolated scope; helpers cannot capture a caller's locals or instance fields.
+Unused functions are not executed. Async/generic functions, higher-order arguments
+and external package function bodies remain unsupported.
+
+Top-level, widget and static helpers can use initialized final/const locals,
+static if/else, nested blocks and expression returns. Static switch statements
+accept primitive selectors with unguarded constant cases, grouped empty labels
+and a default. A selected nonempty case must return. Switch case locals do not
+leak into the surrounding block. Pattern/guard cases, break/continue, mutation,
+statement loops and side effects fail closed. Expression-only model getter/helper
+constraints remain unchanged. Evaluation uses the shared operation budget and
+64-level depth/recursion guard; this is compile-time interpretation, not general
+Dart-to-JavaScript logic translation.
