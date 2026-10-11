@@ -835,6 +835,83 @@ class FlutterDomCompiler {
             }
           } else if (element is ForElement) {
             final parts = element.forLoopParts;
+            if (parts is ForPartsWithDeclarations &&
+                element.awaitKeyword == null) {
+              final declarations = parts.variables;
+              final condition = parts.condition;
+              if (declarations.variables.length != 1 ||
+                  declarations.isFinal ||
+                  declarations.isConst ||
+                  declarations.lateKeyword != null ||
+                  declarations.type != null &&
+                      declarations.type!.toSource() != 'int' ||
+                  condition is! BinaryExpression ||
+                  condition.operator.lexeme != '<' ||
+                  condition.leftOperand is! SimpleIdentifier ||
+                  parts.updaters.length != 1)
+                fail(
+                  'Indexed collections require one int counter, counter < static bound and counter++.',
+                  line,
+                );
+              final variable = declarations.variables.single;
+              final name = variable.name.lexeme;
+              final updater = parts.updaters.single;
+              final operand = updater is PostfixExpression
+                  ? updater.operand
+                  : updater is PrefixExpression
+                  ? updater.operand
+                  : null;
+              final operator = updater is PostfixExpression
+                  ? updater.operator.lexeme
+                  : updater is PrefixExpression
+                  ? updater.operator.lexeme
+                  : null;
+              if ((condition.leftOperand as SimpleIdentifier).name != name ||
+                  operator != '++' ||
+                  operand is! SimpleIdentifier ||
+                  operand.name != name ||
+                  variable.initializer == null ||
+                  frame?.initial.containsKey(name) == true)
+                fail(
+                  'Indexed collection counter must be local and increment by one.',
+                  line,
+                );
+              final start = value(variable.initializer!);
+              final previous = scope;
+              scope = {...previous};
+              try {
+                if (start is! int || start < 0)
+                  fail(
+                    'Indexed collection start must be a nonnegative static integer.',
+                    line,
+                  );
+                scope[name] = start;
+                final end = value(condition.rightOperand);
+                if (end is! int || end < start || end - start > 20000)
+                  fail(
+                    'Indexed collection bound must be a finite static integer within the expansion limit.',
+                    line,
+                  );
+                final references = _NameReferenceVisitor(name);
+                condition.rightOperand.accept(references);
+                if (references.found)
+                  fail(
+                    'Indexed collection bound must be independent of its counter.',
+                    line,
+                  );
+                for (var index = start; index < end; index++) {
+                  scope = {...previous, name: index};
+                  if (--evaluationBudget < 0)
+                    fail('Static evaluation budget exceeded.', line);
+                  append(element.body);
+                  if (items.length > 20000)
+                    fail('Static collection size limit exceeded.', line);
+                }
+              } finally {
+                scope = previous;
+              }
+              return;
+            }
             if (element.awaitKeyword != null ||
                 parts is! ForEachPartsWithDeclaration)
               fail(
@@ -2693,5 +2770,15 @@ class _RunAppVisitor extends RecursiveAstVisitor<void> {
       }
     }
     super.visitMethodInvocation(node);
+  }
+}
+
+class _NameReferenceVisitor extends RecursiveAstVisitor<void> {
+  _NameReferenceVisitor(this.name);
+  final String name;
+  bool found = false;
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
+    if (node.name == name) found = true;
   }
 }

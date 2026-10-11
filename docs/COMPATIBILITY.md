@@ -354,3 +354,19 @@ map keys return null and original null fallbacks work. Named factory declaration
 may coexist with the supported unnamed snapshot constructor, but invoking a
 factory remains unsupported. The schematic icon subset includes
 `data_usage_rounded`.
+
+
+### Bounded indexed collections
+
+Collection `for (var i = 0; i < items.length; i++)` now expands static rows,
+including conditional separators and spreads. Explicit `int` counters, prefix
+increments and nonnegative nonzero starts work. The loop requires one local
+counter, a static integer upper bound independent of that counter, `<` and a
+single `++` updater. Each iteration uses isolated scope; counters cannot shadow
+reactive state fields. Bounds and expanded output are limited to 20,000 and the
+shared evaluation budget also applies.
+
+This is compile-time expansion, not a general Dart loop runtime. Reactive bounds,
+counter mutation in the body, descending/stepped loops, multiple counters,
+statement loops and await loops remain unsupported. Widget mappings, helper
+calls and callback bodies inside rows retain their separate support limits.

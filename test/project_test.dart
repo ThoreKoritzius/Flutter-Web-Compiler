@@ -646,6 +646,22 @@ class Page extends StatelessWidget {
       await expectLater(compile(), throwsA(isA<CompileException>()));
     },
   );
+  test('resolved indexed collections preserve model property reads', () async {
+    write('lib/page.dart', r"""
+import 'package:flutter/widgets.dart';
+class Entry { const Entry(this.title); final String title; }
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) {
+  final entries = [Entry('Run'), Entry('Walk')];
+  return Column(children: [for (var i = 0; i < entries.length; i++) Text('$i: ${entries[i].title}')]);
+ }
+}
+""");
+    final result = await compile();
+    expect(result.html, contains('0: Run'));
+    expect(result.html, contains('1: Walk'));
+  });
   test(
     'imported models preserve constructor and annotated field identities',
     () async {

@@ -303,3 +303,19 @@ This permits original static components to read supplied dashboard-shaped models
 It does not compile JSON factory bodies, async repositories, providers or screen
 startup. Preview layout remains an explicit host composition around original
 components, rather than conversion of the original full screen.
+
+
+## Indexed collection rows
+
+The compiler now has **120 passing tests**: the full regression run passed with
+119, followed by the new reactive-bound/body-mutation test and its focused suite.
+`dart analyze` and the required artifact benchmark pass. Raw benchmark artifacts
+are ignored under `build/indexed-benchmarks/`; existing browser timing and SEO
+claims remain unchanged.
+
+New coverage exercises indexed rows with conditional separators/spreads, prefix
+increments, nonzero starts, empty lists and scope restoration. Resolved fixtures
+read original model properties through indexed lists. Unsupported loop shapes,
+counter-dependent/reactive bounds, mutation and excessive expansion fail closed.
+This supports compile-time collection expansion, not live list updates or a
+complete activity screen.
