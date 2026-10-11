@@ -271,6 +271,10 @@ class ResolvedProject {
     final local = symbol(type);
     final suffix = node.constructorName.name?.name;
     if (local != null) return suffix == null ? local : '$local.$suffix';
+    if (type.library2.uri.toString() == 'dart:core' &&
+        type.name3 == 'DateTime' &&
+        (suffix == null || suffix == 'utc'))
+      return suffix == null ? 'DateTime' : 'DateTime.utc';
     if (type.library2.uri.toString().startsWith('package:flutter/') ||
         type.library2.uri.toString() == 'dart:ui' &&
             type.name3 == 'Color' &&

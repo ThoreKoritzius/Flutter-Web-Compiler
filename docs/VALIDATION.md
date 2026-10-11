@@ -250,3 +250,20 @@ and keyboard collapse with the control retained. This supersedes the prior
 populated-records blocker, but does not establish whole-app coverage, date support,
 activity navigation or live-data behavior. Private inputs and results remain
 Git-ignored; CSS and schematic icons remain approximate.
+
+## Calendar dates and paired original components — 2026-10-11
+
+107 tests pass and Dart analysis is clean. Date tests cover snapshot input,
+original model getters, nullable patterns, leap-day validation, bounded source
+constructors, resolved dart:core identity and rejection of invalid dates, clocks,
+time/offset strings and unsupported temporal fields. The artifact benchmark
+passes; browser speed/SEO measurements remain unchanged.
+
+The private original-component preview now uses eight dated mock records:
+137/137 visited boundaries, zero adapters/island and 19.3 KiB initial files.
+A generated Git-ignored Flutter Web harness reads the same configuration and
+imports the same original widget/model declarations and palette constant. Both
+browser targets show matching dates and six-to-eight row expansion followed by
+keyboard collapse. Preview shells and rendering geometry differ; this is content
+and interaction validation rather than pixel parity, whole-app coverage or a
+performance comparison. Activity IDs/callback behavior remain absent.

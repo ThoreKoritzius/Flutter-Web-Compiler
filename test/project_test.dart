@@ -64,6 +64,25 @@ void main() => runApp(const Page());
   tearDown(() => directory.deleteSync(recursive: true));
 
   test(
+    'resolved dart:core calendar constructors preserve date field reads',
+    () async {
+      write('lib/page.dart', r'''
+import 'package:flutter/widgets.dart';
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) {
+   final date = DateTime.utc(2024, 2, 29);
+   return Text('${date.day}.${date.month}.${date.year}');
+ }
+}
+''');
+      final result = await compile();
+      expect(result.html, contains('29.2.2024'));
+      expect(result.report['staticDateValues'], 1);
+    },
+  );
+
+  test(
     'resolved extension constants preserve imported enum map identity',
     () async {
       final framework = File(

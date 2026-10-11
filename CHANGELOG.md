@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add strict calendar date snapshots, bounded DateTime calendar constructors and original year/month/day access with resolved dart:core identity.
+
 - Lower explicitly selected original ThemeExtension constants, plain enum-keyed maps and bounded index operators with a static build-context token.
 - Add read-only Material surfaces, finite BoxConstraints, TextStyle height, stretched column width and a schematic timer icon.
 

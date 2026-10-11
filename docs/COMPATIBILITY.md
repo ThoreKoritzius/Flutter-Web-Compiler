@@ -257,7 +257,7 @@ Top-level functions remain unsupported. The bounded indexing and explicit theme-
 A nullable field of an otherwise unsupported model type may be included only when
 its supplied/default value is null. This lets snapshots represent absent optional
 data without pretending that the underlying type is supported. A non-null value
-still fails. This does not implement DateTime construction or formatting.
+still fails. The calendar-only DateTime subset below adds explicit non-null snapshots.
 
 
 ### Explicit theme extensions and static indexing
@@ -294,3 +294,20 @@ accepts finite non-negative min/max width/height BoxConstraints. TextStyle heigh
 maps to a finite positive CSS line-height. Stretched columns occupy their available
 width. These are approximate layout mappings, not Material elevation, ink effects
 or interaction support. The schematic Icon subset includes timer_outlined.
+
+
+### Calendar date snapshots
+
+An input descriptor `{"date":"2026-09-21"}` supplies an immutable calendar date.
+Original DateTime field annotations, nullable patterns and year/month/day reads
+are supported. DateTime(year, month, day) and DateTime.utc(year, month, day)
+accept one to three static integer arguments; omitted month/day default to 1.
+Years must be 1–9999, and invalid dates fail rather than normalizing overflow.
+Resolved analysis identifies dart:core DateTime separately from local classes.
+Reports expose staticDateValues.
+
+This subset represents calendar components only. It does not provide instants,
+time-of-day, local/UTC conversion, timezone or DST behavior, comparisons, durations,
+parsing, formatting APIs or DateTime.now. Snapshot strings must be exactly
+YYYY-MM-DD; time/offset suffixes fail. Date labels are derived from original
+supported field reads and string interpolation, not supplied as preformatted HTML.

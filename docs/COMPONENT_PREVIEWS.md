@@ -98,7 +98,7 @@ Construction and getter recursion are bounded. Reports include
 `staticModelInstances`, which counts evaluated instances rather than DOM boundaries.
 
 Inheritance, mixins, generic model classes, arbitrary methods, constructor bodies/initializer
-lists, factories, mutable fields, generated serializers, DateTime and external
+lists, factories, mutable fields, generated serializers, general temporal behavior and external
 model classes remain unsupported. Unused static serializers may remain declared. Invoked static methods must satisfy the bounded expression-helper subset. Unsupported nullable types may have null snapshot values; this does not add non-null type support.
 No application startup or serialization code is executed. Models are compile-time snapshots, not mutable client-side state.
 The [records fixture](../examples/multifile/lib/record_list.dart) uses an imported
@@ -148,3 +148,8 @@ Theme-extension previews can select an original constant using
 `staticTheme.extensions` (see COMPATIBILITY.md). The original palette constructor,
 enum maps and supported expression index operators are interpreted; the snapshot
 is an explicit preview input and does not run the application theme setup.
+
+
+Use `{"date":"2026-09-21"}` for calendar-only DateTime inputs. Original nullable
+patterns and year/month/day access work; clocks, timezones, durations and other
+DateTime operations remain unsupported. See COMPATIBILITY.md for the exact subset.

@@ -72,6 +72,11 @@ class _ExternalCallback {
 
 class _StaticContext {}
 
+class _StaticDate {
+  _StaticDate(this.year, this.month, this.day);
+  final int year, month, day;
+}
+
 class _StaticEnum {
   _StaticEnum(this.identity, this.type);
   final String identity, type;
@@ -237,6 +242,31 @@ class FlutterDomCompiler {
           code: code,
         );
 
+    var dateCount = 0;
+    _StaticDate calendarDate(Object? year, Object? month, Object? day) {
+      if (year is! int ||
+          month is! int ||
+          day is! int ||
+          year < 1 ||
+          year > 9999 ||
+          month < 1 ||
+          month > 12 ||
+          day < 1 ||
+          day > 31)
+        fail('Dates require integer year/month/day within years 1–9999.');
+      final date = DateTime.utc(year, month, day);
+      if (date.year != year || date.month != month || date.day != day)
+        fail('Invalid calendar date.');
+      dateCount++;
+      return _StaticDate(year, month, day);
+    }
+
+    bool dateType(NamedType type) =>
+        type.name2.lexeme == 'DateTime' &&
+        (resolved == null
+            ? !classes.containsKey('DateTime')
+            : type.element2?.library2?.uri.toString() == 'dart:core');
+
     _StaticColor color(Object? input) {
       if (input is _StaticColor) return input;
       if (input is _Call &&
@@ -340,6 +370,14 @@ class FlutterDomCompiler {
     );
 
     Object? property(Object? target, String name) {
+      if (target is _StaticDate) {
+        return switch (name) {
+          'year' => target.year,
+          'month' => target.month,
+          'day' => target.day,
+          _ => fail('Unsupported calendar date property $name.'),
+        };
+      }
       if (target is _StaticObject && target.fields.containsKey(name))
         return target.fields[name];
       if (target is _StaticObject && target.getters.containsKey(name))
@@ -369,16 +407,27 @@ class FlutterDomCompiler {
         PrefixedIdentifier n => scope.containsKey(n.prefix.name),
         PropertyAccess n => staticReceiver(n.target),
         IndexExpression n => staticReceiver(n.target),
+        PostfixExpression n =>
+          n.operator.lexeme == '!' && staticReceiver(n.operand),
         MethodInvocation n =>
-          n.methodName.name == 'of' ||
+          resolved == null &&
+                  !classes.containsKey('DateTime') &&
+                  (n.target == null && n.methodName.name == 'DateTime' ||
+                      n.target?.toSource() == 'DateTime' &&
+                          n.methodName.name == 'utc') ||
+              n.methodName.name == 'of' ||
               staticReceiver(n.target) ||
               n.target == null &&
                   (instanceMethods.containsKey(n.methodName.name) ||
                       classes[n.methodName.name]?.extendsClause == null &&
                           classes.containsKey(n.methodName.name)),
-        InstanceCreationExpression n => classes.containsKey(
-          resolved?.constructor(n) ?? n.constructorName.toSource(),
-        ),
+        InstanceCreationExpression n =>
+          classes.containsKey(
+                resolved?.constructor(n) ?? n.constructorName.toSource(),
+              ) ||
+              ['DateTime', 'DateTime.utc'].contains(
+                resolved?.constructor(n) ?? n.constructorName.toSource(),
+              ),
         ParenthesizedExpression n => staticReceiver(n.expression),
         ListLiteral _ => true,
         _ => false,
@@ -1015,6 +1064,18 @@ class FlutterDomCompiler {
           }
         }
         final call = _Call(name, positional, named, line, expression);
+        if (['DateTime', 'DateTime.utc'].contains(name) &&
+            !classes.containsKey('DateTime')) {
+          if (named.isNotEmpty || positional.isEmpty || positional.length > 3)
+            fail(
+              'Calendar DateTime constructors accept year and optional month/day only.',
+            );
+          return calendarDate(
+            positional[0],
+            positional.length > 1 ? positional[1] : 1,
+            positional.length > 2 ? positional[2] : 1,
+          );
+        }
         if (name == 'Color') return color(call);
         if (classes[name] case final node?) {
           if (isThemeExtension(node)) return instantiateExtension(call);
@@ -1119,6 +1180,8 @@ class FlutterDomCompiler {
     ) {
       if (annotation is! NamedType) return;
       if (input == null && annotation.question != null) return;
+      if (dateType(annotation) && input is! _StaticDate)
+        fail('$label requires a calendar date snapshot.');
       final primitiveType = annotation.name2.lexeme;
       if (primitiveType == 'BuildContext' && input is! _StaticContext)
         fail('$label requires the static build context.');
@@ -1404,10 +1467,12 @@ class FlutterDomCompiler {
             item is String ||
             item is bool ||
             item is num && item.isFinite ||
+            item is _StaticDate ||
             item is _StaticObject && item.model != null ||
             item is List && item.every(supportedData);
         bool supportedType(TypeAnnotation? type) {
           if (type is! NamedType) return false;
+          if (dateType(type)) return true;
           if ([
             'String',
             'int',
@@ -2301,6 +2366,18 @@ class FlutterDomCompiler {
           input is bool ||
           input is num && input.isFinite)
         return input;
+      if (input is Map && input.keys.length == 1 && input['date'] is String) {
+        final match = RegExp(
+          r'^(\d{4})-(\d{2})-(\d{2})$',
+        ).firstMatch(input['date'] as String);
+        if (match == null)
+          fail('Date snapshots require YYYY-MM-DD without time or timezone.');
+        return calendarDate(
+          int.parse(match.group(1)!),
+          int.parse(match.group(2)!),
+          int.parse(match.group(3)!),
+        );
+      }
       if (input is Map &&
           input.keys.length == 1 &&
           input['callback'] is String) {
@@ -2416,6 +2493,7 @@ class FlutterDomCompiler {
       'nativeStateInstances': reactiveCount,
       'nativeConditionalGroups': conditionalGroupCount,
       'staticModelInstances': modelCount,
+      'staticDateValues': dateCount,
       'pureHelperInvocations': helperCount,
       'externalCallbackInputs': externalCallbackCount,
       'stateStrategy':
