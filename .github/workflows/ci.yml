@@ -23,6 +23,7 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed bin lib test tool
       - run: dart analyze
       - run: dart test
+      - run: dart run tool/logic_demo.dart --no-serve
 
   flutter-fixture:
     runs-on: ubuntu-latest

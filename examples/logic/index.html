@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dart logic · Native DOM</title>
+<style>
+  :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101217;color:#eef1fa}
+  *{box-sizing:border-box}body{margin:0;padding:clamp(24px,6vw,72px)}main{max-width:720px;margin:auto}
+  small{color:#a6b8ff;font-weight:600;letter-spacing:.08em}h1{font-size:clamp(32px,6vw,48px);letter-spacing:-.045em;margin:12px 0}
+  p{color:#aab1c3;line-height:1.6}section{margin-top:32px;background:#1d212a;border:1px solid #303644;border-radius:20px;padding:28px}
+  #total{font-size:42px;letter-spacing:-.04em}ul{padding:0;list-style:none}li{display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid #303644}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}button{font:inherit;cursor:pointer;border-radius:10px;padding:12px 18px;border:1px solid #505a72;background:#a6b8ff;color:#101217;font-weight:600}
+  #fail{background:transparent;color:#eef1fa}button:hover{filter:brightness(1.1)}button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  #status{min-height:26px}footer{margin-top:24px;font-size:13px;color:#aab1c3}
+</style>
+<main>
+  <small>EXPERIMENTAL · DART2JS + DOM</small>
+  <h1>Original Dart. Live requests.</h1>
+  <p>A pure-Dart repository and JSON factories run in the browser through the official compiler. Synthetic data comes from an actual local HTTP request.</p>
+  <section id="panel" aria-busy="true">
+    <p>Total activity</p><strong id="total">—</strong>
+    <ul id="activities" aria-label="Activities"></ul>
+    <p id="status" role="status" aria-live="polite">Loading…</p>
+    <div class="actions"><button id="refresh">Refresh / retry</button><button id="fail">Test request failure</button></div>
+  </section>
+  <footer>Explicit DOM view adapter. Automatic Flutter lifecycle and provider conversion are not implemented.</footer>
+</main>
+<script defer src="logic.js"></script>
+</html>

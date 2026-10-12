@@ -2,6 +2,14 @@
 
 The practical product is an additional web build target for document-oriented parts of Flutter applications, with explicit native contracts and Flutter fallback. Universal unchanged-app conversion is a much larger research project.
 
+Executable runtime logic should use the official Dart compiler, rather than
+extend the bounded static evaluator into a general language implementation.
+The [request-flow experiment and integration gates](LOGIC_RUNTIME.md) demonstrate
+pure-Dart repository/factory execution with explicit DOM adapters. The next
+integration work is dependency isolation, a DOM component backend and lifecycle/
+provider bindings. Saved response previews are rendering diagnostics, not the
+working-app milestone.
+
 ## Largest engineering gaps
 
 1. **Resolved, multi-file Dart analysis.** Opt-in project analysis now resolves project-local imports, symbols, exports and parts. Complete generic/type semantics and imported adapter/island boundaries before broadening the compatibility claim. Keep source locations and actionable diagnostics in an intermediate representation.

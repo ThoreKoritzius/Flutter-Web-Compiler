@@ -1,5 +1,22 @@
 # Prototype verification
 
+## Official Dart logic experiment (2026-10-12)
+
+`dart analyze` passes and the complete suite has 155 passing tests. The separate
+logic experiment builds with `dart run tool/logic_demo.dart --no-serve`.
+An automated Node DOM contract harness runs actual dart2js output against a live
+local HTTP server and verifies decoding, loading, HTTP failure, retained data and
+retry. Pure-Dart tests also verify stale successes/errors, disposal, unsubscribe
+and reentrant refresh behavior.
+
+Manual in-app Chromium verification confirms initial loading, native text/list
+updates, a real synthetic HTTP 503 and successful retry. The view is an explicit
+adapter, not automatically translated Flutter lifecycle/provider logic. This is
+an experimental architecture check, not production or cross-browser certification.
+See [the runtime contract and release gates](LOGIC_RUNTIME.md).
+
+## Historical prototype checks
+
 Verified locally on 2026-09-22 with Flutter 3.41.6, Dart 3.11.4, macOS and the Codex in-app Chromium browser.
 
 ## Automated checks

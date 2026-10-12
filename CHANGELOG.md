@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an official dart2js request-flow experiment and a pure-Dart async resource primitive with stale-response suppression, explicit states and disposal; keep the browser view/transport adapters explicit.
+
 - Bind local JSON snapshots through `--data`, explicit JSON Pointer references and model projections; validate inputs before writing output and label supplied data separately from mocks.
 
 - Lower explicitly configured callback route bridges into native links through original synchronous arrow callbacks; report host navigation separately from widget adapters.

@@ -94,6 +94,8 @@ Use explicit constructor inputs and a static theme snapshot to compile existing 
 
 Use `--data response.json` with explicit JSON Pointer bindings to compile a saved response through original model constructors and widget bodies. See [data snapshots](docs/DATA_SNAPSHOTS.md) and the [synthetic example](examples/data_snapshot/flutter_dom.json). This does not execute JSON factories or connect application services.
 
+Executable logic is a separate experiment using the **official Dart-to-JavaScript compiler**, with original pure-Dart repositories and JSON factories, real local HTTP requests and an explicit DOM view adapter. Run `dart run tool/logic_demo.dart`; see [architecture, verification and remaining gaps](docs/LOGIC_RUNTIME.md). Automatic Flutter lifecycle/provider conversion is not implemented.
+
 ## Compared with Flutter Web
 
 | Concern | Flutter Web | This prototype |
