@@ -92,6 +92,8 @@ The SDK is unchanged: `flutter build dom` is not an official command. Builds sho
 
 Use explicit constructor inputs and a static theme snapshot to compile existing stateless components without booting application services. See the [component preview guide](docs/COMPONENT_PREVIEWS.md) and [reproducible fixture](examples/multifile/flutter_dom.preview.json). Preview composition and mock data are explicit; this does not infer the application's live theme, state or screen layout.
 
+Use `--data response.json` with explicit JSON Pointer bindings to compile a saved response through original model constructors and widget bodies. See [data snapshots](docs/DATA_SNAPSHOTS.md) and the [synthetic example](examples/data_snapshot/flutter_dom.json). This does not execute JSON factories or connect application services.
+
 ## Compared with Flutter Web
 
 | Concern | Flutter Web | This prototype |

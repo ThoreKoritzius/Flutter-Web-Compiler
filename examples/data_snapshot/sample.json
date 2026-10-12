@@ -1,0 +1,9 @@
+{
+  "data": {
+    "activities": [
+      {"name": "Walking", "minutes": 42},
+      {"name": "Cycling", "minutes": 65},
+      {"name": "Swimming", "minutes": 30}
+    ]
+  }
+}

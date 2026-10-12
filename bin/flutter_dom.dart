@@ -28,6 +28,10 @@ Future<void> main(List<String> arguments) async {
       help: 'Configuration relative to project.',
     )
     ..addOption(
+      'data',
+      help: 'Local JSON snapshot relative to the current directory.',
+    )
+    ..addOption(
       'output',
       defaultsTo: 'build/dom',
       help: 'Output relative to current directory.',
@@ -60,9 +64,24 @@ Future<void> main(List<String> arguments) async {
     final configFile = File(p.join(project, args['config'] as String));
     if (args.wasParsed('config') && !configFile.existsSync())
       throw ArgumentError('Configuration not found: ${configFile.path}');
-    final config = configFile.existsSync()
+    var config = configFile.existsSync()
         ? jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>
         : <String, dynamic>{};
+    SnapshotBinding? snapshot;
+    if (args['data'] != null) {
+      final file = File(p.absolute(args['data'] as String));
+      if (!file.existsSync()) throw ArgumentError('Snapshot file not found.');
+      if (file.lengthSync() > 5 * 1024 * 1024)
+        throw ArgumentError('Snapshot file exceeds 5 MiB.');
+      Object? payload;
+      try {
+        payload = jsonDecode(file.readAsStringSync());
+      } on FormatException {
+        throw ArgumentError('Snapshot file must contain valid JSON.');
+      }
+      snapshot = bindDataSnapshot(config, payload);
+      config = snapshot.config;
+    }
     final watch = Stopwatch()..start();
     stdout.writeln(
       '\n${_accent('Flutter DOM')}  Building ${p.basename(project)}',
@@ -79,6 +98,15 @@ Future<void> main(List<String> arguments) async {
             config,
             domOnly: args['dom-only'] as bool,
           );
+    if (snapshot != null) {
+      compiled.report['dataSnapshot'] = {
+        'source': 'local-json',
+        'references': snapshot.references,
+      };
+      stdout.writeln(
+        '  Data input         Local JSON snapshot · ${snapshot.references} bindings',
+      );
+    }
     final output = Directory(p.absolute(args['output'] as String));
     output.createSync(recursive: true);
     if (compiled.island != null) {

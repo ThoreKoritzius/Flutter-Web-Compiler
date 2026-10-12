@@ -1,0 +1,18 @@
+{
+  "title": "Activity summary",
+  "preview": [{
+    "root": "ActivitySummary",
+    "arguments": {
+      "items": {
+        "data": "/data/activities",
+        "each": {
+          "model": "Activity",
+          "arguments": {
+            "name": {"data": "/name"},
+            "minutes": {"data": "/minutes"}
+          }
+        }
+      }
+    }
+  }]
+}

@@ -5,6 +5,50 @@ import 'package:test/test.dart';
 
 void main() {
   test(
+    'CLI binds local JSON inputs and fails before output on missing references',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('dom-data-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory(p.join(directory.path, 'lib')).createSync();
+      File(p.join(directory.path, 'lib/main.dart')).writeAsStringSync(
+        "class Page extends StatelessWidget { const Page({required this.title}); final String title; Widget build(BuildContext context)=>Text(title); }",
+      );
+      File(p.join(directory.path, 'flutter_dom.json')).writeAsStringSync(
+        '{"root":"Page","arguments":{"title":{"data":"/title"}}}',
+      );
+      final data = File(p.join(directory.path, 'input.json'))
+        ..writeAsStringSync('{"title":"Imported data"}');
+      final output = p.join(directory.path, 'output');
+      Future<ProcessResult> build(String target) =>
+          Process.run(Platform.resolvedExecutable, [
+            'run',
+            'bin/flutter_dom.dart',
+            'build',
+            '--project',
+            directory.path,
+            '--data',
+            data.path,
+            '--dom-only',
+            '--output',
+            target,
+          ]);
+      final result = await build(output);
+      expect(result.exitCode, 0, reason: '${result.stdout} ${result.stderr}');
+      expect(
+        File(p.join(output, 'index.html')).readAsStringSync(),
+        contains('Imported data'),
+      );
+      expect(
+        File(p.join(output, 'report.json')).readAsStringSync(),
+        contains('"dataSnapshot"'),
+      );
+      data.writeAsStringSync('{}');
+      final invalid = p.join(directory.path, 'invalid');
+      expect((await build(invalid)).exitCode, 1);
+      expect(Directory(invalid).existsSync(), isFalse);
+    },
+  );
+  test(
     'CLI emits a standalone static site without Flutter or JavaScript',
     () async {
       final directory = Directory.systemTemp.createTempSync('flutter-dom-cli-');

@@ -3077,7 +3077,7 @@ class FlutterDomCompiler {
       }).join();
       body =
           '<main class="dom-preview"><h1>${_escape(config['title'] as String? ?? 'Component preview')}</h1>'
-          '<p>Mock data</p><div class="dom-preview-grid">$cards</div></main>';
+          '<p>${_escape(config['previewLabel'] as String? ?? 'Mock data')}</p><div class="dom-preview-grid">$cards</div></main>';
     } else {
       body = entryExpression == null
           ? buildClass(root, configuredCall(root, config, 0))

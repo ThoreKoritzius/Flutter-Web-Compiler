@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bind local JSON snapshots through `--data`, explicit JSON Pointer references and model projections; validate inputs before writing output and label supplied data separately from mocks.
+
 - Lower explicitly configured callback route bridges into native links through original synchronous arrow callbacks; report host navigation separately from widget adapters.
 - Add bounded InkWell navigation links and a schematic chevron icon.
 
