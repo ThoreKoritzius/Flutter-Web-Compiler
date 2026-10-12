@@ -1,5 +1,20 @@
 # Prototype verification
 
+## Flutter-source Dart runtime target (2026-10-12)
+
+The full suite has 158 passing tests and analysis is clean. The runtime target
+builds through `flutter_dom build web --dart-runtime`; CI also builds its demo.
+The actual compiled original fixture source passes a local HTTP/Node DOM contract
+test covering initState, loading, repository/model decoding, setState, overlapping
+requests, stale results, detached event handlers, failure and retry. Unsupported
+imports/APIs fail, source files remain unchanged and failed CLI compilation does
+not create output. Manual Chromium checks verify success, HTTP 503 and recovery.
+
+This target substitutes an explicit, bounded Flutter-shaped API. It supports one
+root state and replaces DOM on updates. No provider compatibility, retained focus,
+static app HTML, authenticated service integration or production readiness is
+claimed. See [the target contract](DART_RUNTIME_TARGET.md).
+
 ## Official Dart logic experiment (2026-10-12)
 
 `dart analyze` passes and the complete suite has 155 passing tests. The separate

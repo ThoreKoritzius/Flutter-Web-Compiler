@@ -94,7 +94,14 @@ Use explicit constructor inputs and a static theme snapshot to compile existing 
 
 Use `--data response.json` with explicit JSON Pointer bindings to compile a saved response through original model constructors and widget bodies. See [data snapshots](docs/DATA_SNAPSHOTS.md) and the [synthetic example](examples/data_snapshot/flutter_dom.json). This does not execute JSON factories or connect application services.
 
-Executable logic is a separate experiment using the **official Dart-to-JavaScript compiler**, with original pure-Dart repositories and JSON factories, real local HTTP requests and an explicit DOM view adapter. Run `dart run tool/logic_demo.dart`; see [architecture, verification and remaining gaps](docs/LOGIC_RUNTIME.md). Automatic Flutter lifecycle/provider conversion is not implemented.
+Executable logic is a separate experiment using the **official Dart-to-JavaScript compiler**, with original pure-Dart repositories and JSON factories, real local HTTP requests and an explicit DOM view adapter. Run `dart run tool/logic_demo.dart`; see [architecture, verification and remaining gaps](docs/LOGIC_RUNTIME.md). General Flutter lifecycle/provider conversion is not implemented.
+
+The newer experimental `flutter_dom build web --dart-runtime` target executes
+original root StatefulWidget lifecycle, async request and build methods through
+dart2js and a bounded DOM compatibility API. Run
+`dart run tool/logic_demo.dart --native-app` for the shared-source fixture.
+[Supported API and limitations](docs/DART_RUNTIME_TARGET.md) include root-only
+state, DOM replacement on updates and no provider integration.
 
 ## Compared with Flutter Web
 

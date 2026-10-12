@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:flutter_dom_compiler/flutter_dom_compiler.dart';
+import 'package:flutter_dom_compiler/native_app_builder.dart';
 import 'package:path/path.dart' as p;
 
 Future<void> main(List<String> arguments) async {
@@ -42,6 +43,11 @@ Future<void> main(List<String> arguments) async {
       help: 'Resolve project-local imports (requires flutter pub get).',
     )
     ..addFlag('verbose', abbr: 'v', negatable: false)
+    ..addFlag(
+      'dart-runtime',
+      negatable: false,
+      help: 'Experimental official Dart compiler + bounded DOM widget runtime.',
+    )
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
@@ -62,6 +68,34 @@ Future<void> main(List<String> arguments) async {
         'No ${input.path}. Run inside a Flutter app or pass --project examples/catalog.',
       );
     final configFile = File(p.join(project, args['config'] as String));
+    if (args['dart-runtime'] as bool) {
+      if (args.wasParsed('config') || args.wasParsed('data')) {
+        throw ArgumentError(
+          'The experimental Dart runtime does not accept static config or snapshot inputs.',
+        );
+      }
+      stdout.writeln('\nFlutter DOM  Compiling experimental Dart runtime…');
+      final app = await buildNativeApp(project, args['source'] as String);
+      final output = Directory(p.absolute(args['output'] as String))
+        ..createSync(recursive: true);
+      File(p.join(output.path, 'app.js')).writeAsStringSync(app.javascript);
+      File(p.join(output.path, 'index.html')).writeAsStringSync(nativeAppHost);
+      File(p.join(output.path, 'report.json')).writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert({
+          'target': 'experimental-dart-runtime',
+          'logicCompiler': 'dart2js',
+          'viewBackend': 'bounded-dom-compatibility-layer',
+          'sourceLibraries': app.libraries,
+          'javascriptBytes': utf8.encode(app.javascript).length,
+          'automaticFlutterCompatibility': false,
+          'stateLifecycle': 'root-only-replace-view',
+        }),
+      );
+      stdout.writeln(
+        '  ✓ Built ${output.path}\n  Official Dart logic · ${app.libraries} original libraries · bounded DOM API\n  Experimental: root state only; no provider integration or retained-view reconciliation.',
+      );
+      return;
+    }
     if (args.wasParsed('config') && !configFile.existsSync())
       throw ArgumentError('Configuration not found: ${configFile.path}');
     var config = configFile.existsSync()

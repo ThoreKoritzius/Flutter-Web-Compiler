@@ -69,8 +69,11 @@ small; it does not replace Riverpod's caching, dependency tracking or lifecycle.
    Runtime-fetched private data does not itself provide pre-rendered SEO content.
 
 Existing static builds and their bounded native-state runtime continue to work.
-This experiment is separate from `flutter_dom build web`; there is no automatic
-logic extraction, provider conversion or runtime model-to-widget lowering yet.
+The explicit-adapter experiment remains separate. A newer
+[experimental Flutter-source runtime target](DART_RUNTIME_TARGET.md) is available
+through `flutter_dom build web --dart-runtime`. It executes a bounded root
+StatefulWidget with original method bodies, but has no provider conversion,
+retained-view reconciliation or general Flutter compatibility yet.
 
 ## Evidence required before production use
 
