@@ -57,8 +57,8 @@ void main() {
       final entry = File('${directory.path}/lib/main.dart');
       for (final source in [
         "import 'dart:ui'; void main() {}",
-        "import 'package:flutter/foundation.dart'; void main() {}",
-        "import 'a.dart' if (dart.library.js_interop) 'b.dart'; void main() {}",
+        "import 'package:flutter/services.dart'; void main() {}",
+        "import 'a.dart' if (custom.feature) 'b.dart'; void main() {}",
         "import 'package:flutter/material.dart'; void main() => runApp(const UnknownWidget());",
       ]) {
         entry.writeAsStringSync(source);
@@ -68,6 +68,54 @@ void main() {
         );
         expect(entry.readAsStringSync(), source);
       }
+    },
+  );
+
+  test(
+    'web branches and foundation compute execute through official compilation',
+    () async {
+      final directory = Directory.systemTemp.createTempSync(
+        'native-foundation-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      // Unselected files intentionally do not exist.
+      File('${directory.path}/lib/main.dart').writeAsStringSync(r'''
+import 'missing_io.dart' if (dart.library.js_interop) 'web.dart' if (dart.library.html) 'missing_second_match.dart' as platform;
+import 'dart:io' if (dart.library.js_interop) 'dart:convert' as codec;
+import 'selected.dart' if (dart.library.io) 'missing_io.dart' as fallback;
+import 'package:flutter/foundation.dart';
+Future<void> main() async {
+  print('web:$kIsWeb release:$kReleaseMode profile:$kProfileMode debug:$kDebugMode');
+  final result = await compute((int value) => platform.twice(value), 21);
+  print('result:$result');
+  print('decoded:${codec.jsonDecode('42')}');
+  print('fallback:${fallback.twice(21)}');
+}
+''');
+      File('${directory.path}/lib/web.dart').writeAsStringSync(
+        "export 'missing_native.dart' if (dart.library.io == 'false') 'selected.dart' show twice;",
+      );
+      File(
+        '${directory.path}/lib/selected.dart',
+      ).writeAsStringSync('int twice(int value) => value * 2;');
+      final app = await buildNativeApp(directory.path, 'lib/main.dart');
+      expect(app.libraries, 3);
+      final script = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        'global.self=global;require(process.argv[1]);',
+        script.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(
+        run.stdout,
+        contains('web:true release:true profile:false debug:false'),
+      );
+      expect(run.stdout, contains('result:42'));
+      expect(run.stdout, contains('decoded:42'));
+      expect(run.stdout, contains('fallback:42'));
     },
   );
 }

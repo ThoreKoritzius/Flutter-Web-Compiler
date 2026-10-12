@@ -14,7 +14,7 @@ class NativeAppBuild {
   final int libraries;
 }
 
-/// Copies a local source graph and substitutes only Flutter's material import.
+/// Copies a local source graph and substitutes bounded Flutter API imports.
 /// Original widget, lifecycle, repository and model bodies remain unchanged.
 /// All unsupported APIs are left to the official compiler to reject.
 Future<NativeAppBuild> buildNativeApp(String project, String source) async {
@@ -29,6 +29,18 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
   );
   if (runtimeUri == null)
     throw StateError('DOM runtime package could not be resolved.');
+  final foundationUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:flutter_dom_compiler/src/runtime/foundation_dom.dart'),
+  );
+  if (foundationUri == null)
+    throw StateError('Foundation runtime package could not be resolved.');
+  const webEnvironment = {
+    'dart.library.js_interop': true,
+    'dart.library.html': true,
+    'dart.library.js': true,
+    'dart.library.io': false,
+    'dart.library.ffi': false,
+  };
   try {
     String copy(File input) {
       final path = input.resolveSymbolicLinksSync();
@@ -52,21 +64,42 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
       final edits = <(int, int, String)>[];
       for (final directive in parsed.unit.directives) {
         if (directive is! UriBasedDirective) continue;
-        final uri = directive.uri.stringValue;
+        Never unsupported(String message) => throw UnsupportedError(
+          '$message at ${p.relative(path, from: root)}:${parsed.lineInfo.getLocation(directive.offset).lineNumber}',
+        );
+        var uri = directive.uri.stringValue;
         if (uri == null) throw ArgumentError('Invalid library URI.');
-        if (directive is ImportDirective &&
-                directive.configurations.isNotEmpty ||
-            directive is ExportDirective &&
-                directive.configurations.isNotEmpty) {
-          throw UnsupportedError(
-            'Conditional library directives are not supported in the experimental runtime target.',
-          );
+        final configurations = directive is ImportDirective
+            ? directive.configurations
+            : directive is ExportDirective
+            ? directive.configurations
+            : <Configuration>[];
+        var selected = false;
+        for (final configuration in configurations) {
+          final name = configuration.name.toSource();
+          if (!webEnvironment.containsKey(name)) {
+            unsupported('Unsupported conditional environment: $name');
+          }
+          final expected = configuration.value?.stringValue ?? 'true';
+          if (!selected && '${webEnvironment[name]}' == expected) {
+            uri = configuration.uri.stringValue;
+            selected = true;
+          }
         }
-        String? replacement;
+        if (uri == null) throw ArgumentError('Invalid selected library URI.');
+        if (configurations.isNotEmpty)
+          edits.add((
+            configurations.first.offset,
+            configurations.last.end - configurations.first.offset,
+            '',
+          ));
+        String? replacement = configurations.isNotEmpty ? uri : null;
         if (uri == 'package:flutter/material.dart') {
           replacement = runtimeUri.toString();
+        } else if (uri == 'package:flutter/foundation.dart') {
+          replacement = foundationUri.toString();
         } else if (uri.startsWith('package:flutter/') || uri == 'dart:ui') {
-          throw UnsupportedError('Unsupported Flutter/engine import: $uri');
+          unsupported('Unsupported Flutter/engine import: $uri');
         } else if (!Uri.parse(uri).hasScheme) {
           replacement = Uri.file(
             copy(File(p.join(p.dirname(path), uri))),
@@ -80,7 +113,8 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
           ));
       }
       var rewritten = text;
-      for (final edit in edits.reversed) {
+      edits.sort((a, b) => b.$1.compareTo(a.$1));
+      for (final edit in edits) {
         rewritten = rewritten.replaceRange(edit.$1, edit.$1 + edit.$2, edit.$3);
       }
       final file = File(destination)..parent.createSync(recursive: true);
@@ -95,6 +129,7 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
       'compile',
       'js',
       '-O2',
+      '-Ddart.vm.product=true',
       '--no-source-maps',
       if (packages.existsSync()) '--packages=${packages.path}',
       '-o',

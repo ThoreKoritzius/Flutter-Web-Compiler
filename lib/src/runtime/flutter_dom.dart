@@ -2,6 +2,8 @@
 /// This is not the Flutter framework and does not claim layout parity.
 library;
 
+export 'foundation_dom.dart';
+
 import 'dart:async';
 import 'dart:js_interop';
 

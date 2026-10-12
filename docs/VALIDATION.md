@@ -1,5 +1,14 @@
 # Prototype verification
 
+## Foundation and web dependency branches (2026-10-12)
+
+The full suite has 161 passing tests and analysis is clean. Focused tests cover
+deferred compute execution, synchronous/asynchronous callback errors and explicit
+console logging. Actual dart2js output verifies web/release flags, original
+compute calls, conditional imports/exports, SDK branch selection, first-match
+precedence and default fallback without traversing missing unselected libraries.
+Unsupported conditional environments and framework imports remain rejected.
+
 ## Flutter-source Dart runtime target (2026-10-12)
 
 The full suite has 158 passing tests and analysis is clean. The runtime target

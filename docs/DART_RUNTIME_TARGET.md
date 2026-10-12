@@ -29,10 +29,11 @@ transport and JSON factories run too. The browser view is built by those widget
 bodies rather than the hand-authored DOM adapter in the earlier experiment.
 
 The builder copies the reachable relative source graph to a temporary directory.
-It rewrites only the URI of `package:flutter/material.dart` imports/exports to
-our compatibility library and rewrites relative library URIs to the copied
-files. It does not edit input sources or replace method bodies. It then invokes
-`dart compile js -O2 --no-source-maps`; temporary sources are removed afterward.
+It rewrites the URIs of supported Flutter material/foundation imports and exports
+to explicit compatibility libraries, selects supported web conditional branches
+and rewrites relative library URIs to copied files. It does not edit input sources
+or replace method bodies. It invokes `dart compile js -O2 -Ddart.vm.product=true
+--no-source-maps`; temporary sources are removed afterward.
 Reports distinguish this backend from static compilation and do not invent a
 whole-app conversion percentage.
 
@@ -60,7 +61,22 @@ reconciliation: updates can lose focus and native selection. Widget keys,
 descendant StatefulWidgets, controllers, inherited context, Flutter themes,
 assets and provider integration are unsupported. CSS approximates layout.
 
-Other Flutter/engine imports and conditional local imports fail explicitly.
+The foundation bridge provides `kIsWeb`, release/profile/debug constants and
+`compute`. Like Flutter's web implementation, `compute` yields then executes on
+the current event loop; it creates no worker and emits no Flutter profiling
+events. `debugPrint` is a replaceable callback using synchronous console output;
+Flutter's throttling is not implemented and non-null `wrapWidth` is rejected.
+ChangeNotifier, ValueNotifier, diagnostic classes and other foundation APIs are
+not implemented and fail official compilation.
+The compute contract follows the documented
+[Flutter web behavior](https://api.flutter.dev/flutter/foundation/compute.html).
+
+Conditional imports/exports support a fixed dart2js web environment:
+`dart.library.js_interop`, `dart.library.html`, `dart.library.js` are true;
+`dart.library.io`, `dart.library.ffi` are false. The first matching condition wins,
+with the default used if none match. Prefixes and show/hide clauses are retained.
+Unknown conditional environments fail explicitly. Other Flutter/engine imports
+fail with project-relative source locations.
 Undeclared widget classes/properties fail official compilation. Structural cases
 such as nested StatefulWidgets fail at runtime; they are not yet preflighted.
 The local graph limit is 500 libraries; dependencies outside the project through
@@ -84,7 +100,7 @@ cross-browser certification.
 
 Before using a real provider-driven application, address retained-view
 reconciliation, lifecycle/subscription cleanup, supported package boundaries and
-authenticated browser transport. The source graph needs conditional-import and
-package extraction support. Evaluate Jaspr as the component backend against
+authenticated browser transport. The source graph still needs package extraction
+support. Evaluate Jaspr as the component backend against
 these same fixtures before extending this minimal compatibility layer broadly.
 The [logic architecture](LOGIC_RUNTIME.md) describes production release gates.

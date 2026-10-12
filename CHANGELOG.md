@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a bounded foundation bridge for web/release flags, compute and explicit console logging; select fixed web conditional import/export branches and report unsupported dependency source locations.
+
 - Add an experimental `--dart-runtime` build target that copies local sources, substitutes a bounded Flutter material API and compiles original lifecycle/request/build methods with dart2js; verify live requests, stale-response guards and retry.
 
 - Add an official dart2js request-flow experiment and a pure-Dart async resource primitive with stale-response suppression, explicit states and disposal; keep the browser view/transport adapters explicit.
