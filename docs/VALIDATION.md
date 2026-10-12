@@ -1,5 +1,19 @@
 # Prototype verification
 
+## Bounded services and core-widget imports (2026-10-12)
+
+The full suite has 169 passing tests and analysis is clean. Services tests cover
+missing-plugin failures, explicit adapter arguments/results, nullable results,
+typed list/map casts, synchronous/asynchronous errors, duplicate registration,
+idempotent disposal and safe callback re-registration. Actual dart2js output
+verifies services imports, web guards, typed-data exports and missing-plugin
+handling. Core widgets retain shared identities across material/widgets imports
+without exposing Material-only APIs through the widgets facade.
+
+No native platform plugin, Flutter binary messaging or inbound event support is
+claimed. The unchanged supported app fixture continues to pass its live HTTP and
+DOM contract tests. Application-specific fallbacks stay explicitly attributed.
+
 ## Explicit runtime library adapters (2026-10-12)
 
 The full suite has 163 passing tests and analysis is clean. Adapter tests compile

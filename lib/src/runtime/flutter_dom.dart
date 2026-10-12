@@ -3,6 +3,7 @@
 library;
 
 export 'foundation_dom.dart';
+export 'services_dom.dart';
 
 import 'dart:async';
 import 'dart:js_interop';

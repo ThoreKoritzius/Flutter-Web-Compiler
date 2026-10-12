@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add bounded services imports with explicit in-process method-channel registration, missing-plugin failures, typed results and safe unregistration; expose supported core widgets through a restricted widgets import.
+
 - Add explicit `--runtime-bridges` library replacements for engine-dependent components; validate reachable mappings, preserve source files and report adapters separately from original libraries.
 
 - Add a bounded foundation bridge for web/release flags, compute and explicit console logging; select fixed web conditional import/export branches and report unsupported dependency source locations.

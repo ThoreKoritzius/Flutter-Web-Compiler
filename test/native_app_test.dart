@@ -5,6 +5,71 @@ import 'package:test/test.dart';
 
 void main() {
   test(
+    'widgets and material bridges share core types without exporting Material-only APIs',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-widgets-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      final entry = File('${directory.path}/lib/main.dart')
+        ..writeAsStringSync(
+          "import 'package:flutter/widgets.dart' as w; import 'package:flutter/material.dart' as m; void main() { final w.Widget value = const m.Text('shared'); print(value is w.Text); }",
+        );
+      final app = await buildNativeApp(directory.path, 'lib/main.dart');
+      final file = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        'global.self=global;require(process.argv[1]);',
+        file.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(run.stdout.toString().trim(), 'true');
+      entry.writeAsStringSync(
+        "import 'package:flutter/widgets.dart'; void main()=>print(MaterialApp); ",
+      );
+      await expectLater(
+        buildNativeApp(directory.path, 'lib/main.dart'),
+        throwsStateError,
+      );
+    },
+  );
+  test(
+    'original services imports preserve web guards and missing-plugin failures',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-services-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      File('${directory.path}/lib/main.dart').writeAsStringSync(r'''
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+Future<void> main() async {
+  if(kIsWeb) print('native-only call skipped');
+  try {
+    await const MethodChannel('unimplemented').invokeMethod<Uint8List>('read');
+    throw StateError('Unexpected plugin success');
+  } on MissingPluginException {
+    print('missing plugin caught');
+  }
+  final dispose = registerDomMethodChannel('explicit', (call) async => call.arguments);
+  print('adapter:${await const MethodChannel('explicit').invokeMethod<int>('echo',42)}');
+  dispose();
+}
+''');
+      final app = await buildNativeApp(directory.path, 'lib/main.dart');
+      final file = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        'global.self=global;require(process.argv[1]);',
+        file.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(run.stdout, contains('native-only call skipped'));
+      expect(run.stdout, contains('missing plugin caught'));
+      expect(run.stdout, contains('adapter:42'));
+    },
+  );
+  test(
     'explicit library adapters replace only selected reachable sources',
     () async {
       final directory = Directory.systemTemp.createTempSync('native-adapter-');
@@ -152,7 +217,7 @@ void main() {
       final entry = File('${directory.path}/lib/main.dart');
       for (final source in [
         "import 'dart:ui'; void main() {}",
-        "import 'package:flutter/services.dart'; void main() {}",
+        "import 'package:flutter/rendering.dart'; void main() {}",
         "import 'a.dart' if (custom.feature) 'b.dart'; void main() {}",
         "import 'package:flutter/material.dart'; void main() => runApp(const UnknownWidget());",
       ]) {

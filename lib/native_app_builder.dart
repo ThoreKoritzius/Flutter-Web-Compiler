@@ -67,6 +67,16 @@ Future<NativeAppBuild> buildNativeApp(
   );
   if (foundationUri == null)
     throw StateError('Foundation runtime package could not be resolved.');
+  final servicesUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:flutter_dom_compiler/src/runtime/services_dom.dart'),
+  );
+  if (servicesUri == null)
+    throw StateError('Services runtime package could not be resolved.');
+  final widgetsUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:flutter_dom_compiler/src/runtime/widgets_dom.dart'),
+  );
+  if (widgetsUri == null)
+    throw StateError('Widgets runtime package could not be resolved.');
   const webEnvironment = {
     'dart.library.js_interop': true,
     'dart.library.html': true,
@@ -134,6 +144,10 @@ Future<NativeAppBuild> buildNativeApp(
           replacement = runtimeUri.toString();
         } else if (uri == 'package:flutter/foundation.dart') {
           replacement = foundationUri.toString();
+        } else if (uri == 'package:flutter/services.dart') {
+          replacement = servicesUri.toString();
+        } else if (uri == 'package:flutter/widgets.dart') {
+          replacement = widgetsUri.toString();
         } else if (uri.startsWith('package:flutter/') || uri == 'dart:ui') {
           unsupported('Unsupported Flutter/engine import: $uri');
         } else if (!Uri.parse(uri).hasScheme) {

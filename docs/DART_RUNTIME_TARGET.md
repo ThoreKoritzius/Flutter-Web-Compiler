@@ -29,7 +29,7 @@ transport and JSON factories run too. The browser view is built by those widget
 bodies rather than the hand-authored DOM adapter in the earlier experiment.
 
 The builder copies the reachable relative source graph to a temporary directory.
-It rewrites the URIs of supported Flutter material/foundation imports and exports
+It rewrites the URIs of supported Flutter material/widgets/foundation/services imports and exports
 to explicit compatibility libraries, selects supported web conditional branches
 and rewrites relative library URIs to copied files. It does not edit input sources
 or replace method bodies. It invokes `dart compile js -O2 -Ddart.vm.product=true
@@ -83,6 +83,10 @@ not supply missing provider wiring, platform plugins or authentication behavior.
 
 ### Bounded built-in API
 
+`package:flutter/widgets.dart` exposes the supported core widget types with the
+same identity as the material bridge. It does not export MaterialApp, Scaffold or
+ElevatedButton. This does not add IndexedStack or other undeclared Flutter APIs.
+
 - `runApp`, `MaterialApp(home:)`, `Scaffold(body:)`, nested `StatelessWidget`s.
 - One root `StatefulWidget`, optionally inside application wrappers.
 - `State.widget`, `context`, `initState`, `mounted`, synchronous `setState`
@@ -116,6 +120,35 @@ Conditional imports/exports support a fixed dart2js web environment:
 with the default used if none match. Prefixes and show/hide clauses are retained.
 Unknown conditional environments fail explicitly. Other Flutter/engine imports
 fail with project-relative source locations.
+
+The services bridge provides a bounded `MethodChannel(name)`, `MethodCall`,
+`PlatformException`, `MissingPluginException`, `invokeMethod`, `invokeListMethod`
+and `invokeMapMethod`, plus Dart typed-data exports. **No platform plugin is
+implemented or registered by default.** Unregistered calls complete with
+MissingPluginException, preserving an explicit failure path consistent with
+[Flutter's missing-handler contract](https://api.flutter.dev/flutter/services/MethodChannel/invokeMethod.html).
+
+A native implementation can register an in-process Dart handler:
+
+```dart
+import 'package:flutter_dom_compiler/runtime.dart';
+
+final unregister = registerDomMethodChannel('example/browser', (call) async {
+  if (call.method == 'supportedOperation') return 42;
+  throw UnsupportedError('Unsupported operation');
+});
+// Call unregister() when the owning service is disposed.
+```
+
+Original channel calls then invoke that explicit handler. Method names and
+arguments are preserved; result type casts and synchronous/asynchronous errors
+propagate. Duplicate channel registrations fail. Unregistration is idempotent
+and cannot remove a later registration, even if it reuses the same callback.
+It does not cancel calls already in flight. These are direct Dart calls, without
+Flutter binary codecs, native messaging, plugin discovery, inbound events or
+background isolate support. Browser/plugin implementations are application
+adapters and require their own behavior tests. Other services APIs are not
+provided and fail compilation. A missing-plugin failure is not plugin support.
 Undeclared widget classes/properties fail official compilation. Structural cases
 such as nested StatefulWidgets fail at runtime; they are not yet preflighted.
 The local graph limit is 500 libraries; dependencies outside the project through
