@@ -401,6 +401,12 @@ p, h1, h2, h3, h4, h5, h6 { margin: 0; white-space: pre-wrap; }
   align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
 button { font: inherit; border: 0; border-radius: 8px; padding: 12px 20px;
   background: #165dcc; color: white; cursor: pointer; }
+.dom-list-tile p { margin:0; }
+.dom-list-tile-title { font-weight:600; }
+.dom-list-tile-subtitle { font-size:14px; opacity:.75; margin-top:4px; }
+a.dom-list-tile { border-radius:8px; transition:background-color .12s; }
+a.dom-list-tile:hover { background:rgba(128,128,128,.12); }
+a.dom-list-tile:focus-visible { outline:2px solid currentColor; outline-offset:4px; }
 button:focus-visible { outline: 3px solid #142e54; outline-offset: 4px; }
 button:disabled { opacity: .65; cursor: wait; }
 .dom-filter { margin: 0; }

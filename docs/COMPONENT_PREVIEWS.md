@@ -188,3 +188,19 @@ statement loops and side effects fail closed. Expression-only model getter/helpe
 constraints remain unchanged. Evaluation uses the shared operation budget and
 64-level depth/recursion guard; this is compile-time interpretation, not general
 Dart-to-JavaScript logic translation.
+
+
+## Model arguments in explicit route bridges
+
+An original callback such as `() => onOpen(entry)` can use a declared model ID:
+
+```json
+{"callback":"openEntry","argument":{"model":"lib/entry.dart::Entry","field":"id"},"routes":{"one":"entries/one/"}}
+```
+
+The selector must reference a plain local immutable model and a nonnullable final
+String field. The argument must have that exact resolved model identity. Missing
+IDs/routes, nullable fields and unrelated models fail; getters and arbitrary
+selector logic are unsupported. This remains an explicit host route adapter;
+the application's callback body, repository fetch and router are not translated.
+`nativeCallbackRouteBridges` reports it separately from widget adapters.

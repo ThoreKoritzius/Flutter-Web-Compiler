@@ -335,3 +335,20 @@ original source location. Historical timing/SEO claims remain unchanged.
 These are bounded compile-time helper evaluations. Numeric method formatting,
 model-based navigation callbacks, async repositories and provider startup remain
 separate gaps; the full feature-screen compatibility claim is unchanged.
+
+
+## Numeric formatting, model routes and native list rows
+
+The suite now has **133 tests**, covering Dart numeric rounding/precision, exact
+integer-range limits, reactive formatting rejection, immutable model route IDs,
+resolved model/SDK identity, semantic list links, read-only rows, avatar SVGs,
+separators and rejection of nested interactive controls and unsupported options.
+Local helpers named round retain their own bodies; numeric dispatch does not
+replace them. Static analysis and required artifact benchmarking are checked;
+raw artifacts remain ignored under `build/activities-benchmarks/`.
+
+An original-source list component was compiled with supplied mock models and an
+explicit model-ID route bridge. Browser verification checked original formatted
+content and keyboard navigation into an existing detail preview. This remains
+component composition with host navigation, not full provider startup or an async
+detail-sheet conversion. Existing historical speed/SEO claims are unchanged.

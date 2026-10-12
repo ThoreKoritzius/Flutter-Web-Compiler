@@ -66,9 +66,16 @@ class _StaticObject {
 }
 
 class _ExternalCallback {
-  _ExternalCallback(this.name, [this.routes]);
+  _ExternalCallback(
+    this.name, [
+    this.routes,
+    this.argumentModel,
+    this.argumentField,
+  ]);
   final String name;
   final Map<String, String>? routes;
+  final String? argumentModel;
+  final String? argumentField;
 }
 
 class _NativeNavigation {
@@ -531,7 +538,13 @@ class FlutterDomCompiler {
             final args = callbackArguments!.arguments;
             if (args.length != 1 || args.single is NamedExpression)
               fail('Route callbacks require one static string argument.');
-            final argument = value(args.single);
+            var argument = value(args.single);
+            if (callback.argumentModel != null) {
+              if (argument is! _StaticObject ||
+                  argument.model != callback.argumentModel)
+                fail('Route callback requires its configured immutable model.');
+              argument = argument.fields[callback.argumentField];
+            }
             if (argument is! String || !callback.routes!.containsKey(argument))
               fail('No explicit route for callback argument $argument.');
             return _NativeNavigation(callback.routes![argument]!);
@@ -1048,6 +1061,48 @@ class FlutterDomCompiler {
       }
       if (expression is MethodInvocation &&
           expression.target != null &&
+          [
+            'round',
+            'floor',
+            'ceil',
+            'truncate',
+            'toStringAsFixed',
+          ].contains(expression.methodName.name)) {
+        final method = expression.methodName.name;
+        if (resolved != null &&
+            expression.methodName.element?.library2?.uri.toString() !=
+                'dart:core')
+          fail('Numeric methods must resolve to dart:core.', line);
+        final target = methodTarget(expression.target!);
+        final args = expression.argumentList.arguments;
+        if (target is! num ||
+            !target.isFinite ||
+            expression.typeArguments != null)
+          fail('Numeric formatting requires a finite static number.', line);
+        if (method == 'toStringAsFixed') {
+          if (args.length != 1 || args.single is NamedExpression)
+            fail('toStringAsFixed requires one static precision.', line);
+          final precision = value(args.single);
+          if (precision is! int || precision < 0 || precision > 20)
+            fail('toStringAsFixed precision must be between 0 and 20.', line);
+          return target.toStringAsFixed(precision);
+        }
+        if (args.isNotEmpty) fail('$method accepts no arguments.', line);
+        // Keep integer results within the exact cross-target numeric range.
+        if (target.abs() > 9007199254740991)
+          fail(
+            'Numeric integer conversion exceeds the exact web integer range.',
+            line,
+          );
+        return switch (method) {
+          'round' => target.round(),
+          'floor' => target.floor(),
+          'ceil' => target.ceil(),
+          _ => target.truncate(),
+        };
+      }
+      if (expression is MethodInvocation &&
+          expression.target != null &&
           staticReceiver(expression.target)) {
         final method = expression.methodName.name;
         if (['take', 'skip', 'toList', 'join'].contains(method)) {
@@ -1272,6 +1327,7 @@ class FlutterDomCompiler {
     }
 
     String padding(Object? object) {
+      if (object == 'EdgeInsets.zero') return '0';
       if (object is! _Call) fail('Expected an EdgeInsets constructor.');
       if (object.name == 'EdgeInsets.all') {
         check(object, {}, 1);
@@ -2271,6 +2327,61 @@ class FlutterDomCompiler {
             '</section>';
       }
       switch (call.name) {
+        case 'ListTile':
+          check(call, {
+            'title',
+            'subtitle',
+            'leading',
+            'trailing',
+            'contentPadding',
+            'onTap',
+          });
+          final action = n['onTap'];
+          if (action != null && action is! _NativeNavigation)
+            fail('ListTile onTap requires an explicit native route callback.');
+          final rowPadding = n['contentPadding'] == null
+              ? 'padding:12px 16px'
+              : 'padding:${padding(n['contentPadding'])}';
+          final children =
+              '${n['leading'] == null ? '' : '<span class="dom-list-tile-leading">${render(n['leading'])}</span>'}'
+              '<div style="flex:1;min-width:0"><div class="dom-list-tile-title">${render(n['title'])}</div>'
+              '${n['subtitle'] == null ? '' : '<div class="dom-list-tile-subtitle">${render(n['subtitle'])}</div>'}</div>'
+              '${n['trailing'] == null ? '' : render(n['trailing'])}';
+          if (action != null &&
+              RegExp(
+                r'<(?:a|button|input|select|textarea)\b',
+              ).hasMatch(children))
+            fail(
+              'Linked ListTile children cannot contain interactive controls.',
+            );
+          final style =
+              'display:flex;align-items:center;gap:16px;min-width:0;width:100%;box-sizing:border-box;min-height:${n['subtitle'] == null ? 56 : 72}px;$rowPadding;color:inherit;text-decoration:none';
+          if (action is _NativeNavigation) {
+            navigationLinkCount++;
+            return '<a class="dom-list-tile" style="$style" href="${_escape(action.href)}">$children</a>';
+          }
+          return '<div class="dom-list-tile" style="$style">$children</div>';
+        case 'CircleAvatar':
+          check(call, {'child', 'backgroundColor', 'radius'});
+          final radius = n['radius'] ?? 20;
+          if (radius is! num || !radius.isFinite || radius <= 0 || radius > 256)
+            fail('CircleAvatar requires a finite radius between 0 and 256.');
+          return '<span style="display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:50%;width:${pixels(radius * 2)};height:${pixels(radius * 2)};'
+              '${n['backgroundColor'] == null ? '' : 'background:${color(n['backgroundColor']).css};'}">${n['child'] == null ? '' : render(n['child'])}</span>';
+        case 'Divider':
+          check(call, {'height', 'thickness', 'color'});
+          final thickness = n['thickness'] ?? 1;
+          final height = n['height'] ?? 16;
+          if (thickness is! num ||
+              height is! num ||
+              !thickness.isFinite ||
+              !height.isFinite ||
+              thickness <= 0 ||
+              height < thickness)
+            fail(
+              'Divider requires finite positive thickness and height >= thickness.',
+            );
+          return '<div role="separator" style="width:100%;box-sizing:border-box;border-top:${pixels(thickness)} solid ${n['color'] == null ? '#596275' : color(n['color']).css};margin:${pixels((height - thickness) / 2)} 0"></div>';
         case 'TextButton':
         case 'ElevatedButton':
         case 'OutlinedButton':
@@ -2470,7 +2581,7 @@ class FlutterDomCompiler {
             fail('Only explicit MainAxisSize.min is supported.', call.line);
           }
           return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
-              '${call.name == 'Column' && cross == 'stretch' ? 'width:100%;' : ''}'
+              '${call.name == 'Column' && (cross == 'stretch' || children.any((child) => child is _Call && child.name == 'ListTile')) ? 'width:100%;' : ''}'
               'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
         case 'Align':
           check(call, {'alignment', 'child'});
@@ -2658,7 +2769,9 @@ class FlutterDomCompiler {
       }
       if (input is Map &&
           input['callback'] is String &&
-          input.keys.every((k) => ['callback', 'routes'].contains(k))) {
+          input.keys.every(
+            (k) => ['callback', 'routes', 'argument'].contains(k),
+          )) {
         final name = input['callback'] as String;
         if (!RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(name))
           fail('Invalid callback input name.');
@@ -2685,7 +2798,41 @@ class FlutterDomCompiler {
           }
           callbackRouteBridgeCount++;
         }
-        return _ExternalCallback(name, routes);
+        String? argumentModel;
+        String? argumentField;
+        if (input.containsKey('argument')) {
+          final selector = input['argument'];
+          if (routes == null ||
+              selector is! Map ||
+              selector.length != 2 ||
+              selector['model'] is! String ||
+              selector['field'] is! String)
+            fail(
+              'Model route arguments require routes and an explicit model/field selector.',
+            );
+          argumentModel =
+              resolved?.root(selector['model'] as String) ??
+              selector['model'] as String;
+          argumentField = selector['field'] as String;
+          final model = classes[argumentModel];
+          if (model == null || model.extendsClause != null)
+            fail('Route argument selector requires a plain local model.');
+          final fields = model.members.whereType<FieldDeclaration>().where(
+            (f) =>
+                !f.isStatic &&
+                f.fields.isFinal &&
+                f.fields.variables.any((v) => v.name.lexeme == argumentField),
+          );
+          if (fields.length != 1 ||
+              fields.single.fields.type is! NamedType ||
+              (fields.single.fields.type as NamedType).name2.lexeme !=
+                  'String' ||
+              (fields.single.fields.type as NamedType).question != null)
+            fail(
+              'Route argument field must be a nonnullable final String field.',
+            );
+        }
+        return _ExternalCallback(name, routes, argumentModel, argumentField);
       }
       if (input is Map && input.keys.length == 1 && input['color'] is String)
         return color(input['color']);

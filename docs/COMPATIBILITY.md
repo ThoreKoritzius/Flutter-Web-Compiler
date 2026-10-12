@@ -388,3 +388,23 @@ mutation, statement loops and asynchronous execution remain unsupported. Model
 getters and instance methods still require expression bodies at model construction.
 This interprets supported logic at compile time; it does not provide an async or
 provider runtime. See COMPONENT_PREVIEWS.md for the contract.
+
+
+### Numeric formatting and native list rows
+
+Static finite numbers support dart:core `round`, `floor`, `ceil`, `truncate` and
+`toStringAsFixed`. Integer conversion stays within the exact web integer range;
+fixed precision is a static integer from 0 to 20. Dart performs the compile-time
+formatting, preserving its rounding rules. Reactive values and custom/external
+numeric methods are unsupported.
+
+The minimal ListTile mapping accepts title, subtitle, leading, trailing,
+contentPadding and onTap. Static rows emit divs; explicitly bridged navigation
+emits native anchors, with hover/focus styling and keyboard activation. Linked
+rows reject nested interactive controls. CircleAvatar accepts a child, static
+backgroundColor and bounded radius; image avatars are unsupported. Divider
+accepts finite height/thickness and static color. These approximate Material
+geometry; selection, dense/three-line variants, Material ink effects and general
+event callbacks remain unsupported. EdgeInsets.zero and the schematic
+`directions_run_rounded` SVG icon are supported. Model callback arguments can use
+explicit ID-field route selectors as documented in COMPONENT_PREVIEWS.md.

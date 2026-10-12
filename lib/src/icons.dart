@@ -1,6 +1,8 @@
 /// Small explicit set of schematic icon shapes. These are semantic CSS/SVG
 /// approximations, not extracted Material font outlines.
 const nativeIconShapes = <String, String>{
+  'directions_run_rounded':
+      '<circle cx="15" cy="4" r="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m6 10 4-3 5 3 4 1M12 9l-3 6-5 2m5-2 5 2 3 5"/>',
   'data_usage_rounded':
       '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3a9 9 0 1 0 9 9M16 3a9 9 0 0 1 5 5"/>',
   'chevron_right_rounded':

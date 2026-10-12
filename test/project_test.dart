@@ -110,6 +110,67 @@ class Page extends StatelessWidget {
   );
 
   test(
+    'resolved model route selectors and numeric SDK methods retain identity',
+    () async {
+      final framework = File(
+        p.join(directory.path, 'framework/lib/widgets.dart'),
+      );
+      write(
+        'framework/lib/widgets.dart',
+        framework.readAsStringSync() +
+            'typedef ValueChanged<T> = void Function(T); class InkWell extends Widget { const InkWell({void Function()? onTap, required Widget child}); }',
+      );
+      write(
+        'lib/entry.dart',
+        'class Entry { const Entry(this.id); final String id; }',
+      );
+      write(
+        'lib/other.dart',
+        'class Entry { const Entry(this.id); final String id; }',
+      );
+      write('lib/main.dart', "import 'page.dart'; void main() {} ");
+      write('lib/page.dart', r"""
+import 'package:flutter/widgets.dart';
+import 'entry.dart' as a;
+import 'other.dart' as b;
+class Page extends StatelessWidget {
+ const Page({required this.onOpen}); final ValueChanged<a.Entry> onOpen;
+ Widget build(BuildContext context)=>InkWell(onTap:()=>onOpen(a.Entry('one')), child:Text('${(2.5).round()} · ${(5000/1000).toStringAsFixed(1)}'));
+}
+""");
+      final config = {
+        'root': 'Page',
+        'arguments': {
+          'onOpen': {
+            'callback': 'open',
+            'routes': {'one': 'items/one/'},
+            'argument': {'model': 'lib/entry.dart::Entry', 'field': 'id'},
+          },
+        },
+      };
+      Future<Compilation> build() => FlutterDomCompiler().compileProject(
+        directory.path,
+        p.join(directory.path, 'lib/main.dart'),
+        config,
+        domOnly: true,
+      );
+      final result = await build();
+      expect(result.html, contains('3 · 5.0'));
+      expect(
+        parse(result.html).querySelector('a')!.attributes['href'],
+        'items/one/',
+      );
+      final page = File(p.join(directory.path, 'lib/page.dart'));
+      page.writeAsStringSync(
+        page.readAsStringSync().replaceFirst(
+          "a.Entry('one')",
+          "b.Entry('one')",
+        ),
+      );
+      await expectLater(build(), throwsA(isA<CompileException>()));
+    },
+  );
+  test(
     'resolved dart:core calendar constructors preserve date field reads',
     () async {
       write('lib/page.dart', r'''
