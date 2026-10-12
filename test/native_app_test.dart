@@ -4,6 +4,101 @@ import 'package:flutter_dom_compiler/native_app_builder.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'explicit library adapters replace only selected reachable sources',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-adapter-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      final main = File('${directory.path}/lib/main.dart')
+        ..writeAsStringSync(
+          "import 'engine.dart'; void main() => print(result());",
+        );
+      final original = File('${directory.path}/lib/engine.dart')
+        ..writeAsStringSync(
+          "import 'package:flutter/rendering.dart'; int result()=>0;",
+        );
+      final bridge = File('${directory.path}/lib/native.dart')
+        ..writeAsStringSync('int result()=>42;');
+      final oldSource = original.readAsStringSync();
+      await expectLater(
+        buildNativeApp(directory.path, 'lib/main.dart'),
+        throwsUnsupportedError,
+      );
+      final app = await buildNativeApp(
+        directory.path,
+        'lib/main.dart',
+        libraryBridges: {'lib/engine.dart': bridge.path},
+      );
+      expect(app.libraryAdapters, ['lib/engine.dart']);
+      expect(original.readAsStringSync(), oldSource);
+      expect(main.readAsStringSync(), contains("import 'engine.dart'"));
+      final script = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        'global.self=global;require(process.argv[1]);',
+        script.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(run.stdout.toString().trim(), '42');
+      final bridges = File('${directory.path}/bridges.json')
+        ..writeAsStringSync('{"lib/engine.dart":"lib/native.dart"}');
+      final output = '${directory.path}/output';
+      final cli = await Process.run(Platform.resolvedExecutable, [
+        'run',
+        'bin/flutter_dom.dart',
+        'build',
+        'web',
+        '--project',
+        directory.path,
+        '--dart-runtime',
+        '--runtime-bridges',
+        bridges.path,
+        '--output',
+        output,
+      ]);
+      expect(cli.exitCode, 0, reason: '${cli.stdout}${cli.stderr}');
+      expect(
+        File('$output/report.json').readAsStringSync(),
+        contains('"nativeLibraryAdapters"'),
+      );
+      expect(
+        File('$output/report.json').readAsStringSync(),
+        contains('lib/engine.dart'),
+      );
+    },
+  );
+
+  test(
+    'invalid and unreachable adapter selections fail rather than being ignored',
+    () async {
+      final directory = Directory.systemTemp.createTempSync(
+        'native-adapter-reject-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      File(
+        '${directory.path}/lib/main.dart',
+      ).writeAsStringSync('void main() {}');
+      File(
+        '${directory.path}/lib/unused.dart',
+      ).writeAsStringSync('void unused() {}');
+      final bridge = File('${directory.path}/lib/native.dart')
+        ..writeAsStringSync('void main() {}');
+      for (final map in [
+        {'../outside.dart': bridge.path},
+        {'lib/missing.dart': bridge.path},
+        {'lib/main.dart': '${directory.path}/missing.dart'},
+        {'lib/unused.dart': bridge.path},
+      ]) {
+        await expectLater(
+          buildNativeApp(directory.path, 'lib/main.dart', libraryBridges: map),
+          throwsArgumentError,
+        );
+      }
+    },
+  );
   test('runtime CLI rejects unsupported apps before creating output', () async {
     final directory = Directory.systemTemp.createTempSync('native-cli-reject-');
     addTearDown(() => directory.deleteSync(recursive: true));

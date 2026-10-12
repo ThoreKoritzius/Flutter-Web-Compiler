@@ -9,18 +9,51 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:path/path.dart' as p;
 
 class NativeAppBuild {
-  NativeAppBuild(this.javascript, this.libraries);
+  NativeAppBuild(this.javascript, this.libraries, this.libraryAdapters);
   final String javascript;
   final int libraries;
+  final List<String> libraryAdapters;
 }
 
 /// Copies a local source graph and substitutes bounded Flutter API imports.
-/// Original widget, lifecycle, repository and model bodies remain unchanged.
+/// Unadapted widget, lifecycle, repository and model bodies remain unchanged.
+/// Selected library bridges are explicit replacements, reported separately.
 /// All unsupported APIs are left to the official compiler to reject.
-Future<NativeAppBuild> buildNativeApp(String project, String source) async {
+Future<NativeAppBuild> buildNativeApp(
+  String project,
+  String source, {
+  Map<String, String> libraryBridges = const {},
+}) async {
   final root = Directory(project).resolveSymbolicLinksSync();
   final entry = File(p.join(root, source));
   if (!entry.existsSync()) throw ArgumentError('Native app entry is missing.');
+  if (libraryBridges.length > 50)
+    throw ArgumentError('At most 50 library bridges are supported.');
+  final bridges = <String, File>{};
+  for (final item in libraryBridges.entries) {
+    if (p.isAbsolute(item.key) ||
+        p.normalize(item.key) != item.key ||
+        item.key.split(p.separator).contains('..')) {
+      throw ArgumentError(
+        'Bridge keys must be normalized project-relative library paths.',
+      );
+    }
+    final original = File(p.join(root, item.key));
+    if (!original.existsSync() ||
+        !p.isWithin(root, original.resolveSymbolicLinksSync())) {
+      throw ArgumentError(
+        'Bridge source must be an existing project-local library.',
+      );
+    }
+    final bridge = File(item.value);
+    if (!bridge.existsSync())
+      throw ArgumentError('Bridge implementation does not exist.');
+    final identity = original.resolveSymbolicLinksSync();
+    if (bridges.containsKey(identity))
+      throw ArgumentError('Duplicate bridge source identity.');
+    bridges[identity] = bridge;
+  }
+  final usedBridges = <String>[];
   final temporary = Directory.systemTemp.createTempSync('flutter-dom-runtime-');
   final seen = <String, String>{};
   // Resolve the package library rather than depending on the caller's cwd.
@@ -57,7 +90,10 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
         p.relative(path, from: root),
       );
       seen[path] = destination;
-      final text = input.readAsStringSync();
+      final implementation = bridges[path] ?? input;
+      if (bridges.containsKey(path))
+        usedBridges.add(p.relative(path, from: root));
+      final text = implementation.readAsStringSync();
       final parsed = parseString(content: text, throwIfDiagnostics: false);
       if (parsed.errors.isNotEmpty)
         throw ArgumentError('Native source contains parser errors.');
@@ -102,7 +138,14 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
           unsupported('Unsupported Flutter/engine import: $uri');
         } else if (!Uri.parse(uri).hasScheme) {
           replacement = Uri.file(
-            copy(File(p.join(p.dirname(path), uri))),
+            copy(
+              File(
+                p.join(
+                  p.dirname(implementation.resolveSymbolicLinksSync()),
+                  uri,
+                ),
+              ),
+            ),
           ).toString();
         }
         if (replacement != null)
@@ -123,6 +166,10 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
     }
 
     final generated = copy(entry);
+    if (usedBridges.length != bridges.length)
+      throw ArgumentError(
+        'A configured library bridge was not reachable from this entry.',
+      );
     final output = p.join(temporary.path, 'app.js');
     final packages = File(p.join(root, '.dart_tool/package_config.json'));
     final result = await Process.run(Platform.resolvedExecutable, [
@@ -140,7 +187,11 @@ Future<NativeAppBuild> buildNativeApp(String project, String source) async {
       throw StateError(
         'Official Dart compilation failed:\n${result.stdout}${result.stderr}',
       );
-    return NativeAppBuild(File(output).readAsStringSync(), seen.length);
+    return NativeAppBuild(
+      File(output).readAsStringSync(),
+      seen.length,
+      List.unmodifiable(usedBridges),
+    );
   } finally {
     temporary.deleteSync(recursive: true);
   }

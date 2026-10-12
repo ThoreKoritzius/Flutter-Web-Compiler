@@ -1,5 +1,12 @@
 # Prototype verification
 
+## Explicit runtime library adapters (2026-10-12)
+
+The full suite has 163 passing tests and analysis is clean. Adapter tests compile
+and execute an explicit replacement, verify CLI report attribution, preserve
+original source files and reject missing, invalid and unreachable mappings.
+These are declared replacements, not automatic translation of library internals.
+
 ## Foundation and web dependency branches (2026-10-12)
 
 The full suite has 161 passing tests and analysis is clean. Focused tests cover

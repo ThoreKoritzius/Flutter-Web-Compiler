@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add explicit `--runtime-bridges` library replacements for engine-dependent components; validate reachable mappings, preserve source files and report adapters separately from original libraries.
+
 - Add a bounded foundation bridge for web/release flags, compute and explicit console logging; select fixed web conditional import/export branches and report unsupported dependency source locations.
 
 - Add an experimental `--dart-runtime` build target that copies local sources, substitutes a bounded Flutter material API and compiles original lifecycle/request/build methods with dart2js; verify live requests, stale-response guards and retry.

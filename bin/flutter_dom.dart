@@ -48,6 +48,11 @@ Future<void> main(List<String> arguments) async {
       negatable: false,
       help: 'Experimental official Dart compiler + bounded DOM widget runtime.',
     )
+    ..addOption(
+      'runtime-bridges',
+      help:
+          'Explicit library bridge JSON file relative to current directory; requires --dart-runtime.',
+    )
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
@@ -75,7 +80,29 @@ Future<void> main(List<String> arguments) async {
         );
       }
       stdout.writeln('\nFlutter DOM  Compiling experimental Dart runtime…');
-      final app = await buildNativeApp(project, args['source'] as String);
+      final bridges = <String, String>{};
+      if (args.wasParsed('runtime-bridges')) {
+        final file = File(p.absolute(args['runtime-bridges'] as String));
+        final decoded = jsonDecode(file.readAsStringSync());
+        if (decoded is! Map ||
+            decoded.entries.any(
+              (e) => e.key is! String || e.value is! String,
+            )) {
+          throw ArgumentError(
+            'Runtime bridges must be a JSON object mapping source paths to Dart files.',
+          );
+        }
+        for (final item in decoded.entries) {
+          bridges[item.key as String] = p.normalize(
+            p.join(file.parent.path, item.value as String),
+          );
+        }
+      }
+      final app = await buildNativeApp(
+        project,
+        args['source'] as String,
+        libraryBridges: bridges,
+      );
       final output = Directory(p.absolute(args['output'] as String))
         ..createSync(recursive: true);
       File(p.join(output.path, 'app.js')).writeAsStringSync(app.javascript);
@@ -86,16 +113,19 @@ Future<void> main(List<String> arguments) async {
           'logicCompiler': 'dart2js',
           'viewBackend': 'bounded-dom-compatibility-layer',
           'sourceLibraries': app.libraries,
+          'nativeLibraryAdapters': app.libraryAdapters,
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
           'stateLifecycle': 'root-only-replace-view',
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Official Dart logic · ${app.libraries} original libraries · bounded DOM API\n  Experimental: root state only; no provider integration or retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} explicit library adapters\n  Experimental: root state only; no provider integration or retained-view reconciliation.',
       );
       return;
     }
+    if (args.wasParsed('runtime-bridges'))
+      throw ArgumentError('--runtime-bridges requires --dart-runtime.');
     if (args.wasParsed('config') && !configFile.existsSync())
       throw ArgumentError('Configuration not found: ${configFile.path}');
     var config = configFile.existsSync()

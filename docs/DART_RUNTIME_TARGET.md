@@ -44,6 +44,45 @@ be measured separately from existing static benchmarks.
 
 ## Supported contract
 
+### Explicit library adapters
+
+For a component that requires Flutter's engine, an application can deliberately
+select a different native implementation. This replaces the entire selected
+library; it is **not translation of its original internals**. It must provide
+the public API required by its consumers, which the official compiler checks.
+Never use this to silently report unsupported behavior as converted.
+
+```sh
+flutter_dom build web --dart-runtime --runtime-bridges runtime-bridges.json
+```
+
+Example `runtime-bridges.json`:
+
+```json
+{"lib/widgets/animated_mark.dart":"native/animated_mark.dart"}
+```
+
+Keys are normalized project-relative paths to existing source libraries. Values
+are replacement Dart files relative to the JSON file, or absolute paths. The
+JSON file itself is relative to the CLI working directory. Implementations may
+live outside the application; any relative dependencies they import must still
+be project-local. Use supported Flutter material/foundation APIs or pure Dart.
+Input sources stay untouched. Built-in API bridges remain separate from these
+application-selected library replacements.
+
+Invalid, missing, duplicate source identities and unreachable mappings fail;
+there is a 50-adapter limit. `--runtime-bridges` requires `--dart-runtime` and
+works independently of static preview configuration. Reports list replaced
+project-relative libraries under `nativeLibraryAdapters`, and CLI output shows
+the count. These adapters are not included in any automatic conversion claim.
+Private implementations and mapping files should remain outside tracked source.
+
+The adapter tests execute an explicit replacement through dart2js, verify report
+attribution and confirm original files remain unchanged. A library adapter does
+not supply missing provider wiring, platform plugins or authentication behavior.
+
+### Bounded built-in API
+
 - `runApp`, `MaterialApp(home:)`, `Scaffold(body:)`, nested `StatelessWidget`s.
 - One root `StatefulWidget`, optionally inside application wrappers.
 - `State.widget`, `context`, `initState`, `mounted`, synchronous `setState`
