@@ -401,6 +401,7 @@ p, h1, h2, h3, h4, h5, h6 { margin: 0; white-space: pre-wrap; }
   align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
 button { font: inherit; border: 0; border-radius: 8px; padding: 12px 20px;
   background: #165dcc; color: white; cursor: pointer; }
+.dom-column:has(> .dom-row-max) { width:100%; }
 .dom-list-tile p { margin:0; }
 .dom-list-tile-title { font-weight:600; }
 .dom-list-tile-subtitle { font-size:14px; opacity:.75; margin-top:4px; }

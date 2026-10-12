@@ -408,3 +408,22 @@ geometry; selection, dense/three-line variants, Material ink effects and general
 event callbacks remain unsupported. EdgeInsets.zero and the schematic
 `directions_run_rounded` SVG icon are supported. Model callback arguments can use
 explicit ID-field route selectors as documented in COMPONENT_PREVIEWS.md.
+
+
+### Static reductions and determinate bars
+
+Bounded static list `fold` accepts an inline two-parameter synchronous expression
+reducer and scalar seed/result. Captured static values and immutable model reads
+work; reactive results, callback mutations, async/block reducers and arbitrary
+higher-order function calls remain unsupported. List expansion and the shared
+operation budget limit work. `num.clamp` supports static finite ordered bounds.
+
+`LinearProgressIndicator` accepts a static value from 0 to 1, positive minHeight,
+static colors and optional source-provided semanticsLabel/semanticsValue. It emits
+DOM bars with progressbar values; indeterminate animation and additional Material
+options are rejected. `ClipRRect` supports an explicit circular radius and maps
+to CSS clipping. This is a native mapping of Flutter bar widgets, not an adapter
+for arbitrary chart packages. Rows with default maximum main-axis size fill their
+CSS parent; explicit MainAxisSize.min retains intrinsic width. Columns containing
+these rows propagate width through a CSS :has rule. Layout remains approximate,
+including unconstrained/intrinsic Flutter layouts.

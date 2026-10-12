@@ -171,6 +171,28 @@ class Page extends StatelessWidget {
     },
   );
   test(
+    'resolved static fold reads imported immutable models and SDK clamp',
+    () async {
+      write(
+        'lib/entry.dart',
+        'class Entry { const Entry(this.value); final double value; }',
+      );
+      write('lib/page.dart', r"""
+import 'package:flutter/widgets.dart';
+import 'entry.dart' as m;
+class Page extends StatelessWidget {
+ const Page();
+ Widget build(BuildContext context) {
+  final values=[m.Entry(20),m.Entry(5)];
+  final peak=values.fold<double>(0,(peak,item)=>item.value>peak?item.value:peak);
+  return Text('${peak.clamp(0.0,10.0).toStringAsFixed(1)}');
+ }
+}
+""");
+      expect((await compile()).html, contains('10.0'));
+    },
+  );
+  test(
     'resolved dart:core calendar constructors preserve date field reads',
     () async {
       write('lib/page.dart', r'''

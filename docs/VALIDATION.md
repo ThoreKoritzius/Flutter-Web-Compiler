@@ -352,3 +352,21 @@ explicit model-ID route bridge. Browser verification checked original formatted
 content and keyboard navigation into an existing detail preview. This remains
 component composition with host navigation, not full provider startup or an async
 detail-sheet conversion. Existing historical speed/SEO claims are unchanged.
+
+
+## Static reductions and native proportional bars
+
+All **141 tests** pass and `dart analyze` is clean. Added tests cover bounded folds,
+empty seeds, captured static values, reducer parameter scope/type coercion,
+mutation/async/block rejection, reactive result rejection and resolved SDK/model
+identity. Native progress tests verify determinate values, source-provided
+accessible labels, clipping, and rejected invalid/indeterminate options.
+The required artifact benchmark passes under ignored `build/sport-benchmarks/`;
+historical performance/SEO claims remain unchanged.
+
+An original source summary and its original bar widget compile with supplied mock
+models and an explicit original palette snapshot. Browser verification showed
+three native bars in a narrow layout; generated semantic values match calculated
+ratios. No widget adapters or Flutter island are used for this component. The
+preview host still composes components around supplied data; provider loading,
+async startup, arbitrary chart packages and live chart state remain unsupported.

@@ -227,6 +227,7 @@ class FlutterDomCompiler {
           topFunctions[declaration.name.lexeme] = declaration;
       }
     }
+    late void Function(TypeAnnotation?, Object?, String) validateStaticInput;
     var helperCount = 0;
     var externalCallbackCount = 0;
     var callbackRouteBridgeCount = 0;
@@ -1061,6 +1062,30 @@ class FlutterDomCompiler {
       }
       if (expression is MethodInvocation &&
           expression.target != null &&
+          expression.methodName.name == 'clamp') {
+        if (resolved != null &&
+            expression.methodName.element?.library2?.uri.toString() !=
+                'dart:core')
+          fail('Numeric clamp must resolve to dart:core.', line);
+        final target = methodTarget(expression.target!);
+        final args = expression.argumentList.arguments;
+        if (target is! num ||
+            !target.isFinite ||
+            args.length != 2 ||
+            args.any((a) => a is NamedExpression) ||
+            expression.typeArguments != null)
+          fail('clamp requires a static finite number and two bounds.', line);
+        final lower = value(args[0]), upper = value(args[1]);
+        if (lower is! num ||
+            upper is! num ||
+            !lower.isFinite ||
+            !upper.isFinite ||
+            lower > upper)
+          fail('clamp bounds must be finite and ordered.', line);
+        return target.clamp(lower, upper);
+      }
+      if (expression is MethodInvocation &&
+          expression.target != null &&
           [
             'round',
             'floor',
@@ -1105,6 +1130,104 @@ class FlutterDomCompiler {
           expression.target != null &&
           staticReceiver(expression.target)) {
         final method = expression.methodName.name;
+        if (method == 'fold') {
+          if (resolved != null &&
+              expression.methodName.element?.library2?.uri.toString() !=
+                  'dart:core')
+            fail('Static fold must resolve to dart:core.', line);
+          final input = methodTarget(expression.target!);
+          final args = expression.argumentList.arguments;
+          if (input is! List ||
+              input.length > 20000 ||
+              args.length != 2 ||
+              args.first is NamedExpression ||
+              args.last is! FunctionExpression)
+            fail(
+              'Static fold requires a bounded list, seed and inline expression reducer.',
+              line,
+            );
+          final reducer = args.last as FunctionExpression;
+          final params = reducer.parameters?.parameters;
+          final body = reducer.body;
+          if (body is! ExpressionFunctionBody ||
+              body.isAsynchronous ||
+              reducer.typeParameters != null ||
+              params?.length != 2 ||
+              params!.any((p) => p is! SimpleFormalParameter || p.name == null))
+            fail(
+              'Static fold reducers require two simple parameters and a synchronous expression.',
+              line,
+            );
+          final names = params.map((p) => p.name!.lexeme).toList();
+          if (names[0] == names[1])
+            fail('Fold reducer parameters must be distinct.');
+          final types = expression.typeArguments?.arguments;
+          if (types != null &&
+              (types.length != 1 ||
+                  types.single is! NamedType ||
+                  ![
+                    'String',
+                    'int',
+                    'double',
+                    'num',
+                    'bool',
+                  ].contains((types.single as NamedType).name2.lexeme)))
+            fail('Fold supports a single primitive result type.');
+          bool scalar(Object? v) =>
+              v == null || v is String || v is bool || v is num && v.isFinite;
+          Object? accumulator = value(args.first);
+          void checkAccumulator() {
+            if (!scalar(accumulator))
+              fail('Fold accumulator must be a finite static scalar.');
+            if (types != null) {
+              validateStaticInput(types.single, accumulator, 'Fold result');
+              if ((types.single as NamedType).name2.lexeme == 'double' &&
+                  accumulator is num)
+                accumulator = (accumulator as num).toDouble();
+            }
+          }
+
+          checkAccumulator();
+          final previous = scope;
+          final previousState = evaluatingState;
+          evaluatingState = false;
+          try {
+            for (final item in input) {
+              if (--evaluationBudget < 0)
+                fail('Static evaluation budget exceeded.', line);
+              validateStaticInput(
+                (params[0] as SimpleFormalParameter).type,
+                accumulator,
+                'Fold accumulator parameter',
+              );
+              validateStaticInput(
+                (params[1] as SimpleFormalParameter).type,
+                item,
+                'Fold item parameter',
+              );
+              Object? parameterValue(int index, Object? input) {
+                final type = (params[index] as SimpleFormalParameter).type;
+                return type is NamedType &&
+                        type.name2.lexeme == 'double' &&
+                        input is num
+                    ? input.toDouble()
+                    : input;
+              }
+
+              scope = {
+                ...previous,
+                names[0]: parameterValue(0, accumulator),
+                names[1]: parameterValue(1, item),
+              };
+              accumulator = value(body.expression);
+              checkAccumulator();
+            }
+          } finally {
+            scope = previous;
+            evaluatingState = previousState;
+          }
+          return accumulator;
+        }
         if (['take', 'skip', 'toList', 'join'].contains(method)) {
           final target = methodTarget(expression.target!);
           if (target is! List) fail('Static $method requires a list.', line);
@@ -1426,6 +1549,8 @@ class FlutterDomCompiler {
           (input is! _StaticObject || input.model != identity))
         fail('$label requires model ${annotation.toSource()}.');
     }
+
+    validateStaticInput = validateInput;
 
     bindPattern = (guarded, input) {
       if (input is ReactiveValue) fail('Pattern inputs must be static.');
@@ -2327,6 +2452,46 @@ class FlutterDomCompiler {
             '</section>';
       }
       switch (call.name) {
+        case 'ClipRRect':
+          check(call, {'child', 'borderRadius'});
+          final radius = n['borderRadius'];
+          if (radius is! _Call || radius.name != 'BorderRadius.circular')
+            fail('ClipRRect supports an explicit circular border radius only.');
+          check(radius, {}, 1);
+          return '<div style="width:100%;overflow:hidden;border-radius:${pixels(radius.positional.single)}">${render(n['child'])}</div>';
+        case 'LinearProgressIndicator':
+          check(call, {
+            'value',
+            'minHeight',
+            'backgroundColor',
+            'color',
+            'semanticsLabel',
+            'semanticsValue',
+          });
+          final fraction = n['value'];
+          final height = n['minHeight'] ?? 4;
+          if (fraction is! num ||
+              !fraction.isFinite ||
+              fraction < 0 ||
+              fraction > 1 ||
+              height is! num ||
+              !height.isFinite ||
+              height <= 0)
+            fail(
+              'Progress indicators require a static fraction 0–1 and positive height.',
+            );
+          for (final key in ['semanticsLabel', 'semanticsValue']) {
+            if (n[key] != null && n[key] is! String)
+              fail('Progress semantics must be static strings.');
+          }
+          final track = n['backgroundColor'] == null
+              ? '#273144'
+              : color(n['backgroundColor']).css;
+          final fill = n['color'] == null ? '#8b9dff' : color(n['color']).css;
+          return '<div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${fraction * 100}"'
+              '${n['semanticsLabel'] == null ? '' : ' aria-label="${_escape(n['semanticsLabel'] as String)}"'}'
+              '${n['semanticsValue'] == null ? '' : ' aria-valuetext="${_escape(n['semanticsValue'] as String)}"'}'
+              ' style="width:100%;height:${pixels(height)};background:$track"><div style="width:${fraction * 100}%;height:100%;background:$fill"></div></div>';
         case 'ListTile':
           check(call, {
             'title',
@@ -2580,8 +2745,13 @@ class FlutterDomCompiler {
               n['mainAxisSize'] != 'MainAxisSize.min') {
             fail('Only explicit MainAxisSize.min is supported.', call.line);
           }
-          return '<div style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
+          return '<div class="${call.name == 'Column'
+                  ? 'dom-column'
+                  : n['mainAxisSize'] == null
+                  ? 'dom-row-max'
+                  : 'dom-row-min'}" style="display:flex;flex-direction:${call.name == 'Column' ? 'column' : 'row'};'
               '${call.name == 'Column' && (cross == 'stretch' || children.any((child) => child is _Call && child.name == 'ListTile')) ? 'width:100%;' : ''}'
+              '${call.name == 'Row' && n['mainAxisSize'] == null ? 'width:100%;' : ''}'
               'align-items:$cross;justify-content:$main">${children.map(render).join()}</div>';
         case 'Align':
           check(call, {'alignment', 'child'});

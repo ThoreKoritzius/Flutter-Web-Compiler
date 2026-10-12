@@ -204,3 +204,19 @@ IDs/routes, nullable fields and unrelated models fail; getters and arbitrary
 selector logic are unsupported. This remains an explicit host route adapter;
 the application's callback body, repository fetch and router are not translated.
 `nativeCallbackRouteBridges` reports it separately from widget adapters.
+
+
+## Bounded list reductions
+
+Static lists support `fold(seed, (accumulator, item) => expression)` with two
+simple parameters and a synchronous expression reducer. An optional primitive
+result type is validated at each step; explicit double parameters use Dart's
+numeric coercion. The accumulator is a finite primitive scalar, and reducers can
+read supplied immutable model fields and captured static values. Seed handling,
+loop scope restoration and the shared operation budget are preserved.
+
+Reducers are interpreted at compile time. Async/block reducers, mutations,
+reactive results, widget results and arbitrary higher-order calls remain
+unsupported. Numeric `clamp` requires finite ordered bounds and a static finite
+receiver. This enables original summary calculations; it does not add a live data
+aggregation or state runtime.
