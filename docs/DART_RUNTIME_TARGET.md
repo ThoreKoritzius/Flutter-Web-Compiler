@@ -176,3 +176,28 @@ authenticated browser transport. The source graph still needs package extraction
 support. Evaluate Jaspr as the component backend against
 these same fixtures before extending this minimal compatibility layer broadly.
 The [logic architecture](LOGIC_RUNTIME.md) describes production release gates.
+
+## Executable GraphQL boundary
+
+`package:flutter_dom_compiler/browser_runtime.dart` exposes an explicit browser
+transport, separate from Flutter service replacements:
+
+```dart
+final client = GraphqlClient(BrowserGraphqlTransport('/api/graphql'));
+final data = await client.query(document, variables: {'limit': 10});
+// Feed data into the original Dart model factories.
+```
+
+`GraphqlClient` accepts an injectable `GraphqlTransport`, encodes documents and
+variables as JSON, checks HTTP status, rejects GraphQL errors (including partial
+data), and returns the `data` map. Failure messages exclude server payloads.
+The browser transport accepts only root-relative endpoints, uses same-origin
+credentials, rejects redirects, and aborts fetch on timeout across headers and
+body consumption. It does not implement tokens, CSRF headers, session refresh,
+automatic retry, subscriptions, uploads, persisted queries or a response-size
+limit. A `query` call does not inspect GraphQL syntax to prohibit mutations;
+read-only policies belong to the application adapter/server.
+
+Existing service classes must still be explicitly adapted to this interface;
+importing this library does not automatically port a networking package. These
+are experimental primitives, not evidence of production authentication parity.

@@ -4,3 +4,4 @@ library;
 export 'src/runtime/async_resource.dart';
 export 'src/runtime/services_dom.dart'
     show registerDomMethodChannel, DomMethodHandler;
+export 'src/runtime/graphql_client.dart';

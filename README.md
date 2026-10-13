@@ -101,7 +101,10 @@ original root StatefulWidget lifecycle, async request and build methods through
 dart2js and a bounded DOM compatibility API. Run
 `dart run tool/logic_demo.dart --native-app` for the shared-source fixture.
 [Supported API and limitations](docs/DART_RUNTIME_TARGET.md) include root-only
-state, DOM replacement on updates and no provider integration.
+state, DOM replacement on updates and no provider integration. An explicit
+[GraphQL transport](docs/DART_RUNTIME_TARGET.md#executable-graphql-boundary)
+executes browser POST requests with response validation and aborting timeouts;
+authentication/session behavior still requires an application adapter.
 
 ## Compared with Flutter Web
 

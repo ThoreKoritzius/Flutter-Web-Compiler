@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an explicit GraphQL JSON client and browser POST transport with same-origin endpoints, strict response handling and aborting timeouts; verify compiled output against real HTTP.
+
 - Add bounded services imports with explicit in-process method-channel registration, missing-plugin failures, typed results and safe unregistration; expose supported core widgets through a restricted widgets import.
 
 - Add explicit `--runtime-bridges` library replacements for engine-dependent components; validate reachable mappings, preserve source files and report adapters separately from original libraries.

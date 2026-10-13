@@ -1,5 +1,18 @@
 # Prototype verification
 
+## Executable GraphQL transport (2026-10-13)
+
+The full suite has 177 passing tests and analysis is clean. Protocol tests check
+JSON document/variable encoding, HTTP failures, malformed envelopes, missing data
+and rejection of partial responses with GraphQL errors. Official dart2js output
+executes real POST requests against a local HTTP server, checks credentials and
+redirect policy, rejects invalid endpoints and cancels a slow response body.
+This Node/fetch integration test is not a browser compatibility certification.
+
+The transport is explicitly integrated by applications; it does not replace
+arbitrary Flutter networking packages, session refresh or provider startup.
+
+
 ## Bounded services and core-widget imports (2026-10-12)
 
 The full suite has 169 passing tests and analysis is clean. Services tests cover
