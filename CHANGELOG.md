@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add scoped native runtime themes, typed text styles, padding, flexible rows and rounded cards; verify compiled state updates and reject unsupported icon painting explicitly.
+
 - Compile the native runtime in dart2js CSP mode and document same-origin hosting for authenticated request slices.
 
 - Add explicit package URI adapters and native `--dart-define` configuration with attribution and strict validation; expose foundation typed-data exports and official testing annotations.

@@ -212,9 +212,21 @@ include visual registries without replacing their business logic. Annotation
 exports resolve to the compiler's official `meta` package even when the input
 project has no package configuration.
 
-These declarations do not provide Flutter painting or theme inheritance.
-`Theme.of`, `ThemeData.extension` and `Color.lerp` throw explicit
-`UnsupportedError`s when executed. No icon font is loaded or rendered. Color
+The bounded runtime now carries explicit `ThemeData` through `MaterialApp`,
+`Theme` and descendant stateless builds. Root `State.context` receives the same
+theme during initialization and subsequent builds. `ThemeData.extension<T>()`
+returns a registered extension or null; it does not synthesize one.
+
+Supported styling includes declared `TextStyle` fields, a small `TextTheme` and
+`ColorScheme`, `Padding`/`EdgeInsets`, `Expanded` inside a Row or Column, and
+`Card` with rounded borders and an explicit color. Text, spacing and borders
+become CSS; implicit runtime gaps no longer alter Flutter-authored layouts.
+Dimensions must be finite and nonnegative. This is a CSS layout approximation,
+not Flutter constraint/layout parity. Generated Material color schemes, full
+application themes, elevation, icon painting and general decorations remain
+unsupported. Icons fail explicitly if rendered. `Color.withValues(alpha:)`
+supports bounded sRGB alpha; `Color.lerp` still throws `UnsupportedError`.
+No icon font is loaded or rendered. Color
 values preserve the low 32 bits and expose integer ARGB channels; floating-point
 color spaces and general Flutter Color methods are outside this subset. The
 supported icon constants are listed in

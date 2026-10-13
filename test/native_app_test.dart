@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 
 void main() {
   test(
-    'metadata dependencies compile without silently resolving ambient themes',
+    'metadata dependencies compile and missing theme extensions return null',
     () async {
       final directory = Directory.systemTemp.createTempSync('native-metadata-');
       addTearDown(() => directory.deleteSync(recursive: true));
@@ -25,8 +25,8 @@ void main() {
   print(palette.copyWith().color.red);
   print(Icons.favorite_rounded.fontFamily);
   print(Icons.favorite_rounded.codePoint);
-  try { Theme.of(const BuildContext()).extension<Palette>(); }
-  on UnsupportedError { print('unsupported ambient theme'); }
+  print(Theme.of(const BuildContext()).extension<Palette>() == null);
+  print(Theme.of(const BuildContext(theme: ThemeData(extensions: [palette]))).extension<Palette>()!.color.red);
   try { palette.lerp(palette, .5); }
   on UnsupportedError { print('unsupported interpolation'); }
 }
@@ -44,7 +44,8 @@ void main() {
         '18',
         'MaterialIcons',
         '${0xf738}',
-        'unsupported ambient theme',
+        'true',
+        '18',
         'unsupported interpolation',
       ]);
     },

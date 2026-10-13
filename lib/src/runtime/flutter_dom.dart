@@ -6,6 +6,10 @@ export 'foundation_dom.dart';
 export 'services_dom.dart';
 export 'visual_metadata.dart';
 export 'material_icons_metadata.dart';
+export 'material_style.dart';
+
+import 'material_style.dart';
+import 'visual_metadata.dart';
 
 import 'dart:async';
 import 'dart:js_interop';
@@ -24,15 +28,11 @@ extension type _Element(JSObject _) implements JSObject {
   external void addEventListener(String event, JSFunction listener);
 }
 
-/// Ambient theme resolution is deliberately unsupported in this target.
-abstract final class Theme {
-  static ThemeData of(BuildContext context) =>
-      throw UnsupportedError('Ambient Theme lookup is not supported.');
-}
-
-class ThemeData {
-  T? extension<T>() =>
-      throw UnsupportedError('Ambient Theme extensions are not supported.');
+class Theme extends Widget {
+  const Theme({required this.data, required this.child, super.key});
+  final ThemeData data;
+  final Widget child;
+  static ThemeData of(BuildContext context) => context.theme;
 }
 
 class Key {
@@ -41,7 +41,8 @@ class Key {
 }
 
 class BuildContext {
-  const BuildContext();
+  const BuildContext({this.theme = const ThemeData()});
+  final ThemeData theme;
 }
 
 /// Extension point for one root scope around the bounded stateful entry.
@@ -76,7 +77,8 @@ abstract class State<T extends StatefulWidget> {
   late T widget;
   bool _mounted = false;
   bool get mounted => _mounted;
-  final context = const BuildContext();
+  BuildContext _context = const BuildContext();
+  BuildContext get context => _context;
   void Function()? _invalidate;
   void initState() {}
   void dispose() {}
@@ -89,8 +91,36 @@ abstract class State<T extends StatefulWidget> {
 }
 
 class Text extends Widget {
-  const Text(this.data, {super.key});
+  const Text(this.data, {this.style, super.key});
   final String data;
+  final TextStyle? style;
+}
+
+class Padding extends Widget {
+  const Padding({required this.padding, required this.child, super.key});
+  final EdgeInsets padding;
+  final Widget child;
+}
+
+class Expanded extends Widget {
+  const Expanded({required this.child, this.flex = 1, super.key});
+  final Widget child;
+  final int flex;
+}
+
+class Card extends Widget {
+  const Card({required this.child, this.shape, this.color, super.key});
+  final Widget child;
+  final RoundedRectangleBorder? shape;
+  final Color? color;
+}
+
+/// Metadata compiles, but icon painting remains unsupported.
+class Icon extends Widget {
+  const Icon(this.icon, {this.size, this.color, super.key});
+  final IconData? icon;
+  final double? size;
+  final Color? color;
 }
 
 enum CrossAxisAlignment { start, center, end, stretch }
@@ -106,8 +136,13 @@ class Column extends Widget {
 }
 
 class Row extends Widget {
-  const Row({required this.children, super.key});
+  const Row({
+    required this.children,
+    this.crossAxisAlignment = CrossAxisAlignment.center,
+    super.key,
+  });
   final List<Widget> children;
+  final CrossAxisAlignment crossAxisAlignment;
 }
 
 class SizedBox extends Widget {
@@ -128,8 +163,9 @@ class ElevatedButton extends Widget {
 }
 
 class MaterialApp extends Widget {
-  const MaterialApp({required this.home, super.key});
+  const MaterialApp({required this.home, this.theme, super.key});
   final Widget home;
+  final ThemeData? theme;
 }
 
 class Scaffold extends Widget {
@@ -145,6 +181,7 @@ class DomMount {
   State? _state;
   void Function()? _disposeScope;
   Widget? _root;
+  BuildContext _context = const BuildContext();
   bool _disposed = false;
   bool _scheduled = false;
   int _renderGeneration = 0;
@@ -167,26 +204,48 @@ class DomMount {
     lifecycle?.beginDomBuild();
     late Widget built;
     try {
-      built = state?.build(const BuildContext()) ?? _root!;
+      built = state?.build(state.context) ?? _root!;
     } finally {
       lifecycle?.endDomBuild();
     }
-    final node = _node(built, generation);
+    final node = _node(built, generation, _context);
     _host.replaceChildren();
     _host.appendChild(node);
   }
 
-  _Element _node(Widget widget, int generation) {
+  _Element _node(
+    Widget widget,
+    int generation,
+    BuildContext context, {
+    bool flexChild = false,
+  }) {
     if (widget.key != null)
       throw UnsupportedError(
         'Widget keys are not supported by the root-only runtime.',
       );
     if (widget is StatelessWidget)
-      return _node(widget.build(const BuildContext()), generation);
+      return _node(
+        widget.build(context),
+        generation,
+        context,
+        flexChild: flexChild,
+      );
     if (widget is StatefulWidget)
       throw UnsupportedError('Only a root StatefulWidget is supported.');
-    if (widget is MaterialApp) return _node(widget.home, generation);
-    if (widget is Scaffold) return _node(widget.body, generation);
+    if (widget is Theme)
+      return _node(
+        widget.child,
+        generation,
+        BuildContext(theme: widget.data),
+        flexChild: flexChild,
+      );
+    if (widget is MaterialApp)
+      return _node(
+        widget.home,
+        generation,
+        BuildContext(theme: widget.theme ?? context.theme),
+      );
+    if (widget is Scaffold) return _node(widget.body, generation, context);
     final node = _document.createElement(
       widget is ElevatedButton
           ? 'button'
@@ -196,6 +255,34 @@ class DomMount {
     );
     if (widget is Text) {
       node.textContent = widget.data;
+      node.setAttribute(
+        'style',
+        'margin:0;color:${colorCss(context.theme.colorScheme.onSurface)};${textStyleCss(context.theme.textTheme.bodyMedium)}${textStyleCss(widget.style)}',
+      );
+    } else if (widget is Padding) {
+      final p = widget.padding;
+      node.setAttribute(
+        'style',
+        'box-sizing:border-box;padding:${checkedDimension(p.top)}px ${checkedDimension(p.right)}px ${checkedDimension(p.bottom)}px ${checkedDimension(p.left)}px;',
+      );
+      node.appendChild(_node(widget.child, generation, context));
+    } else if (widget is Expanded) {
+      if (!flexChild)
+        throw UnsupportedError('Expanded requires a Row or Column parent.');
+      if (widget.flex < 1)
+        throw ArgumentError('Expanded flex must be positive.');
+      node.setAttribute(
+        'style',
+        'flex:${widget.flex} 1 0;min-width:0;min-height:0;',
+      );
+      node.appendChild(_node(widget.child, generation, context));
+    } else if (widget is Card) {
+      final shape = widget.shape;
+      node.setAttribute(
+        'style',
+        'box-sizing:border-box;min-width:0;background:${colorCss(widget.color ?? context.theme.colorScheme.surfaceContainerLow)};border-radius:${checkedDimension(shape?.borderRadius.radius ?? 12)}px;border:${checkedDimension(shape?.side.width ?? 0)}px solid ${colorCss(shape?.side.color ?? context.theme.colorScheme.outlineVariant)};',
+      );
+      node.appendChild(_node(widget.child, generation, context));
     } else if (widget is Column) {
       final alignment = switch (widget.crossAxisAlignment) {
         CrossAxisAlignment.start => 'flex-start',
@@ -205,18 +292,23 @@ class DomMount {
       };
       node.setAttribute(
         'style',
-        'display:flex;flex-direction:column;align-items:$alignment;gap:8px',
+        'display:flex;flex-direction:column;align-items:$alignment',
       );
       for (final child in widget.children) {
-        node.appendChild(_node(child, generation));
+        node.appendChild(_node(child, generation, context, flexChild: true));
       }
     } else if (widget is Row) {
       node.setAttribute(
         'style',
-        'display:flex;flex-wrap:wrap;gap:12px;align-items:center',
+        'display:flex;flex-direction:row;align-items:${switch (widget.crossAxisAlignment) {
+          CrossAxisAlignment.start => 'flex-start',
+          CrossAxisAlignment.end => 'flex-end',
+          CrossAxisAlignment.center => 'center',
+          CrossAxisAlignment.stretch => 'stretch',
+        }}',
       );
       for (final child in widget.children) {
-        node.appendChild(_node(child, generation));
+        node.appendChild(_node(child, generation, context, flexChild: true));
       }
     } else if (widget is SizedBox) {
       for (final size in [widget.height, widget.width]) {
@@ -228,10 +320,10 @@ class DomMount {
         '${widget.height == null ? '' : 'height:${widget.height}px;'}${widget.width == null ? '' : 'width:${widget.width}px;'}',
       );
       if (widget.child != null)
-        node.appendChild(_node(widget.child!, generation));
+        node.appendChild(_node(widget.child!, generation, context));
     } else if (widget is ElevatedButton) {
       node.setAttribute('type', 'button');
-      node.appendChild(_node(widget.child, generation));
+      node.appendChild(_node(widget.child, generation, context));
       if (widget.onPressed == null) {
         node.setAttribute('disabled', '');
       } else {
@@ -286,7 +378,10 @@ void runApp(Widget root) {
   _activeMount = mount;
   DomRootScope? scope;
   // Allow standard application wrappers and one explicit root scope.
-  while (root is MaterialApp || root is Scaffold || root is DomRootScope) {
+  while (root is MaterialApp ||
+      root is Scaffold ||
+      root is DomRootScope ||
+      root is Theme) {
     if (root.key != null)
       throw UnsupportedError('Wrapper keys are not supported.');
     if (root is DomRootScope) {
@@ -295,6 +390,16 @@ void runApp(Widget root) {
       scope = root;
       root = root.child;
     } else {
+      if (root is Theme) {
+        mount._context = BuildContext(theme: root.data);
+        root = root.child;
+        continue;
+      }
+      if (root is MaterialApp) {
+        mount._context = BuildContext(
+          theme: root.theme ?? mount._context.theme,
+        );
+      }
       root = root is MaterialApp ? root.home : (root as Scaffold).body;
     }
   }
@@ -303,6 +408,7 @@ void runApp(Widget root) {
     final state = root.createState();
     mount._state = state;
     state.widget = root;
+    state._context = mount._context;
     state._mounted = true;
     state._invalidate = mount._schedule;
     try {

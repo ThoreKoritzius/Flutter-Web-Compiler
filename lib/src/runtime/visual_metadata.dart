@@ -10,6 +10,14 @@ class Color {
   int get green => (value >> 8) & 0xff;
   int get blue => value & 0xff;
 
+  Color withValues({double? alpha}) {
+    if (alpha == null) return this;
+    if (!alpha.isFinite || alpha < 0 || alpha > 1) {
+      throw ArgumentError('Alpha must be between zero and one.');
+    }
+    return Color(((alpha * 255).round() << 24) | (value & 0xffffff));
+  }
+
   /// Color-space interpolation is not part of this metadata bridge.
   static Color? lerp(Color? a, Color? b, double t) =>
       throw UnsupportedError('Color interpolation is not supported.');

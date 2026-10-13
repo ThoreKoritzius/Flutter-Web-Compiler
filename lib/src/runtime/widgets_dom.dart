@@ -13,6 +13,10 @@ export 'flutter_dom.dart'
         Column,
         Row,
         SizedBox,
+        Padding,
+        Expanded,
         Text,
         CrossAxisAlignment;
 export 'visual_metadata.dart' show Color, IconData;
+export 'material_style.dart'
+    show EdgeInsets, TextStyle, FontWeight, BorderRadius, BorderSide;
