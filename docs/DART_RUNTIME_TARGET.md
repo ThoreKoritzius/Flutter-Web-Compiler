@@ -278,3 +278,6 @@ Cookie scope, same-site policy, CORS and the page origin still apply. A local
 static preview does not inherit a production page's session merely because
 it runs the same Dart code. Live verification must use an authenticated browser
 and a permitted origin; compilation or loopback replay is insufficient evidence.
+
+Native output uses dart2js CSP mode. See [authenticated hosting](NATIVE_HOSTING.md)
+for same-origin preview paths and cookie/CORS boundaries.

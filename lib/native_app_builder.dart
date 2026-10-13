@@ -303,6 +303,7 @@ Future<NativeAppBuild> buildNativeApp(
       'compile',
       'js',
       '-O2',
+      '--csp',
       '-Ddart.vm.product=true',
       for (final item in dartDefines.entries) '-D${item.key}=${item.value}',
       '--no-source-maps',

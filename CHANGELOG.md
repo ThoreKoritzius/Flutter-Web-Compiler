@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compile the native runtime in dart2js CSP mode and document same-origin hosting for authenticated request slices.
+
 - Add explicit package URI adapters and native `--dart-define` configuration with attribution and strict validation; expose foundation typed-data exports and official testing annotations.
 
 - Use the official Riverpod 2.6.1 engine for bounded root ProviderScope/ConsumerState read/watch integration; preserve subscriptions across builds, dispose owned containers, reject incompatible versions and report integration explicitly.

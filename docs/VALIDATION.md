@@ -1,5 +1,12 @@
 # Prototype verification
 
+## CSP-compatible native output (2026-10-13)
+
+All 186 tests pass and analysis is clean with native builds using dart2js `--csp`.
+Compiled request, provider and DOM contracts continue to pass. Same-origin
+hosting guidance distinguishes routing/compilation checks from live authenticated
+verification; no production success is inferred from local checks.
+
 ## Explicit package adapters and native definitions (2026-10-13)
 
 All 186 tests pass and analysis is clean. Tests build through the CLI and execute
