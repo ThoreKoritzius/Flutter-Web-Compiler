@@ -53,6 +53,15 @@ Future<void> main(List<String> arguments) async {
       help:
           'Explicit library bridge JSON file relative to current directory; requires --dart-runtime.',
     )
+    ..addOption(
+      'package-bridges',
+      help: 'Explicit package URI adapter JSON; requires --dart-runtime.',
+    )
+    ..addMultiOption(
+      'dart-define',
+      splitCommas: false,
+      help: 'Compile-time KEY=VALUE; requires --dart-runtime.',
+    )
     ..addFlag('dom-only', negatable: false, help: 'Reject any Flutter island.')
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
@@ -98,10 +107,37 @@ Future<void> main(List<String> arguments) async {
           );
         }
       }
+      final packageBridges = <String, String>{};
+      if (args.wasParsed('package-bridges')) {
+        final file = File(p.absolute(args['package-bridges'] as String));
+        final decoded = jsonDecode(file.readAsStringSync());
+        if (decoded is! Map ||
+            decoded.entries.any((e) => e.key is! String || e.value is! String))
+          throw ArgumentError(
+            'Package bridges must map package URIs to Dart files.',
+          );
+        for (final item in decoded.entries) {
+          packageBridges[item.key as String] = p.normalize(
+            p.join(file.parent.path, item.value as String),
+          );
+        }
+      }
+      final defines = <String, String>{};
+      for (final item in args['dart-define'] as List<String>) {
+        final separator = item.indexOf('=');
+        if (separator < 1)
+          throw ArgumentError('Dart definitions require KEY=VALUE.');
+        final key = item.substring(0, separator);
+        if (defines.containsKey(key))
+          throw ArgumentError('Duplicate Dart definition key.');
+        defines[key] = item.substring(separator + 1);
+      }
       final app = await buildNativeApp(
         project,
         args['source'] as String,
         libraryBridges: bridges,
+        packageBridges: packageBridges,
+        dartDefines: defines,
       );
       final output = Directory(p.absolute(args['output'] as String))
         ..createSync(recursive: true);
@@ -114,6 +150,8 @@ Future<void> main(List<String> arguments) async {
           'viewBackend': 'bounded-dom-compatibility-layer',
           'sourceLibraries': app.libraries,
           'nativeLibraryAdapters': app.libraryAdapters,
+          'nativePackageAdapters': app.packageAdapters,
+          'dartDefinitionKeys': defines.keys.toList(),
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
           'stateLifecycle': 'root-only-replace-view',
@@ -123,10 +161,14 @@ Future<void> main(List<String> arguments) async {
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} explicit library adapters\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
       );
       return;
     }
+    if (args.wasParsed('package-bridges') || args.wasParsed('dart-define'))
+      throw ArgumentError(
+        'Package adapters and Dart definitions require --dart-runtime.',
+      );
     if (args.wasParsed('runtime-bridges'))
       throw ArgumentError('--runtime-bridges requires --dart-runtime.');
     if (args.wasParsed('config') && !configFile.existsSync())

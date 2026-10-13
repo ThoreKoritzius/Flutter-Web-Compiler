@@ -248,3 +248,33 @@ The report attributes this as `providerIntegration: bounded-root-riverpod-2.6.1`
 only when the Flutter Riverpod import is mapped. Root view updates still replace
 DOM and can lose focus. None of this automatically adapts an application's
 authentication or networking dependencies.
+
+## Explicit package boundaries and compile-time configuration
+
+`--package-bridges adapters.json` maps exact package library URIs to explicit
+Dart adapters. Paths resolve relative to the JSON file. For example, a package
+that combines Flutter widgets with a pure-Dart client can explicitly expose the
+client through an adapter; unused widget APIs then remain compiler errors.
+
+```json
+{ "package:legacy_sdk/legacy_sdk.dart": "adapters/client.dart" }
+```
+
+The build reports reached replacements in `nativePackageAdapters`. Missing,
+invalid and unused mappings fail. Built-in Flutter framework and root consumer
+bridges cannot be replaced through this option. This rewrites selected imports
+in the copied local graph, not arbitrary transitive imports inside packages.
+Adapter source/dependencies are checked by the official compiler. No plugin
+implementation is inferred: unavailable operations should explicitly fail.
+
+Repeat `--dart-define KEY=VALUE` to supply original `String.fromEnvironment`/
+`bool.fromEnvironment` configuration to dart2js. Values retain commas and equals
+signs; duplicate, invalid and reserved `dart.*` keys fail. Reports contain keys,
+not values, but compile-time values can be embedded in the public JavaScript.
+Both options require `--dart-runtime`.
+
+Compiling an original request service does not establish authenticated access.
+Cookie scope, same-site policy, CORS and the page origin still apply. A local
+static preview does not inherit a production page's session merely because
+it runs the same Dart code. Live verification must use an authenticated browser
+and a permitted origin; compilation or loopback replay is insufficient evidence.

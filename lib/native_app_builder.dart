@@ -15,7 +15,9 @@ class NativeAppBuild {
     this.libraries,
     this.libraryAdapters, {
     this.riverpodConsumers = false,
+    this.packageAdapters = const [],
   });
+  final List<String> packageAdapters;
   final bool riverpodConsumers;
   final String javascript;
   final int libraries;
@@ -30,6 +32,8 @@ Future<NativeAppBuild> buildNativeApp(
   String project,
   String source, {
   Map<String, String> libraryBridges = const {},
+  Map<String, String> packageBridges = const {},
+  Map<String, String> dartDefines = const {},
 }) async {
   final root = Directory(project).resolveSymbolicLinksSync();
   final entry = File(p.join(root, source));
@@ -60,6 +64,38 @@ Future<NativeAppBuild> buildNativeApp(
       throw ArgumentError('Duplicate bridge source identity.');
     bridges[identity] = bridge;
   }
+  if (packageBridges.length > 50 || dartDefines.length > 50)
+    throw ArgumentError(
+      'At most 50 package bridges and definitions are supported.',
+    );
+  final packageAdapters = <String, String>{};
+  for (final item in packageBridges.entries) {
+    final uri = Uri.parse(item.key);
+    if (uri.scheme != 'package' ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        uri.hasAuthority ||
+        uri.path.startsWith('/') ||
+        uri.pathSegments.length < 2 ||
+        uri.pathSegments.any((s) => s == '..' || s == '.' || s.isEmpty) ||
+        !uri.path.endsWith('.dart') ||
+        item.key.startsWith('package:flutter/') ||
+        item.key == 'package:flutter_riverpod/flutter_riverpod.dart') {
+      throw ArgumentError(
+        'Package bridges require a non-framework package library URI.',
+      );
+    }
+    final file = File(item.value);
+    if (!file.existsSync())
+      throw ArgumentError('Package bridge implementation is missing.');
+    packageAdapters[item.key] = file.resolveSymbolicLinksSync();
+  }
+  for (final key in dartDefines.keys) {
+    if (!RegExp(r'^[A-Za-z_][A-Za-z0-9_.]*$').hasMatch(key) ||
+        key.startsWith('dart.'))
+      throw ArgumentError('Invalid or reserved Dart definition key.');
+  }
+  final usedPackages = <String>{};
   final projectPackages = File(p.join(root, '.dart_tool/package_config.json'));
   final compilerPackages = await Isolate.packageConfig;
   final packagesUri = projectPackages.existsSync()
@@ -135,7 +171,7 @@ Future<NativeAppBuild> buildNativeApp(
   Uri annotatedFacade(String name, Uri runtime) {
     final file = File(p.join(temporary.path, '$name.dart'));
     file.writeAsStringSync(
-      "export '$runtime';\nexport '$metaUri' show immutable;\n",
+      "export '$runtime';\nexport '$metaUri' show immutable, visibleForTesting;\n",
     );
     return file.uri;
   }
@@ -206,7 +242,10 @@ Future<NativeAppBuild> buildNativeApp(
             '',
           ));
         String? replacement = configurations.isNotEmpty ? uri : null;
-        if (uri == 'package:flutter_riverpod/flutter_riverpod.dart') {
+        if (packageAdapters.containsKey(uri)) {
+          usedPackages.add(uri);
+          replacement = Uri.file(packageAdapters[uri]!).toString();
+        } else if (uri == 'package:flutter_riverpod/flutter_riverpod.dart') {
           checkRiverpod();
           if (riverpodUri == null)
             throw StateError('Consumer bridge could not be resolved.');
@@ -255,12 +294,17 @@ Future<NativeAppBuild> buildNativeApp(
       throw ArgumentError(
         'A configured library bridge was not reachable from this entry.',
       );
+    if (usedPackages.length != packageAdapters.length)
+      throw ArgumentError(
+        'A package bridge was not reachable from this entry.',
+      );
     final output = p.join(temporary.path, 'app.js');
     final result = await Process.run(Platform.resolvedExecutable, [
       'compile',
       'js',
       '-O2',
       '-Ddart.vm.product=true',
+      for (final item in dartDefines.entries) '-D${item.key}=${item.value}',
       '--no-source-maps',
       if (packagesUri != null) '--packages=${File.fromUri(packagesUri).path}',
       '-o',
@@ -276,6 +320,7 @@ Future<NativeAppBuild> buildNativeApp(
       seen.length,
       List.unmodifiable(usedBridges),
       riverpodConsumers: checkedRiverpod,
+      packageAdapters: List.unmodifiable(usedPackages),
     );
   } finally {
     temporary.deleteSync(recursive: true);

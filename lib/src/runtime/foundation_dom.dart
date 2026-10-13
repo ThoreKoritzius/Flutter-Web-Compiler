@@ -1,6 +1,8 @@
 /// Bounded foundation APIs for the official Dart web runtime target.
 library;
 
+export 'dart:typed_data';
+
 import 'dart:async';
 
 const bool kIsWeb = bool.fromEnvironment('dart.library.js_interop');

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add explicit package URI adapters and native `--dart-define` configuration with attribution and strict validation; expose foundation typed-data exports and official testing annotations.
+
 - Use the official Riverpod 2.6.1 engine for bounded root ProviderScope/ConsumerState read/watch integration; preserve subscriptions across builds, dispose owned containers, reject incompatible versions and report integration explicitly.
 
 - Compile bounded color/icon metadata and ThemeExtension declarations in native source graphs; resolve official immutable annotations without requiring an input package configuration, and reject unsupported visual operations explicitly.

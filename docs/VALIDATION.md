@@ -1,5 +1,17 @@
 # Prototype verification
 
+## Explicit package adapters and native definitions (2026-10-13)
+
+All 186 tests pass and analysis is clean. Tests build through the CLI and execute
+actual JavaScript to verify an explicit package replacement, unchanged literal
+configuration values with commas/equals, adapter attribution and key-only report
+metadata. Invalid, missing and unreachable package mappings and malformed or
+reserved definition keys are rejected. Existing request/provider tests pass.
+
+These checks establish compilation and adapter contracts, not production cookie
+or CORS compatibility. No authenticated production success is claimed.
+
+
 ## Official Riverpod root consumers (2026-10-13)
 
 All 183 tests pass and analysis is clean. Actual dart2js output runs the official
