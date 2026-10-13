@@ -102,7 +102,8 @@ handlers become inert after the next render or disposal. Root replacement
 invalidates the mounted state before disposal. This is not retained-element
 reconciliation: updates can lose focus and native selection. Widget keys,
 descendant StatefulWidgets, controllers, inherited context, Flutter themes,
-assets and provider integration are unsupported. CSS approximates layout.
+assets and general inherited/provider widget integration are unsupported. A
+bounded root Riverpod consumer is supported as described below. CSS approximates layout.
 
 The foundation bridge provides `kIsWeb`, release/profile/debug constants and
 `compute`. Like Flutter's web implementation, `compute` yields then executes on
@@ -219,3 +220,31 @@ color spaces and general Flutter Color methods are outside this subset. The
 supported icon constants are listed in
 `lib/src/runtime/material_icons_metadata.dart`, with source attribution in
 `THIRD_PARTY_NOTICES.md`.
+
+## Root Riverpod consumers
+
+The target maps `package:flutter_riverpod/flutter_riverpod.dart` to a small
+widget bridge backed by the **official pure-Dart Riverpod 2.6.1 engine**, not a
+replacement provider evaluator. Existing `Provider`, `StateProvider`,
+`FutureProvider` and dependency callbacks execute in its `ProviderContainer`.
+See [Riverpod's container architecture](https://riverpod.dev/docs/concepts2/containers).
+
+Supported widget boundary:
+
+- One root `ProviderScope(child:, overrides:)` around the stateful entry, with
+  optional `MaterialApp`/`Scaffold` wrappers.
+- `ConsumerStatefulWidget` and `ConsumerState`, attached before `initState`.
+- `ref.read` in lifecycle/request callbacks and `ref.watch` during `build`.
+- Watched subscriptions trigger coalesced native renders, persist across builds,
+  and close when no longer watched. Root disposal closes subscriptions and the
+  owned container, independently of an application's call to `super.dispose`.
+
+Nested scopes/consumers, `ConsumerWidget`, widget-ref listen/refresh/invalidate,
+Flutter inherited context, generated Flutter-dependent provider packages and
+Riverpod 3.x compatibility are not implemented. Missing/incompatible engine
+versions fail before compilation. Projects with a package configuration must
+provide `riverpod` 2.6.1; fixtures without one use the compiler's configuration.
+The report attributes this as `providerIntegration: bounded-root-riverpod-2.6.1`
+only when the Flutter Riverpod import is mapped. Root view updates still replace
+DOM and can lose focus. None of this automatically adapts an application's
+authentication or networking dependencies.

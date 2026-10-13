@@ -1,5 +1,19 @@
 # Prototype verification
 
+## Official Riverpod root consumers (2026-10-13)
+
+All 183 tests pass and analysis is clean. Actual dart2js output runs the official
+Riverpod 2.6.1 engine with provider overrides, dependency watches, async loading
+and success, notifier updates and root consumer rebuilds. Tests verify that a
+removed watch stops rebuilding, root replacement disposes the async provider,
+stale callbacks are inert, and references reject access after disposal. Missing
+and incompatible engine configurations fail explicitly.
+
+The Node DOM contract is not full Flutter widget/provider parity. The bridge
+supports one root scope and consumer; nested scopes, general Flutter inherited
+context, ConsumerWidget and Riverpod 3.x remain outside its supported boundary.
+
+
 ## Visual metadata dependency graphs (2026-10-13)
 
 The full suite has 180 passing tests and analysis is clean. A representative

@@ -44,6 +44,19 @@ class BuildContext {
   const BuildContext();
 }
 
+/// Extension point for one root scope around the bounded stateful entry.
+abstract class DomRootScope extends Widget {
+  const DomRootScope({super.key});
+  Widget get child;
+  void Function() openDomScope(State state);
+}
+
+abstract interface class DomBuildLifecycle {
+  void beginDomBuild();
+  void endDomBuild();
+  void disposeDomBuild();
+}
+
 abstract class Widget {
   const Widget({this.key});
   final Key? key;
@@ -130,6 +143,7 @@ class DomMount {
   DomMount._(this._host);
   final _Element _host;
   State? _state;
+  void Function()? _disposeScope;
   Widget? _root;
   bool _disposed = false;
   bool _scheduled = false;
@@ -146,10 +160,18 @@ class DomMount {
 
   void _render() {
     final generation = ++_renderGeneration;
-    final node = _node(
-      _state?.build(const BuildContext()) ?? _root!,
-      generation,
-    );
+    final state = _state;
+    final lifecycle = state is DomBuildLifecycle
+        ? state as DomBuildLifecycle
+        : null;
+    lifecycle?.beginDomBuild();
+    late Widget built;
+    try {
+      built = state?.build(const BuildContext()) ?? _root!;
+    } finally {
+      lifecycle?.endDomBuild();
+    }
+    final node = _node(built, generation);
     _host.replaceChildren();
     _host.appendChild(node);
   }
@@ -235,9 +257,21 @@ class DomMount {
     if (state != null) {
       state._mounted = false;
       state._invalidate = null;
-      state.dispose();
+      try {
+        state.dispose();
+      } finally {
+        try {
+          if (state is DomBuildLifecycle)
+            (state as DomBuildLifecycle).disposeDomBuild();
+        } finally {
+          _disposeScope?.call();
+          _host.replaceChildren();
+        }
+      }
+    } else {
+      _disposeScope?.call();
+      _host.replaceChildren();
     }
-    _host.replaceChildren();
   }
 }
 
@@ -250,11 +284,19 @@ void runApp(Widget root) {
   _activeMount?.dispose();
   final mount = DomMount._(host);
   _activeMount = mount;
-  // Allow standard application wrappers around the stateful entry.
-  while (root is MaterialApp || root is Scaffold) {
+  DomRootScope? scope;
+  // Allow standard application wrappers and one explicit root scope.
+  while (root is MaterialApp || root is Scaffold || root is DomRootScope) {
     if (root.key != null)
       throw UnsupportedError('Wrapper keys are not supported.');
-    root = root is MaterialApp ? root.home : (root as Scaffold).body;
+    if (root is DomRootScope) {
+      if (scope != null)
+        throw UnsupportedError('Nested root scopes are unsupported.');
+      scope = root;
+      root = root.child;
+    } else {
+      root = root is MaterialApp ? root.home : (root as Scaffold).body;
+    }
   }
   if (root.key != null) throw UnsupportedError('Root keys are not supported.');
   if (root is StatefulWidget) {
@@ -263,9 +305,18 @@ void runApp(Widget root) {
     state.widget = root;
     state._mounted = true;
     state._invalidate = mount._schedule;
-    state.initState();
+    try {
+      mount._disposeScope = scope?.openDomScope(state);
+      state.initState();
+      mount._render();
+    } catch (_) {
+      mount.dispose();
+      rethrow;
+    }
   } else {
+    if (scope != null)
+      throw UnsupportedError('Root scopes require a stateful entry.');
     mount._root = root;
+    mount._render();
   }
-  mount._render();
 }

@@ -117,10 +117,13 @@ Future<void> main(List<String> arguments) async {
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
           'stateLifecycle': 'root-only-replace-view',
+          'providerIntegration': app.riverpodConsumers
+              ? 'bounded-root-riverpod-2.6.1'
+              : 'none',
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} explicit library adapters\n  Experimental: root state only; no provider integration or retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} explicit library adapters\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
       );
       return;
     }

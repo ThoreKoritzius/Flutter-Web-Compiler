@@ -7,9 +7,16 @@ import 'dart:isolate';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:path/path.dart' as p;
+import 'package:yaml/yaml.dart';
 
 class NativeAppBuild {
-  NativeAppBuild(this.javascript, this.libraries, this.libraryAdapters);
+  NativeAppBuild(
+    this.javascript,
+    this.libraries,
+    this.libraryAdapters, {
+    this.riverpodConsumers = false,
+  });
+  final bool riverpodConsumers;
   final String javascript;
   final int libraries;
   final List<String> libraryAdapters;
@@ -53,6 +60,47 @@ Future<NativeAppBuild> buildNativeApp(
       throw ArgumentError('Duplicate bridge source identity.');
     bridges[identity] = bridge;
   }
+  final projectPackages = File(p.join(root, '.dart_tool/package_config.json'));
+  final compilerPackages = await Isolate.packageConfig;
+  final packagesUri = projectPackages.existsSync()
+      ? projectPackages.absolute.uri
+      : compilerPackages;
+  final riverpodUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:flutter_dom_compiler/src/runtime/riverpod_dom.dart'),
+  );
+  var checkedRiverpod = false;
+  void checkRiverpod() {
+    if (checkedRiverpod) return;
+    if (packagesUri == null)
+      throw StateError('Riverpod package configuration is missing.');
+    final config =
+        jsonDecode(File.fromUri(packagesUri).readAsStringSync()) as Map;
+    final entries = config['packages'] as List;
+    final entry = entries
+        .cast<Map>()
+        .where((item) => item['name'] == 'riverpod')
+        .firstOrNull;
+    if (entry == null)
+      throw UnsupportedError(
+        'Native consumers require riverpod 2.6.1 in the package configuration.',
+      );
+    final packageRoot = Directory.fromUri(
+      packagesUri.resolve(entry['rootUri'] as String),
+    ).uri;
+    final version =
+        (loadYaml(
+              File.fromUri(
+                packageRoot.resolve('pubspec.yaml'),
+              ).readAsStringSync(),
+            )
+            as YamlMap)['version'];
+    if (version != '2.6.1')
+      throw UnsupportedError(
+        'Native consumers currently support riverpod 2.6.1 only.',
+      );
+    checkedRiverpod = true;
+  }
+
   final usedBridges = <String>[];
   final temporary = Directory.systemTemp.createTempSync('flutter-dom-runtime-');
   final seen = <String, String>{};
@@ -158,7 +206,12 @@ Future<NativeAppBuild> buildNativeApp(
             '',
           ));
         String? replacement = configurations.isNotEmpty ? uri : null;
-        if (uri == 'package:flutter/material.dart') {
+        if (uri == 'package:flutter_riverpod/flutter_riverpod.dart') {
+          checkRiverpod();
+          if (riverpodUri == null)
+            throw StateError('Consumer bridge could not be resolved.');
+          replacement = riverpodUri.toString();
+        } else if (uri == 'package:flutter/material.dart') {
           replacement = materialFacade.toString();
         } else if (uri == 'package:flutter/foundation.dart') {
           replacement = foundationFacade.toString();
@@ -203,14 +256,13 @@ Future<NativeAppBuild> buildNativeApp(
         'A configured library bridge was not reachable from this entry.',
       );
     final output = p.join(temporary.path, 'app.js');
-    final packages = File(p.join(root, '.dart_tool/package_config.json'));
     final result = await Process.run(Platform.resolvedExecutable, [
       'compile',
       'js',
       '-O2',
       '-Ddart.vm.product=true',
       '--no-source-maps',
-      if (packages.existsSync()) '--packages=${packages.path}',
+      if (packagesUri != null) '--packages=${File.fromUri(packagesUri).path}',
       '-o',
       output,
       generated,
@@ -223,6 +275,7 @@ Future<NativeAppBuild> buildNativeApp(
       File(output).readAsStringSync(),
       seen.length,
       List.unmodifiable(usedBridges),
+      riverpodConsumers: checkedRiverpod,
     );
   } finally {
     temporary.deleteSync(recursive: true);

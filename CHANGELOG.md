@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use the official Riverpod 2.6.1 engine for bounded root ProviderScope/ConsumerState read/watch integration; preserve subscriptions across builds, dispose owned containers, reject incompatible versions and report integration explicitly.
+
 - Compile bounded color/icon metadata and ThemeExtension declarations in native source graphs; resolve official immutable annotations without requiring an input package configuration, and reject unsupported visual operations explicitly.
 
 - Add an explicit GraphQL JSON client and browser POST transport with same-origin endpoints, strict response handling and aborting timeouts; verify compiled output against real HTTP.
