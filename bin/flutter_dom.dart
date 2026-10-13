@@ -54,6 +54,11 @@ Future<void> main(List<String> arguments) async {
           'Explicit library bridge JSON file relative to current directory; requires --dart-runtime.',
     )
     ..addOption(
+      'runtime-selections',
+      help:
+          'Explicit component declaration/import selection JSON; requires --dart-runtime.',
+    )
+    ..addOption(
       'package-bridges',
       help: 'Explicit package URI adapter JSON; requires --dart-runtime.',
     )
@@ -122,6 +127,32 @@ Future<void> main(List<String> arguments) async {
           );
         }
       }
+      final selections = <String, NativeSourceSelection>{};
+      if (args.wasParsed('runtime-selections')) {
+        final decoded = jsonDecode(
+          File(args['runtime-selections'] as String).readAsStringSync(),
+        );
+        if (decoded is! Map)
+          throw ArgumentError('Runtime selections must be a JSON object.');
+        for (final item in decoded.entries) {
+          final value = item.value;
+          if (item.key is! String ||
+              value is! Map ||
+              value.length != 2 ||
+              value['declarations'] is! List ||
+              value['imports'] is! List ||
+              (value['declarations'] as List).any((e) => e is! String) ||
+              (value['imports'] as List).any((e) => e is! String)) {
+            throw ArgumentError(
+              'Each selection requires declarations and imports string lists.',
+            );
+          }
+          selections[item.key as String] = NativeSourceSelection(
+            declarations: (value['declarations'] as List).cast<String>(),
+            imports: (value['imports'] as List).cast<String>(),
+          );
+        }
+      }
       final defines = <String, String>{};
       for (final item in args['dart-define'] as List<String>) {
         final separator = item.indexOf('=');
@@ -138,6 +169,7 @@ Future<void> main(List<String> arguments) async {
         libraryBridges: bridges,
         packageBridges: packageBridges,
         dartDefines: defines,
+        sourceSelections: selections,
       );
       final output = Directory(p.absolute(args['output'] as String))
         ..createSync(recursive: true);
@@ -151,6 +183,13 @@ Future<void> main(List<String> arguments) async {
           'sourceLibraries': app.libraries,
           'nativeLibraryAdapters': app.libraryAdapters,
           'nativePackageAdapters': app.packageAdapters,
+          'nativeSourceSelections': {
+            for (final item in app.sourceSelections.entries)
+              item.key: {
+                'declarations': item.value.declarations,
+                'imports': item.value.imports,
+              },
+          },
           'dartDefinitionKeys': defines.keys.toList(),
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
@@ -161,7 +200,7 @@ Future<void> main(List<String> arguments) async {
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
       );
       return;
     }
@@ -169,6 +208,8 @@ Future<void> main(List<String> arguments) async {
       throw ArgumentError(
         'Package adapters and Dart definitions require --dart-runtime.',
       );
+    if (args.wasParsed('runtime-selections'))
+      throw ArgumentError('--runtime-selections requires --dart-runtime.');
     if (args.wasParsed('runtime-bridges'))
       throw ArgumentError('--runtime-bridges requires --dart-runtime.');
     if (args.wasParsed('config') && !configFile.existsSync())

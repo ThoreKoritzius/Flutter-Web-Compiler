@@ -293,3 +293,34 @@ and a permitted origin; compilation or loopback replay is insufficient evidence.
 
 Native output uses dart2js CSP mode. See [authenticated hosting](NATIVE_HOSTING.md)
 for same-origin preview paths and cookie/CORS boundaries.
+
+### Explicit component selection
+
+For a component inside a large library, `--runtime-selections selections.json`
+can select declarations without copying their implementation into an adapter:
+
+```json
+{
+  "lib/components.dart": {
+    "declarations": ["SummaryCard", "SummaryGrid"],
+    "imports": ["package:flutter/material.dart", "spacing.dart"]
+  }
+}
+```
+
+Selection retains named declarations and their same-library identifier dependencies
+verbatim. The import list is explicit: omitted imports and all exports are removed.
+The official Dart compiler checks the resulting graph and rejects missing symbols.
+This is a manual component experiment, **not whole-library or whole-app compatibility**.
+The report records `nativeSourceSelections` separately from replacement adapters.
+Selections cannot overlap adapters or point outside the project; unreachable entries
+fail. Parts, extensions, unnamed declarations and conditional imports are rejected
+because their dependencies need resolved library analysis.
+
+`LayoutBuilder` measures its attached DOM container's `clientWidth`; `Wrap` uses
+CSS flex wrapping and source-defined gaps. `SizedBox` retains explicit widths.
+Viewport resize rebuilds the root; disposal removes its listener. `MediaQuery.sizeOf`
+reads the browser viewport. Only horizontal constraints are supported; vertical
+constraints remain unbounded. Element-only resizing, intrinsic Flutter layout,
+slivers and nested state are still unsupported. The native host has no demo frame,
+heading or card; application source supplies its own layout and theme.

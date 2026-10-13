@@ -26,6 +26,51 @@ extension type _Element(JSObject _) implements JSObject {
   external void replaceChildren();
   external void setAttribute(String key, String value);
   external void addEventListener(String event, JSFunction listener);
+  external double get clientWidth;
+}
+
+@JS('window')
+external _Window get _window;
+extension type _Window(JSObject _) implements JSObject {
+  external double get innerWidth;
+  external double get innerHeight;
+  external void addEventListener(String event, JSFunction listener);
+  external void removeEventListener(String event, JSFunction listener);
+}
+
+class Size {
+  const Size(this.width, this.height);
+  final double width, height;
+}
+
+class MediaQuery {
+  static Size sizeOf(BuildContext context) =>
+      Size(_window.innerWidth, _window.innerHeight);
+}
+
+/// Horizontal DOM layout only; vertical constraints remain unbounded.
+class BoxConstraints {
+  const BoxConstraints({required this.maxWidth});
+  final double maxWidth;
+  double get minWidth => 0;
+  double get minHeight => 0;
+  double get maxHeight => double.infinity;
+}
+
+class LayoutBuilder extends Widget {
+  const LayoutBuilder({required this.builder, super.key});
+  final Widget Function(BuildContext, BoxConstraints) builder;
+}
+
+class Wrap extends Widget {
+  const Wrap({
+    required this.children,
+    this.spacing = 0,
+    this.runSpacing = 0,
+    super.key,
+  });
+  final List<Widget> children;
+  final double spacing, runSpacing;
 }
 
 class Theme extends Widget {
@@ -41,7 +86,8 @@ class Key {
 }
 
 class BuildContext {
-  const BuildContext({this.theme = const ThemeData()});
+  const BuildContext({this.theme = const ThemeData(), this.foreground});
+  final Color? foreground;
   final ThemeData theme;
 }
 
@@ -185,6 +231,8 @@ class DomMount {
   bool _disposed = false;
   bool _scheduled = false;
   int _renderGeneration = 0;
+  final _layoutJobs = <void Function()>[];
+  JSFunction? _resizeListener;
 
   void _schedule() {
     if (_disposed || _scheduled) return;
@@ -197,6 +245,7 @@ class DomMount {
 
   void _render() {
     final generation = ++_renderGeneration;
+    _layoutJobs.clear();
     final state = _state;
     final lifecycle = state is DomBuildLifecycle
         ? state as DomBuildLifecycle
@@ -210,7 +259,21 @@ class DomMount {
     }
     final node = _node(built, generation, _context);
     _host.replaceChildren();
+    _host.setAttribute(
+      'style',
+      'background:${colorCss(_context.theme.colorScheme.surface)};color:${colorCss(_context.theme.colorScheme.onSurface)};min-height:100vh;',
+    );
     _host.appendChild(node);
+    // Measure attached DOM boxes, rather than estimating Flutter constraints.
+    for (var index = 0; index < _layoutJobs.length; index++) {
+      if (index >= 500)
+        throw StateError('Native layout builder limit exceeded.');
+      _layoutJobs[index]();
+    }
+    if (_layoutJobs.isNotEmpty && _resizeListener == null) {
+      _resizeListener = (() => _schedule()).toJS;
+      _window.addEventListener('resize', _resizeListener!);
+    }
   }
 
   _Element _node(
@@ -257,8 +320,30 @@ class DomMount {
       node.textContent = widget.data;
       node.setAttribute(
         'style',
-        'margin:0;color:${colorCss(context.theme.colorScheme.onSurface)};${textStyleCss(context.theme.textTheme.bodyMedium)}${textStyleCss(widget.style)}',
+        'margin:0;color:${colorCss(context.foreground ?? context.theme.colorScheme.onSurface)};${textStyleCss(context.theme.textTheme.bodyMedium)}${textStyleCss(widget.style)}',
       );
+    } else if (widget is LayoutBuilder) {
+      node.setAttribute(
+        'style',
+        'width:100%;min-width:0;box-sizing:border-box;',
+      );
+      _layoutJobs.add(() {
+        final width = checkedDimension(node.clientWidth);
+        node.appendChild(
+          _node(
+            widget.builder(context, BoxConstraints(maxWidth: width)),
+            generation,
+            context,
+          ),
+        );
+      });
+    } else if (widget is Wrap) {
+      node.setAttribute(
+        'style',
+        'display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:${checkedDimension(widget.spacing)}px;row-gap:${checkedDimension(widget.runSpacing)}px;',
+      );
+      for (final child in widget.children)
+        node.appendChild(_node(child, generation, context));
     } else if (widget is Padding) {
       final p = widget.padding;
       node.setAttribute(
@@ -317,13 +402,26 @@ class DomMount {
       }
       node.setAttribute(
         'style',
-        '${widget.height == null ? '' : 'height:${widget.height}px;'}${widget.width == null ? '' : 'width:${widget.width}px;'}',
+        'flex-shrink:0;${widget.height == null ? '' : 'height:${widget.height}px;'}${widget.width == null ? '' : 'width:${widget.width}px;'}',
       );
       if (widget.child != null)
         node.appendChild(_node(widget.child!, generation, context));
     } else if (widget is ElevatedButton) {
       node.setAttribute('type', 'button');
-      node.appendChild(_node(widget.child, generation, context));
+      node.setAttribute(
+        'style',
+        'background:${colorCss(context.theme.colorScheme.primary)};border:0;border-radius:10px;padding:10px 16px;',
+      );
+      node.appendChild(
+        _node(
+          widget.child,
+          generation,
+          BuildContext(
+            theme: context.theme,
+            foreground: context.theme.colorScheme.onPrimary,
+          ),
+        ),
+      );
       if (widget.onPressed == null) {
         node.setAttribute('disabled', '');
       } else {
@@ -344,6 +442,9 @@ class DomMount {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    if (_resizeListener != null)
+      _window.removeEventListener('resize', _resizeListener!);
+    _layoutJobs.clear();
     _renderGeneration++;
     final state = _state;
     if (state != null) {

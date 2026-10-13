@@ -99,3 +99,9 @@
 - Initial static Flutter widget compiler, metadata and heading configuration.
 - Single explicit, lazy-loaded Flutter island.
 - Strict DOM-only mode, example app and compiler/CLI tests.
+
+- Experimental runtime: explicit declaration/import selection preserves original
+  component bodies, records selections separately from adapters, and rejects
+  ambiguous library forms. Added attached-DOM horizontal `LayoutBuilder`, viewport
+  `MediaQuery.sizeOf`, responsive `Wrap`, and resize-listener disposal. Removed
+  compiler-authored demo framing from the native app host.

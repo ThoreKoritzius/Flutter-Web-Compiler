@@ -60,6 +60,7 @@ class TextTheme {
 class ColorScheme {
   const ColorScheme({
     this.primary = const Color(0xff6750a4),
+    this.onPrimary = const Color(0xffffffff),
     this.surface = const Color(0xfffffbfe),
     this.onSurface = const Color(0xff1c1b1f),
     this.onSurfaceVariant = const Color(0xff49454f),
@@ -67,6 +68,7 @@ class ColorScheme {
     this.surfaceContainerLow = const Color(0xfff7f2fa),
   });
   final Color primary,
+      onPrimary,
       surface,
       onSurface,
       onSurfaceVariant,
@@ -147,3 +149,16 @@ String textStyleCss(TextStyle? style) => style == null
           '${style.fontSize == null ? '' : 'font-size:${checkedDimension(style.fontSize!)}px;'}'
           '${style.fontWeight == null ? '' : 'font-weight:${(style.fontWeight!.index + 1) * 100};'}'
           '${style.height == null ? '' : 'line-height:${checkedDimension(style.height!)};'}';
+
+class Border {
+  const Border.all({this.color = const Color(0xff000000), this.width = 1});
+  final Color color;
+  final double width;
+}
+
+class BoxDecoration {
+  const BoxDecoration({this.color, this.borderRadius, this.border});
+  final Color? color;
+  final BorderRadius? borderRadius;
+  final Border? border;
+}

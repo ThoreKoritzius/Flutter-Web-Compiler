@@ -16,7 +16,12 @@ export 'flutter_dom.dart'
         Padding,
         Expanded,
         Text,
-        CrossAxisAlignment;
+        CrossAxisAlignment,
+        MediaQuery,
+        Size,
+        BoxConstraints,
+        LayoutBuilder,
+        Wrap;
 export 'visual_metadata.dart' show Color, IconData;
 export 'material_style.dart'
     show EdgeInsets, TextStyle, FontWeight, BorderRadius, BorderSide;
