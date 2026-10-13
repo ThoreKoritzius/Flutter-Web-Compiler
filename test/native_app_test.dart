@@ -5,6 +5,51 @@ import 'package:test/test.dart';
 
 void main() {
   test(
+    'metadata dependencies compile without silently resolving ambient themes',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-metadata-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      File('${directory.path}/lib/main.dart').writeAsStringSync(r"""
+import 'package:flutter/material.dart';
+@immutable
+class Palette extends ThemeExtension<Palette> {
+  const Palette(this.color);
+  final Color color;
+  @override Palette copyWith({Color? color}) => Palette(color ?? this.color);
+  @override Palette lerp(ThemeExtension<Palette>? other, double t) =>
+    Palette(Color.lerp(color, (other as Palette?)?.color, t)!);
+}
+void main() {
+  const palette = Palette(Color(0xff123456));
+  print(palette.copyWith().color.red);
+  print(Icons.favorite_rounded.fontFamily);
+  print(Icons.favorite_rounded.codePoint);
+  try { Theme.of(const BuildContext()).extension<Palette>(); }
+  on UnsupportedError { print('unsupported ambient theme'); }
+  try { palette.lerp(palette, .5); }
+  on UnsupportedError { print('unsupported interpolation'); }
+}
+""");
+      final app = await buildNativeApp(directory.path, 'lib/main.dart');
+      final file = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        'global.self=global;require(process.argv[1]);',
+        file.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(run.stdout.toString().trim().split('\n'), [
+        '18',
+        'MaterialIcons',
+        '${0xf738}',
+        'unsupported ambient theme',
+        'unsupported interpolation',
+      ]);
+    },
+  );
+  test(
     'widgets and material bridges share core types without exporting Material-only APIs',
     () async {
       final directory = Directory.systemTemp.createTempSync('native-widgets-');

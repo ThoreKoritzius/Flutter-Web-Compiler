@@ -1,5 +1,18 @@
 # Prototype verification
 
+## Visual metadata dependency graphs (2026-10-13)
+
+The full suite has 180 passing tests and analysis is clean. A representative
+unchanged palette declaration compiles through material imports with annotation,
+color and icon metadata. Compiled JavaScript preserves channel values and icon
+code points and verifies that ambient theme lookup and color interpolation fail
+explicitly. Standalone tests cover low-32-bit ARGB channels and value equality.
+The existing async repository/request and DOM lifecycle tests still pass.
+
+This supports metadata dependencies, not Material theming, icon painting or a
+complete application screen. Unsupported visual operations remain visible.
+
+
 ## Executable GraphQL transport (2026-10-13)
 
 The full suite has 177 passing tests and analysis is clean. Protocol tests check

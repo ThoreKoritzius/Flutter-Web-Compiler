@@ -15,3 +15,4 @@ export 'flutter_dom.dart'
         SizedBox,
         Text,
         CrossAxisAlignment;
+export 'visual_metadata.dart' show Color, IconData;

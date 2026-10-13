@@ -201,3 +201,21 @@ read-only policies belong to the application adapter/server.
 Existing service classes must still be explicitly adapted to this interface;
 importing this library does not automatically port a networking package. These
 are experimental primitives, not evidence of production authentication parity.
+
+## Visual metadata dependencies
+
+The runtime accepts `@immutable`, legacy integer ARGB `Color` values, `IconData`
+metadata, a bounded set of rounded Material icon constants, and abstract
+`ThemeExtension` declarations. This lets repository/model dependency graphs
+include visual registries without replacing their business logic. Annotation
+exports resolve to the compiler's official `meta` package even when the input
+project has no package configuration.
+
+These declarations do not provide Flutter painting or theme inheritance.
+`Theme.of`, `ThemeData.extension` and `Color.lerp` throw explicit
+`UnsupportedError`s when executed. No icon font is loaded or rendered. Color
+values preserve the low 32 bits and expose integer ARGB channels; floating-point
+color spaces and general Flutter Color methods are outside this subset. The
+supported icon constants are listed in
+`lib/src/runtime/material_icons_metadata.dart`, with source attribution in
+`THIRD_PARTY_NOTICES.md`.

@@ -4,6 +4,8 @@ library;
 
 export 'foundation_dom.dart';
 export 'services_dom.dart';
+export 'visual_metadata.dart';
+export 'material_icons_metadata.dart';
 
 import 'dart:async';
 import 'dart:js_interop';
@@ -20,6 +22,17 @@ extension type _Element(JSObject _) implements JSObject {
   external void replaceChildren();
   external void setAttribute(String key, String value);
   external void addEventListener(String event, JSFunction listener);
+}
+
+/// Ambient theme resolution is deliberately unsupported in this target.
+abstract final class Theme {
+  static ThemeData of(BuildContext context) =>
+      throw UnsupportedError('Ambient Theme lookup is not supported.');
+}
+
+class ThemeData {
+  T? extension<T>() =>
+      throw UnsupportedError('Ambient Theme extensions are not supported.');
 }
 
 class Key {

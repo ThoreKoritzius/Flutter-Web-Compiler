@@ -77,6 +77,24 @@ Future<NativeAppBuild> buildNativeApp(
   );
   if (widgetsUri == null)
     throw StateError('Widgets runtime package could not be resolved.');
+  // Resolve annotation metadata from the compiler package, even for fixtures
+  // without a project package configuration. Keep widget identities shared.
+  final metaUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:meta/meta.dart'),
+  );
+  if (metaUri == null)
+    throw StateError('Annotation metadata could not be resolved.');
+  Uri annotatedFacade(String name, Uri runtime) {
+    final file = File(p.join(temporary.path, '$name.dart'));
+    file.writeAsStringSync(
+      "export '$runtime';\nexport '$metaUri' show immutable;\n",
+    );
+    return file.uri;
+  }
+
+  final materialFacade = annotatedFacade('material', runtimeUri);
+  final widgetsFacade = annotatedFacade('widgets', widgetsUri);
+  final foundationFacade = annotatedFacade('foundation', foundationUri);
   const webEnvironment = {
     'dart.library.js_interop': true,
     'dart.library.html': true,
@@ -141,13 +159,13 @@ Future<NativeAppBuild> buildNativeApp(
           ));
         String? replacement = configurations.isNotEmpty ? uri : null;
         if (uri == 'package:flutter/material.dart') {
-          replacement = runtimeUri.toString();
+          replacement = materialFacade.toString();
         } else if (uri == 'package:flutter/foundation.dart') {
-          replacement = foundationUri.toString();
+          replacement = foundationFacade.toString();
         } else if (uri == 'package:flutter/services.dart') {
           replacement = servicesUri.toString();
         } else if (uri == 'package:flutter/widgets.dart') {
-          replacement = widgetsUri.toString();
+          replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/') || uri == 'dart:ui') {
           unsupported('Unsupported Flutter/engine import: $uri');
         } else if (!Uri.parse(uri).hasScheme) {

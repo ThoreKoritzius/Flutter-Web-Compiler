@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compile bounded color/icon metadata and ThemeExtension declarations in native source graphs; resolve official immutable annotations without requiring an input package configuration, and reject unsupported visual operations explicitly.
+
 - Add an explicit GraphQL JSON client and browser POST transport with same-origin endpoints, strict response handling and aborting timeouts; verify compiled output against real HTTP.
 
 - Add bounded services imports with explicit in-process method-channel registration, missing-plugin failures, typed results and safe unregistration; expose supported core widgets through a restricted widgets import.
