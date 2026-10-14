@@ -141,4 +141,17 @@ const goRouterBridgeNames = [
   'StatefulShellRoutePageBuilder',
 ];
 
-const allBridgeNames = [...flChartBridgeNames, ...goRouterBridgeNames];
+const flutterLocalizationsBridgeNames = [
+  'CupertinoLocalizations',
+  'DefaultCupertinoLocalizations',
+  'GlobalCupertinoLocalizations',
+  'GlobalMaterialLocalizations',
+  'GlobalWidgetsLocalizations',
+  'kMaterialSupportedLanguages',
+];
+
+const allBridgeNames = [
+  ...flChartBridgeNames,
+  ...goRouterBridgeNames,
+  ...flutterLocalizationsBridgeNames,
+];

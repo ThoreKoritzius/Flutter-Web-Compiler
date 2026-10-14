@@ -36,6 +36,57 @@ enum TextDirection { ltr, rtl }
 
 enum TextBaseline { alphabetic, ideographic }
 
+/// A language/script/country identifier, as in `dart:ui`.
+class Locale {
+  const Locale(this.languageCode, [this.countryCode]) : scriptCode = null;
+  const Locale.fromSubtags({
+    this.languageCode = 'und',
+    this.scriptCode,
+    this.countryCode,
+  });
+  final String languageCode;
+  final String? scriptCode, countryCode;
+
+  /// Parses BCP 47 tags such as `de-DE` or `zh-Hant-TW`.
+  factory Locale.parse(String tag) {
+    final parts = tag.replaceAll('_', '-').split('-');
+    String? script, country;
+    for (final part in parts.skip(1)) {
+      if (part.length == 4) {
+        script = part[0].toUpperCase() + part.substring(1).toLowerCase();
+      } else if (part.length == 2 || part.length == 3) {
+        country = part.toUpperCase();
+      }
+    }
+    return Locale.fromSubtags(
+      languageCode: parts.first.toLowerCase(),
+      scriptCode: script,
+      countryCode: country,
+    );
+  }
+
+  String toLanguageTag() => [
+    languageCode,
+    ?scriptCode,
+    if (countryCode != null && countryCode!.isNotEmpty) countryCode!,
+  ].join('-');
+
+  @override
+  bool operator ==(Object other) =>
+      other is Locale &&
+      other.languageCode == languageCode &&
+      other.scriptCode == scriptCode &&
+      other.countryCode == countryCode;
+  @override
+  int get hashCode => Object.hash(languageCode, scriptCode, countryCode);
+  @override
+  String toString() => [
+    languageCode,
+    ?scriptCode,
+    if (countryCode != null && countryCode!.isNotEmpty) countryCode!,
+  ].join('_');
+}
+
 enum BoxShape { rectangle, circle }
 
 enum BorderStyle { none, solid }

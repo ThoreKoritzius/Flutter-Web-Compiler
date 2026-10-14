@@ -118,7 +118,7 @@ function connected(node) {
 }
 
 /// Installs `document` and `window` globals and returns the `#app` host.
-function install({ width = 1024, height = 768, history = false } = {}) {
+function install({ width = 1024, height = 768, history = false, languages = ['en-US'] } = {}) {
   const host = new Element('div');
   root = host;
   const windowListeners = {};
@@ -127,6 +127,7 @@ function install({ width = 1024, height = 768, history = false } = {}) {
     currentScript: null,
     title: '',
     activeElement: null,
+    documentElement: { lang: '' },
     querySelector: selector => (selector === '#app' ? host : null),
     createElement: tag => new Element(tag),
   };
@@ -134,6 +135,7 @@ function install({ width = 1024, height = 768, history = false } = {}) {
     innerWidth: width,
     innerHeight: height,
     requestAnimationFrame: callback => setTimeout(() => callback(performance.now()), 16),
+    navigator: { languages, language: languages[0] },
     addEventListener(type, fn) { (windowListeners[type] ??= new Set()).add(fn); },
     removeEventListener(type, fn) { windowListeners[type]?.delete(fn); },
   };

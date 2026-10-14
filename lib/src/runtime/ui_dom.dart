@@ -21,7 +21,8 @@ export 'material_style.dart'
         FontStyle,
         FontFeature,
         Brightness,
-        Clip;
+        Clip,
+        Locale;
 export 'painting_ui.dart' hide UiGradient, shaderSpec, replayPath, PathSink;
 export 'visual_metadata.dart' show Color;
 

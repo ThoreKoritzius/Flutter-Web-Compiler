@@ -66,3 +66,5 @@ part 'dom_paint.dart';
 part 'dom_animation.dart';
 part 'dom_fl_chart.dart';
 part 'dom_go_router.dart';
+part 'dom_localizations.dart';
+part 'dom_flutter_localizations.dart';

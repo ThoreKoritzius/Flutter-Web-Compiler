@@ -169,3 +169,65 @@ bool mapEquals<K, V>(Map<K, V>? a, Map<K, V>? b) {
 }
 
 String describeEnum(Enum value) => value.name;
+
+/// A future whose value is available synchronously: [then] runs its callback
+/// immediately, as in Flutter. Localization delegates rely on this to
+/// build without an empty first frame.
+class SynchronousFuture<T> implements Future<T> {
+  SynchronousFuture(this._value);
+  final T _value;
+
+  @override
+  Stream<T> asStream() => Stream<T>.value(_value);
+  @override
+  Future<T> catchError(Function onError, {bool Function(Object error)? test}) =>
+      this;
+  @override
+  Future<R> then<R>(
+    FutureOr<R> Function(T value) onValue, {
+    Function? onError,
+  }) {
+    final result = onValue(_value);
+    if (result is Future<R>) return result;
+    return SynchronousFuture<R>(result);
+  }
+
+  @override
+  Future<T> timeout(Duration timeLimit, {FutureOr<T> Function()? onTimeout}) =>
+      Future<T>.value(_value).timeout(timeLimit, onTimeout: onTimeout);
+  @override
+  Future<T> whenComplete(FutureOr<dynamic> Function() action) {
+    try {
+      final result = action();
+      if (result is Future) return result.then((_) => _value);
+      return this;
+    } catch (error, stack) {
+      return Future<T>.error(error, stack);
+    }
+  }
+}
+
+class FlutterError extends Error {
+  FlutterError(this.message);
+  factory FlutterError.fromParts(List<Object> parts) =>
+      FlutterError(parts.join('\n'));
+  final String message;
+  @override
+  String toString() => message;
+  static void Function(FlutterErrorDetails details)? onError;
+  static void reportError(FlutterErrorDetails details) =>
+      onError?.call(details);
+}
+
+class FlutterErrorDetails {
+  const FlutterErrorDetails({
+    required this.exception,
+    this.stack,
+    this.library,
+    this.context,
+  });
+  final Object exception;
+  final StackTrace? stack;
+  final String? library;
+  final Object? context;
+}

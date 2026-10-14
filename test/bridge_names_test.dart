@@ -16,6 +16,11 @@ Set<String> _declared(String path) {
       multiLine: true,
     ).allMatches(source))
       if (!match.group(1)!.startsWith('_')) match.group(1)!,
+    for (final match in RegExp(
+      r'^const ([a-zA-Z]\w*) =',
+      multiLine: true,
+    ).allMatches(source))
+      if (!match.group(1)!.startsWith('_')) match.group(1)!,
   };
 }
 
@@ -28,6 +33,10 @@ void main() {
     expect(
       goRouterBridgeNames.toSet(),
       _declared('lib/src/runtime/dom_go_router.dart'),
+    );
+    expect(
+      flutterLocalizationsBridgeNames.toSet(),
+      _declared('lib/src/runtime/dom_flutter_localizations.dart'),
     );
   });
 }

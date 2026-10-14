@@ -153,6 +153,11 @@ class MaterialApp extends StatelessWidget {
     this.darkTheme,
     this.themeMode = ThemeMode.system,
     this.debugShowCheckedModeBanner = true,
+    this.locale,
+    this.localizationsDelegates,
+    this.localeResolutionCallback,
+    this.localeListResolutionCallback,
+    this.supportedLocales = const [Locale('en', 'US')],
   }) : routerConfig = null;
   const MaterialApp.router({
     super.key,
@@ -165,6 +170,11 @@ class MaterialApp extends StatelessWidget {
     this.darkTheme,
     this.themeMode = ThemeMode.system,
     this.debugShowCheckedModeBanner = true,
+    this.locale,
+    this.localizationsDelegates,
+    this.localeResolutionCallback,
+    this.localeListResolutionCallback,
+    this.supportedLocales = const [Locale('en', 'US')],
   }) : navigatorKey = null,
        home = null,
        routes = const {},
@@ -173,6 +183,27 @@ class MaterialApp extends StatelessWidget {
        onUnknownRoute = null,
        navigatorObservers = const [];
   final RouterConfig<Object>? routerConfig;
+  final Locale? locale;
+  final Iterable<LocalizationsDelegate<dynamic>>? localizationsDelegates;
+  final LocaleResolutionCallback? localeResolutionCallback;
+  final LocaleListResolutionCallback? localeListResolutionCallback;
+  final Iterable<Locale> supportedLocales;
+
+  Locale _resolveLocale() {
+    if (locale != null) return locale!;
+    final preferred = _browserLocales();
+    final listResolved = localeListResolutionCallback?.call(
+      preferred,
+      supportedLocales,
+    );
+    if (listResolved != null) return listResolved;
+    final resolved = localeResolutionCallback?.call(
+      preferred.firstOrNull,
+      supportedLocales,
+    );
+    return resolved ?? basicLocaleListResolution(preferred, supportedLocales);
+  }
+
   final GlobalKey<NavigatorState>? navigatorKey;
   final GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey;
   final Widget? home;
@@ -224,14 +255,27 @@ class MaterialApp extends StatelessWidget {
       final inner = content;
       content = Builder(builder: (context) => builder!(context, inner));
     }
+    final appLocale = _resolveLocale();
     return Title(
       title: title,
       color: color ?? data.colorScheme.primary,
-      child: Theme(
-        data: data,
-        child: ScaffoldMessenger(
-          key: scaffoldMessengerKey,
-          child: _AppSurface(child: content),
+      child: _DocumentLanguage(
+        locale: appLocale,
+        child: Localizations(
+          locale: appLocale,
+          isApplicationLevel: true,
+          delegates: [
+            ...?localizationsDelegates,
+            DefaultMaterialLocalizations.delegate,
+            DefaultWidgetsLocalizations.delegate,
+          ],
+          child: Theme(
+            data: data,
+            child: ScaffoldMessenger(
+              key: scaffoldMessengerKey,
+              child: _AppSurface(child: content),
+            ),
+          ),
         ),
       ),
     );

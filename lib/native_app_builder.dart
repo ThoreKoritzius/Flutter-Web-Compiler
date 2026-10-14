@@ -225,6 +225,25 @@ Future<NativeAppBuild> buildNativeApp(
   );
   if (markdownUri == null)
     throw StateError('Markdown bridge could not be resolved.');
+  Future<Uri> runtimeLibrary(String name) async =>
+      await Isolate.resolvePackageUri(
+        Uri.parse('package:flutter_dom_compiler/src/runtime/$name.dart'),
+      ) ??
+      (throw StateError('Runtime library $name could not be resolved.'));
+  final pluginBridges = {
+    'package:shared_preferences/shared_preferences.dart': (
+      'shared_preferences',
+      await runtimeLibrary('shared_preferences_dom'),
+    ),
+    'package:url_launcher/url_launcher.dart': (
+      'url_launcher',
+      await runtimeLibrary('url_launcher_dom'),
+    ),
+    'package:url_launcher/url_launcher_string.dart': (
+      'url_launcher',
+      await runtimeLibrary('url_launcher_dom'),
+    ),
+  };
   final uiUri = await Isolate.resolvePackageUri(
     Uri.parse('package:flutter_dom_compiler/src/runtime/ui_dom.dart'),
   );
@@ -273,6 +292,12 @@ Future<NativeAppBuild> buildNativeApp(
     ..writeAsStringSync(
       "export '$runtimeUri' show ${goRouterBridgeNames.join(', ')};\n",
     );
+  final localizationsFacade =
+      File(
+        p.join(temporary.path, 'flutter_localizations.dart'),
+      )..writeAsStringSync(
+        "export '$runtimeUri' show ${flutterLocalizationsBridgeNames.join(', ')};\n",
+      );
   final builtInBridges = <String>{};
   final foundationFacade = annotatedFacade('foundation', foundationUri);
   const webEnvironment = {
@@ -350,6 +375,14 @@ Future<NativeAppBuild> buildNativeApp(
             uri == 'package:flutter_markdown_plus/flutter_markdown_plus.dart') {
           builtInBridges.add(uri.split('/').first.substring('package:'.length));
           replacement = markdownUri.toString();
+        } else if (pluginBridges.containsKey(uri)) {
+          final (name, library) = pluginBridges[uri]!;
+          builtInBridges.add(name);
+          replacement = library.toString();
+        } else if (uri ==
+            'package:flutter_localizations/flutter_localizations.dart') {
+          builtInBridges.add('flutter_localizations');
+          replacement = localizationsFacade.uri.toString();
         } else if (uri == 'package:go_router/go_router.dart') {
           builtInBridges.add('go_router');
           replacement = goRouterFacade.uri.toString();
