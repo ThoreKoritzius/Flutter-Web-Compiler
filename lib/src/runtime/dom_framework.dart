@@ -909,22 +909,6 @@ class _DomElement extends Element with _DomParent {
 // ---------------------------------------------------------------------------
 // Root, media and owner.
 
-class Size {
-  const Size(this.width, this.height);
-  final double width, height;
-  static const zero = Size(0, 0);
-  double get shortestSide => math.min(width, height);
-  double get longestSide => math.max(width, height);
-  double get aspectRatio => height == 0 ? 0 : width / height;
-  @override
-  bool operator ==(Object other) =>
-      other is Size && other.width == width && other.height == height;
-  @override
-  int get hashCode => Object.hash(width, height);
-  @override
-  String toString() => 'Size($width, $height)';
-}
-
 enum Orientation { portrait, landscape }
 
 class TextScaler {
@@ -1073,12 +1057,19 @@ class _DomOwner {
   final _dirtyElements = <Element>[];
   final _layoutQueue = LinkedHashSet<_LayoutBuilderElement>.identity();
   final _layoutBuilders = HashSet<_LayoutBuilderElement>.identity();
+  final _paintQueue = LinkedHashSet<_PaintElement>.identity();
+  final _painters = HashSet<_PaintElement>.identity();
   _RootElement? _root;
   bool _scheduled = false, _disposed = false, _flushing = false;
   JSFunction? _resizeListener;
 
   void _scheduleBuild(Element element) {
     _dirtyElements.add(element);
+    _scheduleFrame();
+  }
+
+  void _schedulePaint(_PaintElement element) {
+    _paintQueue.add(element);
     _scheduleFrame();
   }
 
@@ -1109,7 +1100,9 @@ class _DomOwner {
     _flushing = true;
     try {
       var passes = 0;
-      while (_dirtyElements.isNotEmpty || _layoutQueue.isNotEmpty) {
+      while (_dirtyElements.isNotEmpty ||
+          _layoutQueue.isNotEmpty ||
+          _paintQueue.isNotEmpty) {
         if (++passes > 10000)
           throw StateError('Native rebuild limit exceeded.');
         if (_dirtyElements.isNotEmpty) {
@@ -1121,11 +1114,21 @@ class _DomOwner {
           }
           continue;
         }
-        // Measure attached DOM boxes, rather than estimating constraints.
-        final jobs = List.of(_layoutQueue)..sort((a, b) => a._depth - b._depth);
-        _layoutQueue.clear();
-        for (final job in jobs) {
-          if (job._active) job._performLayout();
+        if (_layoutQueue.isNotEmpty) {
+          // Measure attached DOM boxes, rather than estimating constraints.
+          final jobs = List.of(_layoutQueue)
+            ..sort((a, b) => a._depth - b._depth);
+          _layoutQueue.clear();
+          for (final job in jobs) {
+            if (job._active) job._performLayout();
+          }
+          continue;
+        }
+        // Paint once layout has settled.
+        final paints = List.of(_paintQueue);
+        _paintQueue.clear();
+        for (final job in paints) {
+          if (job._active) job._performPaint();
         }
       }
       _updateResizeListener();
@@ -1136,12 +1139,15 @@ class _DomOwner {
 
   void _updateResizeListener() {
     final needed =
-        _layoutBuilders.isNotEmpty || (_root?._mediaHasDependents ?? false);
+        _layoutBuilders.isNotEmpty ||
+        _painters.isNotEmpty ||
+        (_root?._mediaHasDependents ?? false);
     if (needed && _resizeListener == null) {
       _resizeListener = (() {
         if (_disposed) return;
         _root?._resize();
         _layoutQueue.addAll(_layoutBuilders);
+        _paintQueue.addAll(_painters);
         _scheduleFrame();
       }).toJS;
       _window.addEventListener('resize', _resizeListener!);
@@ -1165,6 +1171,7 @@ class _DomOwner {
     }
     _dirtyElements.clear();
     _layoutQueue.clear();
+    _paintQueue.clear();
     Object? failure;
     StackTrace? failureStack;
     void cleanup(void Function() action) {
@@ -1183,6 +1190,7 @@ class _DomOwner {
     }
     _live.clear();
     _layoutBuilders.clear();
+    _painters.clear();
     cleanup(() => host.replaceChildren());
     if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
   }

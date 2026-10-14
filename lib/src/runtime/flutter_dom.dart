@@ -11,6 +11,7 @@ export 'services_dom.dart';
 export 'visual_metadata.dart';
 export 'material_icons_metadata.dart';
 export 'material_colors.dart';
+export 'painting_ui.dart' hide UiGradient, shaderSpec, replayPath, PathSink;
 export 'material_style.dart'
     hide
         borderRadiusCss,
@@ -36,6 +37,7 @@ import 'foundation_dom.dart';
 import 'services_dom.dart';
 import 'material_icons_metadata.dart';
 import 'material_style.dart';
+import 'painting_ui.dart';
 import 'visual_metadata.dart';
 
 import 'dart:async';
@@ -50,3 +52,4 @@ part 'dom_material.dart';
 part 'dom_navigation.dart';
 part 'dom_input.dart';
 part 'dom_material_navigation.dart';
+part 'dom_paint.dart';

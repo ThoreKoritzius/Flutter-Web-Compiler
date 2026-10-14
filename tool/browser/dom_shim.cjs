@@ -74,8 +74,42 @@ class Element {
     if (!connected(this)) throw new Error('Measured a detached element');
     return Element.measure(this);
   }
+  get clientHeight() {
+    if (!connected(this)) throw new Error('Measured a detached element');
+    return Element.measureHeight(this);
+  }
+  // Canvas elements record 2D context calls for assertions.
+  getContext(kind) {
+    if (this.tag !== 'canvas' || kind !== '2d') return null;
+    return this.context ??= recordingContext(this);
+  }
 }
 Element.measure = () => 0;
+Element.measureHeight = () => 0;
+
+function recordingContext(canvas) {
+  const ops = [];
+  const state = { font: '10px sans-serif' };
+  const target = {
+    ops,
+    canvas,
+    measureText(text) {
+      const size = Number((/(\d+(?:\.\d+)?)px/.exec(state.font) || [0, 10])[1]);
+      return { width: text.length * size * 0.5 };
+    },
+    createLinearGradient(...args) { const g = { kind: 'linear', args, stops: [], addColorStop(o, c) { this.stops.push([o, c]); } }; return g; },
+    createRadialGradient(...args) { const g = { kind: 'radial', args, stops: [], addColorStop(o, c) { this.stops.push([o, c]); } }; return g; },
+  };
+  return new Proxy(target, {
+    get(obj, key) {
+      if (key in obj) return obj[key];
+      if (typeof key !== 'string') return undefined;
+      if (key in state) return state[key];
+      return (...args) => { ops.push([key, ...args]); };
+    },
+    set(obj, key, value) { state[key] = value; ops.push(['set:' + key, value]); return true; },
+  });
+}
 
 let root = null;
 function connected(node) {

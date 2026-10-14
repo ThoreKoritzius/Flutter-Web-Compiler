@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `CustomPaint`, `Canvas`, `Paint`, `Path`, `TextPainter` and a `dart:ui` facade backed by HTML canvas, repainting only on resize, `shouldRepaint` or repaint listenables.
+
 - Tree-shake Material icons in native builds with a pure-Dart CFF subsetter (1.6 MB font to a few KB for typical screens); fall back to the full font when usage cannot be determined statically.
 - Rebind Riverpod consumers when an ancestor scope supplies a different container.
 

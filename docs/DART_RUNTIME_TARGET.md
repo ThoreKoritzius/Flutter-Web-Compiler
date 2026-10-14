@@ -171,13 +171,28 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `errorBuilder`.
 - **Icons:** `Icon`, `IconTheme`, `Icons` (all 8,825 Material constants
   generated from Flutter 3.41.6) and `Icons.adaptive`.
+- **Painting:** `CustomPaint` and `CustomPainter` (`shouldRepaint`,
+  `repaint` listenables, foreground painters) on an HTML `<canvas>` sized from
+  the laid-out box at the device pixel ratio; `Canvas` (save/restore,
+  transforms, rect/rrect/path clips, lines, rects, rounded rects, ovals,
+  circles, arcs, paths, points, shadows), `Paint` (fill/stroke, width, caps,
+  joins, gradient shaders, blur mask filters), `Path` (lines, quadratic and
+  cubic curves, arcs including SVG-style `arcToPoint`, rect/oval/rrect/polygon
+  shapes, shifting, even-odd fill), `Rect`, `RRect`, `Offset`/`Size`
+  arithmetic, `ui.Gradient` and `Gradient.createShader`, and `TextPainter`
+  (styled spans, wrapping, `maxLines` with ellipsis, alignment). `dart:ui`
+  imports map to this subset; `package:flutter/painting.dart` maps to the
+  widgets facade. Canvases repaint only on size changes, `shouldRepaint` or
+  their repaint listenable. Not supported: blend modes other than `srcOver`,
+  path metrics, images, paragraphs, and saveLayer compositing (it applies
+  alpha to subsequent drawing).
 
 Not yet implemented: animations and implicit animations, `Hero`, slivers and
 `CustomScrollView`, lazy/infinite lists (`itemCount` is required; at most
-10,000 eagerly built items), long-press gestures and drag/pan, `CustomPaint`,
+10,000 eagerly built items), long-press gestures and drag/pan,
 `Overlay`/`OverlayEntry`, menus/popups, date and time pickers,
 `SegmentedButton`, `DataTable`, `Stepper`, localizations, Cupertino widgets,
-platform plugins and `dart:ui` imports. CSS approximates Flutter layout;
+platform plugins and `dart:ui` window, image and paragraph APIs. CSS approximates Flutter layout;
 widths that Flutter boxes expand to are propagated through wrappers so
 expanding rows and tiles fill their column, but heights remain document flow.
 

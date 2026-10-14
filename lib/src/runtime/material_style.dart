@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:material_color_utilities/material_color_utilities.dart';
 
+import 'painting_ui.dart';
 import 'visual_metadata.dart';
 
 enum FontWeight {
@@ -32,6 +33,8 @@ enum TextAlign { left, right, center, justify, start, end }
 enum TextOverflow { clip, fade, ellipsis, visible }
 
 enum TextDirection { ltr, rtl }
+
+enum TextBaseline { alphabetic, ideographic }
 
 enum BoxShape { rectangle, circle }
 
@@ -83,13 +86,270 @@ class TextDecoration {
 
 class Offset {
   const Offset(this.dx, this.dy);
+  factory Offset.fromDirection(double direction, [double distance = 1]) =>
+      Offset(distance * math.cos(direction), distance * math.sin(direction));
   final double dx, dy;
   static const zero = Offset(0, 0);
+  static const infinite = Offset(double.infinity, double.infinity);
+  double get distance => math.sqrt(dx * dx + dy * dy);
+  double get distanceSquared => dx * dx + dy * dy;
+  double get direction => math.atan2(dy, dx);
+  bool get isFinite => dx.isFinite && dy.isFinite;
+  Offset scale(double scaleX, double scaleY) =>
+      Offset(dx * scaleX, dy * scaleY);
+  Offset translate(double translateX, double translateY) =>
+      Offset(dx + translateX, dy + translateY);
+  Offset operator -() => Offset(-dx, -dy);
+  Offset operator -(Offset other) => Offset(dx - other.dx, dy - other.dy);
+  Offset operator +(Offset other) => Offset(dx + other.dx, dy + other.dy);
+  Offset operator *(double operand) => Offset(dx * operand, dy * operand);
+  Offset operator /(double operand) => Offset(dx / operand, dy / operand);
+  Offset operator %(double operand) => Offset(dx % operand, dy % operand);
+  Rect operator &(Size other) =>
+      Rect.fromLTWH(dx, dy, other.width, other.height);
+  static Offset? lerp(Offset? a, Offset? b, double t) {
+    if (a == null || b == null) return a ?? b;
+    return Offset(a.dx + (b.dx - a.dx) * t, a.dy + (b.dy - a.dy) * t);
+  }
+
   @override
   bool operator ==(Object other) =>
       other is Offset && other.dx == dx && other.dy == dy;
   @override
   int get hashCode => Object.hash(dx, dy);
+  @override
+  String toString() => 'Offset($dx, $dy)';
+}
+
+/// Width and height, as in `dart:ui`.
+class Size {
+  const Size(this.width, this.height);
+  const Size.square(double dimension) : width = dimension, height = dimension;
+  const Size.fromWidth(this.width) : height = double.infinity;
+  const Size.fromHeight(this.height) : width = double.infinity;
+  const Size.fromRadius(double radius)
+    : width = radius * 2,
+      height = radius * 2;
+  final double width, height;
+  static const zero = Size(0, 0);
+  static const infinite = Size(double.infinity, double.infinity);
+  double get shortestSide => math.min(width, height);
+  double get longestSide => math.max(width, height);
+  double get aspectRatio => height == 0 ? 0 : width / height;
+  bool get isEmpty => width <= 0 || height <= 0;
+  bool get isFinite => width.isFinite && height.isFinite;
+  Offset center(Offset origin) =>
+      Offset(origin.dx + width / 2, origin.dy + height / 2);
+  Size operator *(double operand) => Size(width * operand, height * operand);
+  Size operator /(double operand) => Size(width / operand, height / operand);
+  Size operator +(Offset other) => Size(width + other.dx, height + other.dy);
+  Offset operator -(Size other) =>
+      Offset(width - other.width, height - other.height);
+  bool contains(Offset offset) =>
+      offset.dx >= 0 &&
+      offset.dx < width &&
+      offset.dy >= 0 &&
+      offset.dy < height;
+  @override
+  bool operator ==(Object other) =>
+      other is Size && other.width == width && other.height == height;
+  @override
+  int get hashCode => Object.hash(width, height);
+  @override
+  String toString() => 'Size($width, $height)';
+}
+
+class Rect {
+  const Rect.fromLTRB(this.left, this.top, this.right, this.bottom);
+  const Rect.fromLTWH(double left, double top, double width, double height)
+    : this.fromLTRB(left, top, left + width, top + height);
+  Rect.fromCircle({required Offset center, required double radius})
+    : this.fromCenter(center: center, width: radius * 2, height: radius * 2);
+  Rect.fromCenter({
+    required Offset center,
+    required double width,
+    required double height,
+  }) : this.fromLTRB(
+         center.dx - width / 2,
+         center.dy - height / 2,
+         center.dx + width / 2,
+         center.dy + height / 2,
+       );
+  Rect.fromPoints(Offset a, Offset b)
+    : this.fromLTRB(
+        math.min(a.dx, b.dx),
+        math.min(a.dy, b.dy),
+        math.max(a.dx, b.dx),
+        math.max(a.dy, b.dy),
+      );
+  final double left, top, right, bottom;
+  static const zero = Rect.fromLTRB(0, 0, 0, 0);
+  static const largest = Rect.fromLTRB(-1e9, -1e9, 1e9, 1e9);
+  double get width => right - left;
+  double get height => bottom - top;
+  Size get size => Size(width, height);
+  bool get isEmpty => left >= right || top >= bottom;
+  bool get isFinite =>
+      left.isFinite && top.isFinite && right.isFinite && bottom.isFinite;
+  double get shortestSide => math.min(width.abs(), height.abs());
+  double get longestSide => math.max(width.abs(), height.abs());
+  Offset get topLeft => Offset(left, top);
+  Offset get topCenter => Offset(left + width / 2, top);
+  Offset get topRight => Offset(right, top);
+  Offset get centerLeft => Offset(left, top + height / 2);
+  Offset get center => Offset(left + width / 2, top + height / 2);
+  Offset get centerRight => Offset(right, top + height / 2);
+  Offset get bottomLeft => Offset(left, bottom);
+  Offset get bottomCenter => Offset(left + width / 2, bottom);
+  Offset get bottomRight => Offset(right, bottom);
+  Rect shift(Offset offset) => Rect.fromLTRB(
+    left + offset.dx,
+    top + offset.dy,
+    right + offset.dx,
+    bottom + offset.dy,
+  );
+  Rect translate(double translateX, double translateY) =>
+      shift(Offset(translateX, translateY));
+  Rect inflate(double delta) =>
+      Rect.fromLTRB(left - delta, top - delta, right + delta, bottom + delta);
+  Rect deflate(double delta) => inflate(-delta);
+  Rect intersect(Rect other) => Rect.fromLTRB(
+    math.max(left, other.left),
+    math.max(top, other.top),
+    math.min(right, other.right),
+    math.min(bottom, other.bottom),
+  );
+  Rect expandToInclude(Rect other) => Rect.fromLTRB(
+    math.min(left, other.left),
+    math.min(top, other.top),
+    math.max(right, other.right),
+    math.max(bottom, other.bottom),
+  );
+  bool overlaps(Rect other) =>
+      right > other.left &&
+      other.right > left &&
+      bottom > other.top &&
+      other.bottom > top;
+  bool contains(Offset offset) =>
+      offset.dx >= left &&
+      offset.dx < right &&
+      offset.dy >= top &&
+      offset.dy < bottom;
+  static Rect? lerp(Rect? a, Rect? b, double t) {
+    if (a == null || b == null) return a ?? b;
+    double mix(double x, double y) => x + (y - x) * t;
+    return Rect.fromLTRB(
+      mix(a.left, b.left),
+      mix(a.top, b.top),
+      mix(a.right, b.right),
+      mix(a.bottom, b.bottom),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is Rect &&
+      other.left == left &&
+      other.top == top &&
+      other.right == right &&
+      other.bottom == bottom;
+  @override
+  int get hashCode => Object.hash(left, top, right, bottom);
+  @override
+  String toString() => 'Rect.fromLTRB($left, $top, $right, $bottom)';
+}
+
+class RRect {
+  const RRect.fromLTRBAndCorners(
+    this.left,
+    this.top,
+    this.right,
+    this.bottom, {
+    this.topLeft = Radius.zero,
+    this.topRight = Radius.zero,
+    this.bottomRight = Radius.zero,
+    this.bottomLeft = Radius.zero,
+  });
+  RRect.fromLTRBR(
+    double left,
+    double top,
+    double right,
+    double bottom,
+    Radius radius,
+  ) : this.fromLTRBAndCorners(
+        left,
+        top,
+        right,
+        bottom,
+        topLeft: radius,
+        topRight: radius,
+        bottomRight: radius,
+        bottomLeft: radius,
+      );
+  RRect.fromLTRBXY(
+    double left,
+    double top,
+    double right,
+    double bottom,
+    double radiusX,
+    double radiusY,
+  ) : this.fromLTRBR(
+        left,
+        top,
+        right,
+        bottom,
+        Radius.elliptical(radiusX, radiusY),
+      );
+  RRect.fromRectAndRadius(Rect rect, Radius radius)
+    : this.fromLTRBR(rect.left, rect.top, rect.right, rect.bottom, radius);
+  RRect.fromRectXY(Rect rect, double radiusX, double radiusY)
+    : this.fromRectAndRadius(rect, Radius.elliptical(radiusX, radiusY));
+  RRect.fromRectAndCorners(
+    Rect rect, {
+    Radius topLeft = Radius.zero,
+    Radius topRight = Radius.zero,
+    Radius bottomRight = Radius.zero,
+    Radius bottomLeft = Radius.zero,
+  }) : this.fromLTRBAndCorners(
+         rect.left,
+         rect.top,
+         rect.right,
+         rect.bottom,
+         topLeft: topLeft,
+         topRight: topRight,
+         bottomRight: bottomRight,
+         bottomLeft: bottomLeft,
+       );
+  final double left, top, right, bottom;
+  final Radius topLeft, topRight, bottomRight, bottomLeft;
+  double get width => right - left;
+  double get height => bottom - top;
+  Rect get outerRect => Rect.fromLTRB(left, top, right, bottom);
+  Offset get center => Offset(left + width / 2, top + height / 2);
+  RRect shift(Offset offset) => RRect.fromLTRBAndCorners(
+    left + offset.dx,
+    top + offset.dy,
+    right + offset.dx,
+    bottom + offset.dy,
+    topLeft: topLeft,
+    topRight: topRight,
+    bottomRight: bottomRight,
+    bottomLeft: bottomLeft,
+  );
+  RRect inflate(double delta) => RRect.fromLTRBAndCorners(
+    left - delta,
+    top - delta,
+    right + delta,
+    bottom + delta,
+    topLeft: Radius.elliptical(topLeft.x + delta, topLeft.y + delta),
+    topRight: Radius.elliptical(topRight.x + delta, topRight.y + delta),
+    bottomRight: Radius.elliptical(
+      bottomRight.x + delta,
+      bottomRight.y + delta,
+    ),
+    bottomLeft: Radius.elliptical(bottomLeft.x + delta, bottomLeft.y + delta),
+  );
+  RRect deflate(double delta) => inflate(-delta);
 }
 
 class TextStyle {
@@ -956,6 +1216,13 @@ class BorderRadius extends BorderRadiusGeometry {
   final Radius topLeft, topRight, bottomLeft, bottomRight;
   @override
   BorderRadius resolve(TextDirection? direction) => this;
+  RRect toRRect(Rect rect) => RRect.fromRectAndCorners(
+    rect,
+    topLeft: topLeft,
+    topRight: topRight,
+    bottomRight: bottomRight,
+    bottomLeft: bottomLeft,
+  );
 }
 
 /// Left-to-right documents only.
@@ -1140,6 +1407,7 @@ abstract class Gradient {
   const Gradient({required this.colors, this.stops});
   final List<Color> colors;
   final List<double>? stops;
+  Shader createShader(Rect rect, {TextDirection? textDirection});
 }
 
 class LinearGradient extends Gradient {
@@ -1150,6 +1418,18 @@ class LinearGradient extends Gradient {
     super.stops,
   });
   final AlignmentGeometry begin, end;
+  @override
+  Shader createShader(Rect rect, {TextDirection? textDirection}) {
+    Offset point(AlignmentGeometry a) {
+      final r = a.resolve(textDirection);
+      return Offset(
+        rect.center.dx + r.x * rect.width / 2,
+        rect.center.dy + r.y * rect.height / 2,
+      );
+    }
+
+    return Shader.linear(point(begin), point(end), colors, stops);
+  }
 }
 
 class RadialGradient extends Gradient {
@@ -1161,6 +1441,19 @@ class RadialGradient extends Gradient {
   });
   final AlignmentGeometry center;
   final double radius;
+  @override
+  Shader createShader(Rect rect, {TextDirection? textDirection}) {
+    final c = center.resolve(textDirection);
+    return Shader.radial(
+      Offset(
+        rect.center.dx + c.x * rect.width / 2,
+        rect.center.dy + c.y * rect.height / 2,
+      ),
+      radius * rect.shortestSide,
+      colors,
+      stops,
+    );
+  }
 }
 
 enum BoxFit { fill, contain, cover, fitWidth, fitHeight, none, scaleDown }

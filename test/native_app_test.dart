@@ -262,7 +262,7 @@ Future<void> main() async {
       Directory('${directory.path}/lib').createSync();
       final entry = File('${directory.path}/lib/main.dart');
       for (final source in [
-        "import 'dart:ui'; void main() {}",
+        "import 'dart:ui'; void main() { PlatformDispatcher.instance; }",
         "import 'package:flutter/rendering.dart'; void main() {}",
         "import 'a.dart' if (custom.feature) 'b.dart'; void main() {}",
         "import 'package:flutter/material.dart'; void main() => runApp(const UnknownWidget());",

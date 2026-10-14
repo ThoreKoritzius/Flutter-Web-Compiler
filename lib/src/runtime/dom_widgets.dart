@@ -373,8 +373,6 @@ enum CrossAxisAlignment { start, end, center, stretch, baseline }
 
 enum VerticalDirection { up, down }
 
-enum TextBaseline { alphabetic, ideographic }
-
 enum FlexFit { tight, loose }
 
 String _justifyCss(MainAxisAlignment alignment) => switch (alignment) {
