@@ -5,6 +5,7 @@ library;
 import 'package:riverpod/riverpod.dart';
 import 'flutter_dom.dart';
 export 'package:riverpod/riverpod.dart';
+export 'riverpod_change_notifier.dart';
 
 /// Owns a [ProviderContainer] for its subtree. Nested scopes create child
 /// containers, so overrides apply only below them.

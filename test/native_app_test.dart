@@ -126,7 +126,7 @@ Future<void> main() async {
         );
       final original = File('${directory.path}/lib/engine.dart')
         ..writeAsStringSync(
-          "import 'package:flutter/rendering.dart'; int result()=>0;",
+          "import 'package:flutter/physics.dart'; int result()=>0;",
         );
       final bridge = File('${directory.path}/lib/native.dart')
         ..writeAsStringSync('int result()=>42;');
@@ -262,7 +262,7 @@ Future<void> main() async {
       final entry = File('${directory.path}/lib/main.dart');
       for (final source in [
         "import 'dart:ui'; void main() { PlatformDispatcher.instance; }",
-        "import 'package:flutter/rendering.dart'; void main() {}",
+        "import 'package:flutter/physics.dart'; void main() {}",
         "import 'a.dart' if (custom.feature) 'b.dart'; void main() {}",
         "import 'package:flutter/material.dart'; void main() => runApp(const UnknownWidget());",
       ]) {

@@ -882,6 +882,7 @@ Color defaultLineTooltipColor(LineBarSpot touchedSpot) =>
 class LineTouchTooltipData {
   const LineTouchTooltipData({
     BorderRadius? tooltipBorderRadius,
+    double? tooltipRoundedRadius,
     this.tooltipPadding = const EdgeInsets.symmetric(
       horizontal: 16,
       vertical: 8,
@@ -897,10 +898,14 @@ class LineTouchTooltipData {
     this.showOnTopOfTheChartBoxArea = false,
     this.rotateAngle = 0.0,
     this.tooltipBorder = BorderSide.none,
-  }) : _tooltipBorderRadius = tooltipBorderRadius;
+  }) : _tooltipBorderRadius = tooltipBorderRadius,
+       _tooltipRoundedRadius = tooltipRoundedRadius;
   final BorderRadius? _tooltipBorderRadius;
+  // fl_chart < 0.70 named the corner radius `tooltipRoundedRadius`.
+  final double? _tooltipRoundedRadius;
   BorderRadius get tooltipBorderRadius =>
-      _tooltipBorderRadius ?? BorderRadius.circular(4);
+      _tooltipBorderRadius ?? BorderRadius.circular(_tooltipRoundedRadius ?? 4);
+  double get tooltipRoundedRadius => tooltipBorderRadius.topLeft.x;
   final EdgeInsets tooltipPadding;
   final double tooltipMargin, tooltipHorizontalOffset, maxContentWidth;
   final FLHorizontalAlignment tooltipHorizontalAlignment;
@@ -1330,6 +1335,7 @@ Color defaultBarTooltipColor(BarChartGroupData group) =>
 class BarTouchTooltipData {
   BarTouchTooltipData({
     BorderRadius? tooltipBorderRadius,
+    double? tooltipRoundedRadius,
     EdgeInsets? tooltipPadding,
     double? tooltipMargin,
     FLHorizontalAlignment? tooltipHorizontalAlignment,
@@ -1342,7 +1348,9 @@ class BarTouchTooltipData {
     TooltipDirection? direction,
     double? rotateAngle,
     BorderSide? tooltipBorder,
-  }) : tooltipBorderRadius = tooltipBorderRadius ?? BorderRadius.circular(4),
+  }) : tooltipBorderRadius =
+           tooltipBorderRadius ??
+           BorderRadius.circular(tooltipRoundedRadius ?? 4),
        tooltipPadding =
            tooltipPadding ??
            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

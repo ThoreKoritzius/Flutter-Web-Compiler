@@ -798,6 +798,11 @@ Future<T?> showDialog<T>({
   String? barrierLabel,
   bool useRootNavigator = true,
   RouteSettings? routeSettings,
+  bool useSafeArea = true,
+  Offset? anchorPoint,
+  bool? requestFocus,
+  Object? traversalEdgeBehavior,
+  bool fullscreenDialog = false,
 }) => Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
   _OverlayRoute<T>(
     builder: builder,
@@ -818,10 +823,26 @@ Future<T?> showModalBottomSheet<T>({
   bool useRootNavigator = false,
   bool showDragHandle = false,
   RouteSettings? routeSettings,
+  bool useSafeArea = false,
+  Clip? clipBehavior,
+  ShapeBorder? shape,
+  double? elevation,
+  BoxConstraints? constraints,
+  bool? enableDrag,
+  String? barrierLabel,
+  Offset? anchorPoint,
+  bool? requestFocus,
+  Object? sheetAnimationStyle,
+  AnimationController? transitionAnimationController,
 }) => Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
   _OverlayRoute<T>(
-    builder: (context) =>
-        _BottomSheetSurface(color: backgroundColor, child: builder(context)),
+    builder: (context) => _BottomSheetSurface(
+      color: backgroundColor,
+      scrollControlled: isScrollControlled,
+      shape: shape,
+      maxWidth: constraints?.maxWidth,
+      child: builder(context),
+    ),
     dismissible: isDismissible,
     color: barrierColor ?? const Color(0x52000000),
     sheet: true,
@@ -830,15 +851,27 @@ Future<T?> showModalBottomSheet<T>({
 );
 
 class _BottomSheetSurface extends StatelessWidget {
-  const _BottomSheetSurface({required this.color, required this.child});
+  const _BottomSheetSurface({
+    required this.color,
+    required this.child,
+    this.scrollControlled = false,
+    this.shape,
+    this.maxWidth,
+  });
   final Color? color;
   final Widget child;
+  final bool scrollControlled;
+  final ShapeBorder? shape;
+  final double? maxWidth;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final width = maxWidth == null || !maxWidth!.isFinite
+        ? 'min(640px,100vw)'
+        : 'min(${px(maxWidth!)},100vw)';
     return _Box(
       css:
-          'box-sizing:border-box;width:min(640px,100vw);max-height:90vh;overflow-y:auto;border-radius:28px 28px 0 0;background-color:${colorCss(color ?? scheme.surfaceContainerLow)};',
+          'box-sizing:border-box;width:$width;max-height:${scrollControlled ? '100vh' : '90vh'};overflow-y:auto;${shape == null ? 'border-radius:28px 28px 0 0;' : shapeCss(shape)}background-color:${colorCss(color ?? scheme.surfaceContainerLow)};',
       attributes: const {'role': 'dialog', 'aria-modal': 'true'},
       fill: _Fill.none,
       children: [child],
@@ -848,6 +881,7 @@ class _BottomSheetSurface extends StatelessWidget {
 
 class Dialog extends StatelessWidget {
   const Dialog({
+    this.clipBehavior,
     super.key,
     this.backgroundColor,
     this.elevation,
@@ -855,6 +889,9 @@ class Dialog extends StatelessWidget {
     this.shape,
     this.child,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Color? backgroundColor;
   final double? elevation;
   final EdgeInsets? insetPadding;
@@ -878,6 +915,7 @@ class Dialog extends StatelessWidget {
 
 class AlertDialog extends StatelessWidget {
   const AlertDialog({
+    this.clipBehavior,
     super.key,
     this.icon,
     this.title,
@@ -891,6 +929,9 @@ class AlertDialog extends StatelessWidget {
     this.actionsAlignment,
     this.insetPadding,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget? icon, title, content;
   final List<Widget>? actions;
   final Color? backgroundColor;
@@ -970,11 +1011,15 @@ class AlertDialog extends StatelessWidget {
 
 class SimpleDialog extends StatelessWidget {
   const SimpleDialog({
+    this.clipBehavior,
     super.key,
     this.title,
     this.children,
     this.backgroundColor,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget? title;
   final List<Widget>? children;
   final Color? backgroundColor;

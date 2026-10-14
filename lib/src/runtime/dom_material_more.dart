@@ -201,6 +201,8 @@ Future<T?> showMenu<T>({
   );
 }
 
+enum PopupMenuPosition { over, under }
+
 typedef PopupMenuItemBuilder<T> =
     List<PopupMenuEntry<T>> Function(BuildContext context);
 typedef PopupMenuItemSelected<T> = void Function(T value);
@@ -222,7 +224,28 @@ class PopupMenuButton<T> extends StatelessWidget {
     this.enabled = true,
     this.color,
     this.shape,
+    this.position,
+    this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.constraints,
+    this.splashRadius,
+    this.menuPadding,
+    this.clipBehavior = Clip.none,
+    this.useRootNavigator = false,
+    this.enableFeedback,
+    this.iconColor,
+    this.style,
   });
+  final PopupMenuPosition? position;
+  final double? elevation, splashRadius;
+  final Color? shadowColor, surfaceTintColor, iconColor;
+  final BoxConstraints? constraints;
+  final EdgeInsetsGeometry? menuPadding;
+  final Clip clipBehavior;
+  final bool useRootNavigator;
+  final bool? enableFeedback;
+  final ButtonStyle? style;
   final PopupMenuItemBuilder<T> itemBuilder;
   final T? initialValue;
   final VoidCallback? onOpened, onCanceled;
@@ -244,7 +267,8 @@ class PopupMenuButton<T> extends StatelessWidget {
       context: context,
       position: RelativeRect.fromLTRB(
         rect.left + offset.dx,
-        rect.bottom + offset.dy,
+        (position == PopupMenuPosition.under ? rect.bottom : rect.top) +
+            offset.dy,
         viewport.width - rect.right,
         0,
       ),
@@ -252,6 +276,7 @@ class PopupMenuButton<T> extends StatelessWidget {
       initialValue: initialValue,
       color: color,
       shape: shape,
+      useRootNavigator: useRootNavigator,
     );
     if (value == null) {
       onCanceled?.call();
@@ -783,6 +808,7 @@ class ActionChip extends StatelessWidget {
 
 class InputChip extends StatelessWidget {
   const InputChip({
+    this.clipBehavior,
     super.key,
     required this.label,
     this.avatar,
@@ -792,6 +818,9 @@ class InputChip extends StatelessWidget {
     this.onDeleted,
     this.tooltip,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget label;
   final Widget? avatar;
   final bool selected;

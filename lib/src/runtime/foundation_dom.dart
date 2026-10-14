@@ -5,6 +5,9 @@ export 'dart:typed_data';
 
 import 'dart:async';
 
+import 'browser_platform.dart'
+    if (dart.library.js_interop) 'browser_platform_web.dart';
+
 const bool kIsWeb = bool.fromEnvironment('dart.library.js_interop');
 const bool kReleaseMode = bool.fromEnvironment('dart.vm.product');
 const bool kProfileMode = bool.fromEnvironment('dart.vm.profile');
@@ -33,6 +36,42 @@ void debugPrintSynchronously(String? message, {int? wrapWidth}) {
     throw UnsupportedError('Debug log wrapping is unsupported.');
   print(message);
 }
+
+/// Prints [stackTrace] (or the current one) with an optional [label].
+void debugPrintStack({StackTrace? stackTrace, String? label, int? maxFrames}) {
+  if (label != null) debugPrint(label);
+  var lines = (stackTrace ?? StackTrace.current).toString().trimRight().split(
+    '\n',
+  );
+  if (maxFrames != null) lines = lines.take(maxFrames).toList();
+  debugPrint(lines.join('\n'));
+}
+
+enum TargetPlatform { android, fuchsia, iOS, linux, macOS, windows }
+
+/// Overrides [defaultTargetPlatform] in debug code, as in Flutter.
+TargetPlatform? debugDefaultTargetPlatformOverride;
+
+/// The operating system the browser runs on, detected from the user agent
+/// the way Flutter web does; Android when unknown.
+TargetPlatform get defaultTargetPlatform =>
+    debugDefaultTargetPlatformOverride ?? _browserPlatform;
+
+final TargetPlatform _browserPlatform = () {
+  final agent = (browserUserAgent() ?? '').toLowerCase();
+  if (agent.contains('iphone') ||
+      agent.contains('ipad') ||
+      agent.contains('ipod')) {
+    return TargetPlatform.iOS;
+  }
+  if (agent.contains('android')) return TargetPlatform.android;
+  if (agent.contains('mac')) return TargetPlatform.macOS;
+  if (agent.contains('win')) return TargetPlatform.windows;
+  if (agent.contains('linux') || agent.contains('cros')) {
+    return TargetPlatform.linux;
+  }
+  return TargetPlatform.android;
+}();
 
 typedef VoidCallback = void Function();
 typedef ValueChanged<T> = void Function(T value);

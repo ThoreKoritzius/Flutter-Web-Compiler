@@ -1299,7 +1299,32 @@ class DropdownButton<T> extends StatelessWidget {
     this.isDense = false,
     this.dropdownColor,
     this.borderRadius,
+    this.selectedItemBuilder,
+    this.onTap,
+    this.elevation = 8,
+    this.iconDisabledColor,
+    this.iconEnabledColor,
+    this.iconSize = 24,
+    this.itemHeight,
+    this.focusColor,
+    this.focusNode,
+    this.autofocus = false,
+    this.menuMaxHeight,
+    this.enableFeedback,
+    this.alignment = AlignmentDirectional.centerStart,
+    this.padding,
   });
+  final List<Widget> Function(BuildContext context)? selectedItemBuilder;
+  final VoidCallback? onTap;
+  final int elevation;
+  final Color? iconDisabledColor, iconEnabledColor, focusColor;
+  final double iconSize;
+  final double? itemHeight, menuMaxHeight;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final bool? enableFeedback;
+  final AlignmentGeometry alignment;
+  final EdgeInsetsGeometry? padding;
   final List<DropdownMenuItem<T>>? items;
   final T? value;
   final Widget? hint, disabledHint, underline, icon;
@@ -1319,8 +1344,23 @@ class DropdownButton<T> extends StatelessWidget {
     onChanged: items == null || items!.isEmpty ? null : onChanged,
     expanded: isExpanded,
     style: style,
-    underline: underline != null,
+    // Flutter draws a default underline unless one is given or an ancestor
+    // hides it; a given underline other than an empty box draws a line.
+    underline: underline == null
+        ? context
+                  .dependOnInheritedWidgetOfExactType<
+                    DropdownButtonHideUnderline
+                  >() ==
+              null
+        : underline is! SizedBox,
   );
+}
+
+/// Hides the default underline of descendant [DropdownButton]s.
+class DropdownButtonHideUnderline extends InheritedWidget {
+  const DropdownButtonHideUnderline({super.key, required super.child});
+  @override
+  bool updateShouldNotify(DropdownButtonHideUnderline oldWidget) => false;
 }
 
 class _Select<T> extends StatelessWidget {
