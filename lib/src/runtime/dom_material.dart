@@ -2106,7 +2106,8 @@ class ScaffoldMessenger extends StatefulWidget {
   State<ScaffoldMessenger> createState() => ScaffoldMessengerState();
 }
 
-class ScaffoldMessengerState extends State<ScaffoldMessenger> {
+class ScaffoldMessengerState extends State<ScaffoldMessenger>
+    with _MaterialBannerHost {
   final _queue = <(SnackBar, Completer<SnackBarClosedReason>)>[];
   Timer? _timer;
 
@@ -2181,6 +2182,7 @@ class ScaffoldMessengerState extends State<ScaffoldMessenger> {
           fill: _Fill.none,
           children: [_queue.first.$1],
         ),
+      ?_materialBannerView,
     ],
   );
 }
