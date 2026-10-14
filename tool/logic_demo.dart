@@ -77,12 +77,26 @@ Future<void> main(List<String> args) async {
           }),
         );
       }
-    } else if (request.uri.path == '/' || request.uri.path == '/$script') {
-      final name = request.uri.path == '/' ? 'index.html' : script;
-      request.response.headers.contentType = name.endsWith('.js')
-          ? ContentType('application', 'javascript')
-          : ContentType.html;
-      request.response.add(File('${output.path}/$name').readAsBytesSync());
+    } else if (const {
+      '/',
+      '/app.js',
+      '/logic.js',
+      '/app.css',
+    }.contains(request.uri.path)) {
+      final name = request.uri.path == '/'
+          ? 'index.html'
+          : request.uri.path.substring(1);
+      final file = File('${output.path}/$name');
+      if (!file.existsSync()) {
+        request.response.statusCode = 404;
+      } else {
+        request.response.headers.contentType = name.endsWith('.js')
+            ? ContentType('application', 'javascript')
+            : name.endsWith('.css')
+            ? ContentType('text', 'css', charset: 'utf-8')
+            : ContentType.html;
+        request.response.add(file.readAsBytesSync());
+      }
     } else {
       request.response.statusCode = 404;
     }

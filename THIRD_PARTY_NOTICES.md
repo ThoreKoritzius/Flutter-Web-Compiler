@@ -1,7 +1,12 @@
 # Third-party notices
 
-Material icon metadata in `lib/src/runtime/material_icons_metadata.dart` is
-derived from Flutter `packages/flutter/lib/src/material/icons.dart`.
+Material icon metadata in `lib/src/runtime/material_icons_metadata.dart` and
+color swatches in `lib/src/runtime/material_colors.dart` are generated from
+Flutter `packages/flutter/lib/src/material/icons.dart` and `colors.dart`.
+Native builds copy Flutter's `MaterialIcons-Regular.otf` from the user's
+Flutter SDK into their output; that font is distributed under the Apache
+License 2.0 (see `MaterialIcons_LICENSE.txt` in the Flutter material fonts
+artifact) and is not included in this repository.
 
 Source: https://github.com/flutter/flutter
 

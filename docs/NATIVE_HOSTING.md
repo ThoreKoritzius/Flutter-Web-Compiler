@@ -1,9 +1,12 @@
 # Hosting an authenticated native slice
 
-The experimental Dart runtime emits `index.html` and `app.js`. The script path
-is relative, so the bundle can be hosted under a path such as `/native-preview/`.
-Native builds use dart2js `--csp`, which disables dynamic code generation. The
-current host uses inline styles; its styling requires an appropriate style policy.
+The experimental Dart runtime emits `index.html`, `app.js`, `app.css` and an
+`assets/` directory. All paths are relative, so the bundle can be hosted under a path such as `/native-preview/`.
+Native builds use dart2js `--csp`, which disables dynamic code generation. Runtime
+stylesheets are linked (`app.css`), but elements carry inline style attributes,
+so the policy needs `style-src 'self'` plus `style-src-attr 'unsafe-inline'`.
+Fonts and images load from the same origin (`font-src 'self'`, `img-src 'self'`
+plus any `Image.network` hosts).
 
 For an existing cookie-authenticated application, serve the native slice on the
 same HTTPS origin as its API and sign in through the application's normal flow.

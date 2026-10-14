@@ -62,6 +62,11 @@ Future<void> main(List<String> arguments) async {
       'package-bridges',
       help: 'Explicit package URI adapter JSON; requires --dart-runtime.',
     )
+    ..addOption(
+      'material-icons-font',
+      help:
+          'MaterialIcons-Regular.otf for --dart-runtime; defaults to the Flutter SDK on FLUTTER_ROOT or PATH.',
+    )
     ..addMultiOption(
       'dart-define',
       splitCommas: false,
@@ -170,11 +175,18 @@ Future<void> main(List<String> arguments) async {
         packageBridges: packageBridges,
         dartDefines: defines,
         sourceSelections: selections,
+        materialIconsFont: args['material-icons-font'] as String?,
       );
+      if (app.usesMaterialIcons && app.materialIconsFont == null) {
+        throw StateError(
+          'This app renders Material icons, but MaterialIcons-Regular.otf was not found. '
+          'Install the Flutter SDK (FLUTTER_ROOT or flutter on PATH, then run `flutter precache --web`) '
+          'or pass --material-icons-font <path>.',
+        );
+      }
       final output = Directory(p.absolute(args['output'] as String))
         ..createSync(recursive: true);
-      File(p.join(output.path, 'app.js')).writeAsStringSync(app.javascript);
-      File(p.join(output.path, 'index.html')).writeAsStringSync(nativeAppHost);
+      final written = writeNativeApp(app, output.path);
       File(p.join(output.path, 'report.json')).writeAsStringSync(
         const JsonEncoder.withIndent('  ').convert({
           'target': 'experimental-dart-runtime',
@@ -193,14 +205,22 @@ Future<void> main(List<String> arguments) async {
           'dartDefinitionKeys': defines.keys.toList(),
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
-          'stateLifecycle': 'unkeyed-structural-state-replace-view',
+          'stateLifecycle': 'keyed-element-tree-retained-dom',
           'providerIntegration': app.riverpodConsumers
-              ? 'bounded-root-riverpod-2.6.1'
+              ? 'riverpod-2.6.1-element-scopes'
               : 'none',
+          'materialIconsFont': app.materialIconsFont == null
+              ? null
+              : 'assets/fonts/MaterialIcons-Regular.otf',
+          'fontFamilies': {
+            for (final face in app.fontFaces) face.family,
+          }.toList(),
+          'assets': app.assets.keys.toList(),
+          'files': written,
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  Experimental: unkeyed structural state; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  ${app.assets.length} assets\n  Experimental: keyed element tree with retained DOM; ${app.riverpodConsumers ? 'Riverpod 2.6.1 scopes and consumers' : 'no provider integration'}.',
       );
       return;
     }

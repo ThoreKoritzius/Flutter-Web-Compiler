@@ -20,7 +20,21 @@ class NativeAppBuild {
     this.riverpodConsumers = false,
     this.packageAdapters = const [],
     this.sourceSelections = const {},
+    this.assets = const {},
+    this.fontFaces = const [],
+    this.usesMaterialIcons = false,
+    this.materialIconsFont,
   });
+
+  /// Output-relative asset paths mapped to absolute source files.
+  final Map<String, String> assets;
+  final List<NativeFontFace> fontFaces;
+
+  /// Whether compiled code retains Material icon metadata.
+  final bool usesMaterialIcons;
+
+  /// The resolved MaterialIcons font, when one was found or supplied.
+  final String? materialIconsFont;
   final Map<String, NativeSourceSelection> sourceSelections;
   final List<String> packageAdapters;
   final bool riverpodConsumers;
@@ -40,8 +54,10 @@ Future<NativeAppBuild> buildNativeApp(
   Map<String, String> packageBridges = const {},
   Map<String, String> dartDefines = const {},
   Map<String, NativeSourceSelection> sourceSelections = const {},
+  String? materialIconsFont,
 }) async {
   final root = Directory(project).resolveSymbolicLinksSync();
+  final resources = readNativeResources(root);
   final entry = File(p.join(root, source));
   if (!entry.existsSync()) throw ArgumentError('Native app entry is missing.');
   if (libraryBridges.length > 50)
@@ -354,21 +370,230 @@ Future<NativeAppBuild> buildNativeApp(
       throw StateError(
         'Official Dart compilation failed:\n${result.stdout}${result.stderr}',
       );
+    final javascript = File(output).readAsStringSync();
+    // dart2js drops unused constants, so the family name survives only when
+    // icon metadata is reachable from the compiled program.
+    final usesIcons = javascript.contains('MaterialIcons');
+    final iconFont = usesIcons || resources.usesMaterialDesign
+        ? findMaterialIconsFont(materialIconsFont)
+        : null;
     return NativeAppBuild(
-      File(output).readAsStringSync(),
+      javascript,
       seen.length,
       List.unmodifiable(usedBridges),
       sourceSelections: Map.unmodifiable(usedSelections),
       riverpodConsumers: checkedRiverpod,
       packageAdapters: List.unmodifiable(usedPackages),
+      assets: Map.unmodifiable({
+        ...resources.assets,
+        if (iconFont != null) _materialIconsPath: iconFont,
+      }),
+      fontFaces: List.unmodifiable([
+        if (iconFont != null)
+          const NativeFontFace('MaterialIcons', _materialIconsPath),
+        ...resources.fontFaces,
+      ]),
+      usesMaterialIcons: usesIcons,
+      materialIconsFont: iconFont,
     );
   } finally {
     temporary.deleteSync(recursive: true);
   }
 }
 
+const _materialIconsPath = 'assets/fonts/MaterialIcons-Regular.otf';
+
+class NativeFontFace {
+  const NativeFontFace(this.family, this.path, {this.weight, this.style});
+  final String family;
+
+  /// Output-relative URL path of the font file.
+  final String path;
+  final int? weight;
+  final String? style;
+}
+
+class NativeResources {
+  NativeResources(this.assets, this.fontFaces, this.usesMaterialDesign);
+  final Map<String, String> assets;
+  final List<NativeFontFace> fontFaces;
+  final bool usesMaterialDesign;
+}
+
+final _safeFamily = RegExp(r'^[A-Za-z0-9 _./-]+$');
+
+/// Reads `flutter: assets/fonts/uses-material-design` from the project
+/// pubspec. Assets keep Flutter web's `assets/<key>` URL layout; directory
+/// entries include their direct files, as in Flutter.
+NativeResources readNativeResources(String root) {
+  final pubspec = File(p.join(root, 'pubspec.yaml'));
+  if (!pubspec.existsSync()) return NativeResources(const {}, const [], false);
+  final yaml = loadYaml(pubspec.readAsStringSync());
+  final flutter = yaml is YamlMap ? yaml['flutter'] : null;
+  if (flutter is! YamlMap) return NativeResources(const {}, const [], false);
+  final assets = <String, String>{};
+  void add(String key) {
+    final normalized = p.posix.normalize(key);
+    if (p.posix.isAbsolute(normalized) || normalized.split('/').contains('..'))
+      throw ArgumentError('Asset paths must stay within the project: $key');
+    final file = File(p.join(root, normalized));
+    if (!file.existsSync() ||
+        !p.isWithin(root, file.resolveSymbolicLinksSync()))
+      throw ArgumentError('Declared asset is missing: $key');
+    assets['assets/$normalized'] = file.resolveSymbolicLinksSync();
+  }
+
+  final declared = flutter['assets'];
+  if (declared is YamlList) {
+    for (final item in declared) {
+      final key = item is YamlMap ? item['path'] : item;
+      if (key is! String) throw ArgumentError('Invalid asset declaration.');
+      if (key.endsWith('/')) {
+        final directory = Directory(p.join(root, key));
+        if (!directory.existsSync() ||
+            !p.isWithin(root, directory.resolveSymbolicLinksSync()))
+          throw ArgumentError('Declared asset directory is missing: $key');
+        for (final entity
+            in directory.listSync()..sort((a, b) => a.path.compareTo(b.path))) {
+          if (entity is File) add(p.posix.join(key, p.basename(entity.path)));
+        }
+      } else {
+        add(key);
+      }
+    }
+  }
+  final faces = <NativeFontFace>[];
+  final fonts = flutter['fonts'];
+  if (fonts is YamlList) {
+    for (final family in fonts) {
+      final name = family is YamlMap ? family['family'] : null;
+      final files = family is YamlMap ? family['fonts'] : null;
+      if (name is! String || !_safeFamily.hasMatch(name) || files is! YamlList)
+        throw ArgumentError('Invalid font family declaration.');
+      for (final font in files) {
+        final asset = font is YamlMap ? font['asset'] : null;
+        if (asset is! String) throw ArgumentError('Invalid font asset.');
+        add(asset);
+        final weight = font['weight'];
+        final style = font['style'];
+        if (weight != null && (weight is! int || weight < 100 || weight > 900))
+          throw ArgumentError('Invalid font weight for $name.');
+        if (style != null && style != 'normal' && style != 'italic')
+          throw ArgumentError('Invalid font style for $name.');
+        faces.add(
+          NativeFontFace(
+            name,
+            'assets/${p.posix.normalize(asset)}',
+            weight: weight as int?,
+            style: style as String?,
+          ),
+        );
+      }
+    }
+  }
+  return NativeResources(
+    assets,
+    faces,
+    flutter['uses-material-design'] == true,
+  );
+}
+
+/// Locates Flutter's MaterialIcons font: an explicit path, `FLUTTER_ROOT`,
+/// or the SDK containing the `flutter` executable on `PATH`.
+String? findMaterialIconsFont([String? explicit]) {
+  if (explicit != null) {
+    final file = File(explicit);
+    if (!file.existsSync())
+      throw ArgumentError('Material icon font is missing: $explicit');
+    return file.resolveSymbolicLinksSync();
+  }
+  final roots = <String>[
+    if (Platform.environment['FLUTTER_ROOT'] case final root?) root,
+  ];
+  for (final directory in (Platform.environment['PATH'] ?? '').split(
+    Platform.isWindows ? ';' : ':',
+  )) {
+    if (directory.isEmpty) continue;
+    final executable = File(
+      p.join(directory, Platform.isWindows ? 'flutter.bat' : 'flutter'),
+    );
+    if (executable.existsSync()) {
+      roots.add(p.dirname(p.dirname(executable.resolveSymbolicLinksSync())));
+    }
+  }
+  for (final root in roots) {
+    final font = File(
+      p.join(
+        root,
+        'bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+      ),
+    );
+    if (font.existsSync()) return font.resolveSymbolicLinksSync();
+  }
+  return null;
+}
+
+const _runtimeCss = '''
+html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+#app{min-height:100vh}
+button{font:inherit;color:inherit}
+.fd-ink{cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none}
+.fd-ink:hover{background-image:linear-gradient(var(--fd-hover),var(--fd-hover))}
+.fd-ink:active{background-image:linear-gradient(var(--fd-press),var(--fd-press))}
+.fd-ink:focus-visible{outline:2px solid var(--fd-focus,currentColor);outline-offset:2px}
+.fd-button:disabled{cursor:default;background-image:none;box-shadow:none}
+.fd-linear-indeterminate::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--fd-indicator);animation:fd-linear 1.8s ease-in-out infinite}
+@keyframes fd-linear{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.fd-switch{appearance:none;-webkit-appearance:none;position:relative;flex-shrink:0;box-sizing:border-box;width:52px;height:32px;margin:4px;border-radius:16px;border:2px solid var(--fd-off-border);background:var(--fd-off-track);cursor:pointer;transition:background-color .15s}
+.fd-switch::before{content:"";position:absolute;top:50%;left:6px;width:16px;height:16px;border-radius:50%;background:var(--fd-off-thumb);transform:translateY(-50%);transition:left .15s,width .15s,height .15s}
+.fd-switch:checked{background:var(--fd-on-track);border-color:var(--fd-on-track)}
+.fd-switch:checked::before{left:22px;width:24px;height:24px;background:var(--fd-on-thumb)}
+.fd-switch:disabled{opacity:.38;cursor:default}
+.fd-switch:focus-visible{outline:2px solid var(--fd-on-track);outline-offset:2px}
+.fd-spin{animation:fd-spin 1s linear infinite}
+@keyframes fd-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.fd-spin,.fd-linear-indeterminate::after{animation-duration:4s}}
+''';
+
+/// Stylesheet for runtime interaction states and declared font faces.
+String nativeAppCss(List<NativeFontFace> fontFaces) {
+  final out = StringBuffer(_runtimeCss);
+  for (final face in fontFaces) {
+    final format = face.path.endsWith('.otf')
+        ? 'opentype'
+        : face.path.endsWith('.woff2')
+        ? 'woff2'
+        : face.path.endsWith('.woff')
+        ? 'woff'
+        : 'truetype';
+    out.writeln(
+      '@font-face{font-family:"${face.family}";src:url("${Uri.encodeFull(face.path)}") format("$format");font-display:block;'
+      '${face.weight == null ? '' : 'font-weight:${face.weight};'}${face.style == null ? '' : 'font-style:${face.style};'}}',
+    );
+  }
+  return out.toString();
+}
+
 const nativeAppHost = '''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Native app</title>
-<style>html,body{margin:0;min-height:100%;font-family:system-ui,sans-serif}#app{min-height:100vh}button{font:inherit;cursor:pointer}button:disabled{cursor:default}button:focus-visible{outline:2px solid currentColor;outline-offset:3px}</style>
+<link rel="stylesheet" href="app.css">
 </head><body><div id="app"></div><script defer src="app.js"></script></body></html>''';
+
+/// Writes the compiled app, host page, stylesheet and copied assets.
+List<String> writeNativeApp(NativeAppBuild app, String outputDirectory) {
+  final output = Directory(outputDirectory)..createSync(recursive: true);
+  final written = <String>['index.html', 'app.css', 'app.js'];
+  File(p.join(output.path, 'app.js')).writeAsStringSync(app.javascript);
+  File(p.join(output.path, 'index.html')).writeAsStringSync(nativeAppHost);
+  File(
+    p.join(output.path, 'app.css'),
+  ).writeAsStringSync(nativeAppCss(app.fontFaces));
+  for (final asset in app.assets.entries) {
+    final target = File(p.join(output.path, asset.key));
+    target.parent.createSync(recursive: true);
+    File(asset.value).copySync(target.path);
+    written.add(asset.key);
+  }
+  return written;
+}
