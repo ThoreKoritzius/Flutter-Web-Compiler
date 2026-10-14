@@ -325,8 +325,12 @@ Future<NativeAppBuild> buildNativeApp(
           replacement = servicesUri.toString();
         } else if (uri == 'dart:ui') {
           replacement = uiUri.toString();
-        } else if (uri == 'package:flutter/widgets.dart' ||
-            uri == 'package:flutter/painting.dart') {
+        } else if (const {
+          'package:flutter/widgets.dart',
+          'package:flutter/painting.dart',
+          'package:flutter/animation.dart',
+          'package:flutter/scheduler.dart',
+        }.contains(uri)) {
           replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/')) {
           unsupported('Unsupported Flutter/engine import: $uri');

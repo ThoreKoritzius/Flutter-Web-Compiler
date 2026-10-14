@@ -124,6 +124,7 @@ class Offset {
 /// Width and height, as in `dart:ui`.
 class Size {
   const Size(this.width, this.height);
+  static Size? lerp(Size? a, Size? b, double t) => lerpSize(a, b, t);
   const Size.square(double dimension) : width = dimension, height = dimension;
   const Size.fromWidth(this.width) : height = double.infinity;
   const Size.fromHeight(this.height) : width = double.infinity;
@@ -353,6 +354,8 @@ class RRect {
 }
 
 class TextStyle {
+  static TextStyle? lerp(TextStyle? a, TextStyle? b, double t) =>
+      lerpTextStyle(a, b, t);
   const TextStyle({
     this.inherit = true,
     this.color,
@@ -1084,11 +1087,18 @@ class ThemeData {
 }
 
 abstract class EdgeInsetsGeometry {
+  static EdgeInsetsGeometry? lerp(
+    EdgeInsetsGeometry? a,
+    EdgeInsetsGeometry? b,
+    double t,
+  ) => lerpEdgeInsets(a, b, t);
   const EdgeInsetsGeometry();
   EdgeInsets resolve(TextDirection? direction);
 }
 
 class EdgeInsets extends EdgeInsetsGeometry {
+  static EdgeInsets? lerp(EdgeInsets? a, EdgeInsets? b, double t) =>
+      _lerpInsets(a, b, t);
   const EdgeInsets.all(double value)
     : left = value,
       top = value,
@@ -1174,6 +1184,11 @@ class EdgeInsetsDirectional extends EdgeInsetsGeometry {
 }
 
 class Radius {
+  static Radius? lerp(Radius? a, Radius? b, double t) {
+    if (a == null && b == null) return null;
+    return _lerpRadius(a ?? Radius.zero, b ?? Radius.zero, t);
+  }
+
   const Radius.circular(double radius) : x = radius, y = radius;
   const Radius.elliptical(this.x, this.y);
   static const zero = Radius.circular(0);
@@ -1181,11 +1196,18 @@ class Radius {
 }
 
 abstract class BorderRadiusGeometry {
+  static BorderRadiusGeometry? lerp(
+    BorderRadiusGeometry? a,
+    BorderRadiusGeometry? b,
+    double t,
+  ) => lerpBorderRadius(a, b, t);
   const BorderRadiusGeometry();
   BorderRadius resolve(TextDirection? direction);
 }
 
 class BorderRadius extends BorderRadiusGeometry {
+  static BorderRadius? lerp(BorderRadius? a, BorderRadius? b, double t) =>
+      lerpBorderRadius(a, b, t) as BorderRadius?;
   const BorderRadius.all(Radius radius)
     : topLeft = radius,
       topRight = radius,
@@ -1259,6 +1281,8 @@ class BorderRadiusDirectional extends BorderRadiusGeometry {
 }
 
 class BorderSide {
+  static BorderSide lerp(BorderSide a, BorderSide b, double t) =>
+      _lerpSide(a, b, t);
   const BorderSide({
     this.color = const Color(0xff000000),
     this.width = 1,
@@ -1348,6 +1372,11 @@ class CircleBorder extends OutlinedBorder {
 }
 
 class BoxShadow {
+  static List<BoxShadow>? lerpList(
+    List<BoxShadow>? a,
+    List<BoxShadow>? b,
+    double t,
+  ) => _lerpShadows(a, b, t);
   const BoxShadow({
     this.color = const Color(0xff000000),
     this.offset = Offset.zero,
@@ -1360,11 +1389,18 @@ class BoxShadow {
 }
 
 abstract class AlignmentGeometry {
+  static AlignmentGeometry? lerp(
+    AlignmentGeometry? a,
+    AlignmentGeometry? b,
+    double t,
+  ) => lerpAlignment(a, b, t);
   const AlignmentGeometry();
   Alignment resolve(TextDirection? direction);
 }
 
 class Alignment extends AlignmentGeometry {
+  static Alignment? lerp(Alignment? a, Alignment? b, double t) =>
+      lerpAlignment(a, b, t) as Alignment?;
   const Alignment(this.x, this.y);
   final double x, y;
   static const topLeft = Alignment(-1, -1);
@@ -1554,10 +1590,14 @@ String decorationImageCss(DecorationImage? image) {
 }
 
 abstract class Decoration {
+  static Decoration? lerp(Decoration? a, Decoration? b, double t) =>
+      lerpDecoration(a, b, t);
   const Decoration();
 }
 
 class BoxDecoration extends Decoration {
+  static BoxDecoration? lerp(BoxDecoration? a, BoxDecoration? b, double t) =>
+      lerpDecoration(a, b, t) as BoxDecoration?;
   const BoxDecoration({
     this.color,
     this.border,
@@ -1829,4 +1869,179 @@ String elevationCss(double elevation, Color shadow) {
   final key = colorCss(shadow.withValues(alpha: 0.3));
   final ambient = colorCss(shadow.withValues(alpha: 0.15));
   return 'box-shadow:0 ${level}px ${level + 1}px $key,0 ${level * 2 - 1}px ${level * 3}px ${level}px $ambient;';
+}
+
+// ---------------------------------------------------------------------------
+// Interpolation used by implicit animations. Shapes that cannot be blended
+// (different border types, gradients) switch at the midpoint, as Flutter
+// does for non-interpolable properties.
+
+double _mix(double a, double b, double t) => a + (b - a) * t;
+
+T? _switch<T>(T? a, T? b, double t) => t < 0.5 ? a : b;
+
+EdgeInsets? _lerpInsets(EdgeInsets? a, EdgeInsets? b, double t) {
+  {
+    if (a == null && b == null) return null;
+    a ??= EdgeInsets.zero;
+    b ??= EdgeInsets.zero;
+    return EdgeInsets.fromLTRB(
+      _mix(a.left, b.left, t),
+      _mix(a.top, b.top, t),
+      _mix(a.right, b.right, t),
+      _mix(a.bottom, b.bottom, t),
+    );
+  }
+}
+
+EdgeInsetsGeometry? lerpEdgeInsets(
+  EdgeInsetsGeometry? a,
+  EdgeInsetsGeometry? b,
+  double t,
+) => _lerpInsets(
+  a?.resolve(TextDirection.ltr),
+  b?.resolve(TextDirection.ltr),
+  t,
+);
+
+Radius _lerpRadius(Radius a, Radius b, double t) =>
+    Radius.elliptical(_mix(a.x, b.x, t), _mix(a.y, b.y, t));
+
+BorderRadiusGeometry? lerpBorderRadius(
+  BorderRadiusGeometry? x,
+  BorderRadiusGeometry? y,
+  double t,
+) {
+  if (x == null && y == null) return null;
+  final a = x?.resolve(TextDirection.ltr) ?? BorderRadius.zero;
+  final b = y?.resolve(TextDirection.ltr) ?? BorderRadius.zero;
+  return BorderRadius.only(
+    topLeft: _lerpRadius(a.topLeft, b.topLeft, t),
+    topRight: _lerpRadius(a.topRight, b.topRight, t),
+    bottomLeft: _lerpRadius(a.bottomLeft, b.bottomLeft, t),
+    bottomRight: _lerpRadius(a.bottomRight, b.bottomRight, t),
+  );
+}
+
+AlignmentGeometry? lerpAlignment(
+  AlignmentGeometry? x,
+  AlignmentGeometry? y,
+  double t,
+) {
+  if (x == null && y == null) return null;
+  final a = x?.resolve(TextDirection.ltr) ?? Alignment.center;
+  final b = y?.resolve(TextDirection.ltr) ?? Alignment.center;
+  return Alignment(_mix(a.x, b.x, t), _mix(a.y, b.y, t));
+}
+
+BorderSide _lerpSide(BorderSide a, BorderSide b, double t) => BorderSide(
+  color: Color.lerp(a.color, b.color, t)!,
+  width: _mix(a.width, b.width, t),
+  style: _switch(a.style, b.style, t)!,
+);
+
+BoxBorder? _lerpBorder(BoxBorder? a, BoxBorder? b, double t) {
+  if (a == null && b == null) return null;
+  final none = const Border();
+  final x = a ?? none, y = b ?? none;
+  return Border(
+    top: _lerpSide(x.top, y.top, t),
+    right: _lerpSide(x.right, y.right, t),
+    bottom: _lerpSide(x.bottom, y.bottom, t),
+    left: _lerpSide(x.left, y.left, t),
+  );
+}
+
+List<BoxShadow>? _lerpShadows(
+  List<BoxShadow>? a,
+  List<BoxShadow>? b,
+  double t,
+) {
+  if (a == null && b == null) return null;
+  final x = a ?? const [], y = b ?? const [];
+  final length = x.length > y.length ? x.length : y.length;
+  return [
+    for (var i = 0; i < length; i++)
+      BoxShadow(
+        color: Color.lerp(
+          i < x.length ? x[i].color : null,
+          i < y.length ? y[i].color : null,
+          t,
+        )!,
+        offset: Offset.lerp(
+          i < x.length ? x[i].offset : Offset.zero,
+          i < y.length ? y[i].offset : Offset.zero,
+          t,
+        )!,
+        blurRadius: _mix(
+          i < x.length ? x[i].blurRadius : 0,
+          i < y.length ? y[i].blurRadius : 0,
+          t,
+        ),
+        spreadRadius: _mix(
+          i < x.length ? x[i].spreadRadius : 0,
+          i < y.length ? y[i].spreadRadius : 0,
+          t,
+        ),
+      ),
+  ];
+}
+
+Decoration? lerpDecoration(Decoration? a, Decoration? b, double t) {
+  if (a == null && b == null) return null;
+  if ((a == null || a is BoxDecoration) && (b == null || b is BoxDecoration)) {
+    final x = a as BoxDecoration?, y = b as BoxDecoration?;
+    if (x?.shape != y?.shape && x != null && y != null) return _switch(a, b, t);
+    return BoxDecoration(
+      color: Color.lerp(x?.color, y?.color, t),
+      border: _lerpBorder(x?.border, y?.border, t),
+      borderRadius: lerpBorderRadius(x?.borderRadius, y?.borderRadius, t),
+      boxShadow: _lerpShadows(x?.boxShadow, y?.boxShadow, t),
+      gradient: _switch(x?.gradient, y?.gradient, t),
+      image: _switch(x?.image, y?.image, t),
+      shape: (y ?? x)!.shape,
+    );
+  }
+  return _switch(a, b, t);
+}
+
+TextStyle? lerpTextStyle(TextStyle? a, TextStyle? b, double t) {
+  if (a == null && b == null) return null;
+  final x = a ?? const TextStyle(), y = b ?? const TextStyle();
+  double? number(double? p, double? q) =>
+      p == null || q == null ? _switch(p, q, t) : _mix(p, q, t);
+  FontWeight? weight;
+  if (x.fontWeight != null && y.fontWeight != null) {
+    weight =
+        FontWeight.values[_mix(
+          x.fontWeight!.index.toDouble(),
+          y.fontWeight!.index.toDouble(),
+          t,
+        ).round()];
+  } else {
+    weight = _switch(x.fontWeight, y.fontWeight, t);
+  }
+  return TextStyle(
+    inherit: _switch(x.inherit, y.inherit, t)!,
+    color: Color.lerp(x.color, y.color, t),
+    backgroundColor: Color.lerp(x.backgroundColor, y.backgroundColor, t),
+    fontSize: number(x.fontSize, y.fontSize),
+    fontWeight: weight,
+    fontStyle: _switch(x.fontStyle, y.fontStyle, t),
+    letterSpacing: number(x.letterSpacing, y.letterSpacing),
+    wordSpacing: number(x.wordSpacing, y.wordSpacing),
+    height: number(x.height, y.height),
+    decoration: _switch(x.decoration, y.decoration, t),
+    decorationColor: Color.lerp(x.decorationColor, y.decorationColor, t),
+    fontFamily: _switch(x.fontFamily, y.fontFamily, t),
+    fontFamilyFallback: _switch(x.fontFamilyFallback, y.fontFamilyFallback, t),
+    fontFeatures: _switch(x.fontFeatures, y.fontFeatures, t),
+    overflow: _switch(x.overflow, y.overflow, t),
+  );
+}
+
+Size? lerpSize(Size? a, Size? b, double t) {
+  if (a == null && b == null) return null;
+  final x = a ?? Size.zero, y = b ?? Size.zero;
+  return Size(_mix(x.width, y.width, t), _mix(x.height, y.height, t));
 }

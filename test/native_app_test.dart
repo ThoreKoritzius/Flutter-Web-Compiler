@@ -27,8 +27,7 @@ void main() {
   print(Icons.favorite_rounded.codePoint);
   print(ThemeData().extension<Palette>() == null);
   print(ThemeData(extensions: [palette]).extension<Palette>()!.color.red);
-  try { palette.lerp(palette, .5); }
-  on UnsupportedError { print('unsupported interpolation'); }
+  print(palette.lerp(const Palette(Color(0xff000000)), .5).color.red);
 }
 """);
       final app = await buildNativeApp(directory.path, 'lib/main.dart');
@@ -46,7 +45,7 @@ void main() {
         '${0xf738}',
         'true',
         '18',
-        'unsupported interpolation',
+        '9',
       ]);
     },
   );

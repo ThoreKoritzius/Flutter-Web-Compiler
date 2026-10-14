@@ -7,6 +7,7 @@
 library;
 
 export 'foundation_dom.dart';
+export 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 export 'services_dom.dart';
 export 'visual_metadata.dart';
 export 'material_icons_metadata.dart';
@@ -29,6 +30,12 @@ export 'material_style.dart'
         elevationCss,
         fontFamilyCss,
         gradientCss,
+        lerpAlignment,
+        lerpBorderRadius,
+        lerpDecoration,
+        lerpEdgeInsets,
+        lerpSize,
+        lerpTextStyle,
         px,
         shapeCss,
         textStyleCss;
@@ -46,6 +53,8 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:math' as math;
 
+import 'package:vector_math/vector_math_64.dart' show Matrix4;
+
 part 'dom_framework.dart';
 part 'dom_widgets.dart';
 part 'dom_material.dart';
@@ -53,3 +62,4 @@ part 'dom_navigation.dart';
 part 'dom_input.dart';
 part 'dom_material_navigation.dart';
 part 'dom_paint.dart';
+part 'dom_animation.dart';

@@ -1135,6 +1135,7 @@ class _DomOwner {
     } finally {
       _flushing = false;
     }
+    WidgetsBinding.instance._runPostFrame();
   }
 
   void _updateResizeListener() {

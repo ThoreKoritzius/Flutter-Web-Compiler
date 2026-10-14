@@ -133,6 +133,7 @@ function install({ width = 1024, height = 768, history = false } = {}) {
   global.window = {
     innerWidth: width,
     innerHeight: height,
+    requestAnimationFrame: callback => setTimeout(() => callback(performance.now()), 16),
     addEventListener(type, fn) { (windowListeners[type] ??= new Set()).add(fn); },
     removeEventListener(type, fn) { windowListeners[type]?.delete(fn); },
   };

@@ -171,6 +171,24 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `errorBuilder`.
 - **Icons:** `Icon`, `IconTheme`, `Icons` (all 8,825 Material constants
   generated from Flutter 3.41.6) and `Icons.adaptive`.
+- **Animation:** `AnimationController` (forward, reverse, `animateTo`,
+  `repeat`, `toggle`, status listeners, `TickerFuture.orCancel`) driven by
+  `requestAnimationFrame` through `SingleTickerProviderStateMixin` and
+  `TickerProviderStateMixin`; `Curves` (Flutter's cubic definitions and
+  bisection), `Interval`, `Tween`/`ColorTween`/`IntTween`/`SizeTween`/
+  `RectTween`/`AlignmentTween`/`EdgeInsetsTween`/`DecorationTween`/
+  `TextStyleTween`, `TweenSequence`, `CurvedAnimation`, `chain`/`drive`;
+  `FadeTransition`, `ScaleTransition`, `RotationTransition`,
+  `SlideTransition`, `SizeTransition`, `AnimatedWidget`; implicit
+  `AnimatedContainer`, `AnimatedOpacity`, `AnimatedPadding`, `AnimatedAlign`,
+  `AnimatedScale`, `AnimatedRotation`, `AnimatedSlide`, `AnimatedPositioned`,
+  `AnimatedDefaultTextStyle`, `TweenAnimationBuilder`, `AnimatedSwitcher`
+  (outgoing children stay until faded) and `AnimatedCrossFade`, all
+  retargeting mid-flight; `Transform` (`rotate`, `scale`, `translate`,
+  `flip`, `Matrix4` from `vector_math`) as CSS 3D transforms;
+  `WidgetsBinding.instance.addPostFrameCallback`,
+  `WidgetsFlutterBinding.ensureInitialized` and `Color.lerp`/`lerp` statics
+  on painting types. `AnimatedSize` changes size immediately.
 - **Painting:** `CustomPaint` and `CustomPainter` (`shouldRepaint`,
   `repaint` listenables, foreground painters) on an HTML `<canvas>` sized from
   the laid-out box at the device pixel ratio; `Canvas` (save/restore,
@@ -187,7 +205,7 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   path metrics, images, paragraphs, and saveLayer compositing (it applies
   alpha to subsequent drawing).
 
-Not yet implemented: animations and implicit animations, `Hero`, slivers and
+Not yet implemented: `Hero`, page transition animations, slivers and
 `CustomScrollView`, lazy/infinite lists (`itemCount` is required; at most
 10,000 eagerly built items), long-press gestures and drag/pan,
 `Overlay`/`OverlayEntry`, menus/popups, date and time pickers,
