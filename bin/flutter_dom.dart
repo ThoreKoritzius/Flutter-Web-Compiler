@@ -67,6 +67,11 @@ Future<void> main(List<String> arguments) async {
       help:
           'MaterialIcons-Regular.otf for --dart-runtime; defaults to the Flutter SDK on FLUTTER_ROOT or PATH.',
     )
+    ..addFlag(
+      'tree-shake-icons',
+      defaultsTo: true,
+      help: 'Ship only the Material icon glyphs the app uses (--dart-runtime).',
+    )
     ..addMultiOption(
       'dart-define',
       splitCommas: false,
@@ -176,6 +181,7 @@ Future<void> main(List<String> arguments) async {
         dartDefines: defines,
         sourceSelections: selections,
         materialIconsFont: args['material-icons-font'] as String?,
+        treeShakeIcons: args['tree-shake-icons'] as bool,
       );
       if (app.usesMaterialIcons && app.materialIconsFont == null) {
         throw StateError(
@@ -212,6 +218,11 @@ Future<void> main(List<String> arguments) async {
           'materialIconsFont': app.materialIconsFont == null
               ? null
               : 'assets/fonts/MaterialIcons-Regular.otf',
+          'materialIconsSubset': app.materialIconsFont == null
+              ? null
+              : app.iconCodePoints == null
+              ? 'full-font'
+              : '${app.iconCodePoints!.length} glyphs',
           'fontFamilies': {
             for (final face in app.fontFaces) face.family,
           }.toList(),
@@ -220,7 +231,7 @@ Future<void> main(List<String> arguments) async {
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  ${app.assets.length} assets\n  Experimental: keyed element tree with retained DOM; ${app.riverpodConsumers ? 'Riverpod 2.6.1 scopes and consumers' : 'no provider integration'}.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  ${app.assets.length + app.generatedAssets.length} assets${app.iconCodePoints == null ? '' : ' · ${app.iconCodePoints!.length} icon glyphs'}\n  Experimental: keyed element tree with retained DOM; ${app.riverpodConsumers ? 'Riverpod 2.6.1 scopes and consumers' : 'no provider integration'}.',
       );
       return;
     }

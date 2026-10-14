@@ -279,8 +279,17 @@ so the host page has no inline `<style>`; element style attributes still need
   `FLUTTER_ROOT` or the Flutter SDK on `PATH`
   (`bin/cache/artifacts/material_fonts`). When compiled code still references
   icon metadata and no font is found, the CLI fails before writing output.
-  The full font (about 1.6 MB) is shipped because no subsetter is bundled;
-  browsers download it only when an icon is first rendered.
+- Icons are tree-shaken by default, like Flutter's release builds: the
+  builder keeps `.notdef` plus the glyphs the app can render and rewrites the
+  CFF font in pure Dart (`lib/src/font_subset.dart`), dropping the ligature
+  tables. Glyph usage comes from `Icons.*` references and literal `IconData`
+  code points in project sources, which identify the icon constructor in the
+  tree-shaken dart2js output; every literal code point it builds is kept, so
+  icons used inside packages are included. If code points are computed at
+  runtime, or the constructor cannot be identified, the full font (about
+  1.6 MB) is shipped and the report says `full-font`. `--no-tree-shake-icons`
+  always ships the full font. Subset output is validated against the
+  OpenType Sanitizer that browsers apply to web fonts.
 
 Regenerate icon and color metadata with
 `dart run tool/generate_material_metadata.dart <flutter-checkout>`.

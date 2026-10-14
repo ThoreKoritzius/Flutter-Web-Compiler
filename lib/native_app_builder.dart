@@ -2,10 +2,12 @@ library;
 
 export 'src/runtime/source_selection.dart' show NativeSourceSelection;
 import 'src/runtime/source_selection.dart';
+import 'src/font_subset.dart';
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
@@ -24,7 +26,17 @@ class NativeAppBuild {
     this.fontFaces = const [],
     this.usesMaterialIcons = false,
     this.materialIconsFont,
+    this.generatedAssets = const {},
+    this.iconCodePoints,
   });
+
+  /// Output-relative paths of files generated during the build, such as a
+  /// subset icon font.
+  final Map<String, Uint8List> generatedAssets;
+
+  /// Material icon code points shipped in a subset font; null when the full
+  /// font is shipped (tree shaking disabled or usage not statically known).
+  final Set<int>? iconCodePoints;
 
   /// Output-relative asset paths mapped to absolute source files.
   final Map<String, String> assets;
@@ -55,6 +67,7 @@ Future<NativeAppBuild> buildNativeApp(
   Map<String, String> dartDefines = const {},
   Map<String, NativeSourceSelection> sourceSelections = const {},
   String? materialIconsFont,
+  bool treeShakeIcons = true,
 }) async {
   final root = Directory(project).resolveSymbolicLinksSync();
   final resources = readNativeResources(root);
@@ -374,9 +387,26 @@ Future<NativeAppBuild> buildNativeApp(
     // dart2js drops unused constants, so the family name survives only when
     // icon metadata is reachable from the compiled program.
     final usesIcons = javascript.contains('MaterialIcons');
-    final iconFont = usesIcons || resources.usesMaterialDesign
+    final iconFont = usesIcons
         ? findMaterialIconsFont(materialIconsFont)
         : null;
+    Set<int>? iconCodes;
+    Uint8List? subsetFont;
+    if (iconFont != null && treeShakeIcons) {
+      iconCodes = materialIconCodePoints(javascript, [
+        for (final file in seen.values) File(file).readAsStringSync(),
+      ], await _materialIconNames());
+      if (iconCodes != null) {
+        try {
+          subsetFont = subsetCffFont(
+            File(iconFont).readAsBytesSync(),
+            iconCodes,
+          );
+        } on FontSubsetException {
+          iconCodes = null;
+        }
+      }
+    }
     return NativeAppBuild(
       javascript,
       seen.length,
@@ -386,8 +416,13 @@ Future<NativeAppBuild> buildNativeApp(
       packageAdapters: List.unmodifiable(usedPackages),
       assets: Map.unmodifiable({
         ...resources.assets,
-        if (iconFont != null) _materialIconsPath: iconFont,
+        if (iconFont != null && subsetFont == null)
+          _materialIconsPath: iconFont,
       }),
+      generatedAssets: Map.unmodifiable({
+        if (subsetFont != null) _materialIconsPath: subsetFont,
+      }),
+      iconCodePoints: subsetFont == null ? null : Set.unmodifiable(iconCodes!),
       fontFaces: List.unmodifiable([
         if (iconFont != null)
           const NativeFontFace('MaterialIcons', _materialIconsPath),
@@ -402,6 +437,88 @@ Future<NativeAppBuild> buildNativeApp(
 }
 
 const _materialIconsPath = 'assets/fonts/MaterialIcons-Regular.otf';
+
+/// Icons the runtime itself may render (back, close, menu, chip delete,
+/// expansion chevrons).
+const _runtimeIcons = [
+  'arrow_back',
+  'close',
+  'menu',
+  'cancel_rounded',
+  'expand_more',
+  'expand_less',
+];
+
+Map<String, int>? _iconNameCache;
+
+Future<Map<String, int>> _materialIconNames() async {
+  if (_iconNameCache != null) return _iconNameCache!;
+  final uri = await Isolate.resolvePackageUri(
+    Uri.parse(
+      'package:flutter_dom_compiler/src/runtime/material_icons_metadata.dart',
+    ),
+  );
+  if (uri == null) throw StateError('Icon metadata could not be resolved.');
+  final source = File.fromUri(uri).readAsStringSync();
+  final names = <String, int>{
+    for (final match in RegExp(
+      r'static const (\w+) = IconData\(\s*(0x[0-9a-fA-F]+)',
+    ).allMatches(source))
+      match.group(1)!: int.parse(match.group(2)!),
+  };
+  for (final match in RegExp(
+    r'IconData get (\w+) => Icons\.(\w+);',
+  ).allMatches(source)) {
+    final code = names[match.group(2)!];
+    if (code != null) names['adaptive.${match.group(1)}'] = code;
+  }
+  return _iconNameCache = names;
+}
+
+/// The Material icon code points a compiled app can render, or null when
+/// they cannot be determined statically (the full font is then shipped).
+///
+/// Icon names referenced in the copied project sources identify the
+/// minified IconData constructor in the dart2js output; every literal code
+/// point it constructs is kept, which also covers icons used by packages.
+/// Non-literal construction (computed code points) disables subsetting.
+Set<int>? materialIconCodePoints(
+  String javascript,
+  Iterable<String> sources,
+  Map<String, int> names,
+) {
+  final referenced = <int>{for (final name in _runtimeIcons) ?names[name]};
+  final usage = RegExp(r'\bIcons\.((?:adaptive\.)?\w+)');
+  final literal = RegExp(
+    r'IconData\(\s*(0x[0-9a-fA-F]+|\d+)\s*,\s*fontFamily:\s*[\x27"]MaterialIcons[\x27"]',
+  );
+  for (final source in sources) {
+    for (final match in usage.allMatches(source)) {
+      final code = names[match.group(1)!];
+      if (code != null) referenced.add(code);
+    }
+    for (final match in literal.allMatches(source)) {
+      referenced.add(int.parse(match.group(1)!));
+    }
+  }
+  final constructions = RegExp(r'new ([\w$.]+)\((\d+),');
+  final byClass = <String, Set<int>>{};
+  for (final match in constructions.allMatches(javascript)) {
+    byClass
+        .putIfAbsent(match.group(1)!, () => {})
+        .add(int.parse(match.group(2)!));
+  }
+  final iconClasses = [
+    for (final entry in byClass.entries)
+      if (entry.value.any(referenced.contains) &&
+          entry.value.every((code) => code >= 0xe000 && code <= 0x10ffff))
+        entry.key,
+  ];
+  if (iconClasses.length != 1) return null;
+  final iconClass = RegExp.escape(iconClasses.single);
+  if (RegExp('new $iconClass\\((?!\\d+,)').hasMatch(javascript)) return null;
+  return {...byClass[iconClasses.single]!, ...referenced};
+}
 
 class NativeFontFace {
   const NativeFontFace(this.family, this.path, {this.weight, this.style});
@@ -593,6 +710,12 @@ List<String> writeNativeApp(NativeAppBuild app, String outputDirectory) {
     final target = File(p.join(output.path, asset.key));
     target.parent.createSync(recursive: true);
     File(asset.value).copySync(target.path);
+    written.add(asset.key);
+  }
+  for (final asset in app.generatedAssets.entries) {
+    final target = File(p.join(output.path, asset.key));
+    target.parent.createSync(recursive: true);
+    target.writeAsBytesSync(asset.value);
     written.add(asset.key);
   }
   return written;

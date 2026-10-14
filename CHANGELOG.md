@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tree-shake Material icons in native builds with a pure-Dart CFF subsetter (1.6 MB font to a few KB for typical screens); fall back to the full font when usage cannot be determined statically.
+- Rebind Riverpod consumers when an ancestor scope supplies a different container.
+
 - Replace the native runtime's full-view rendering with a keyed element tree that patches retained DOM nodes: Flutter's list reconciliation, `GlobalKey`, `InheritedWidget`/`InheritedNotifier`, per-element dirty rebuilds, `didChangeDependencies`, and preserved focus, caret and selection.
 - Add Flutter-shaped layout, painting and Material widgets (Container, Align, Stack, scroll views, grids, buttons with `ButtonStyle`, InkWell/ListTile with keyboard activation, ExpansionTile, chips, badges, progress indicators, app bars, drawers, tabs and navigation bars), full Material 3 color roles, `ColorScheme.fromSeed` via `material_color_utilities` 0.13.0, and the Material 3 type scale.
 - Add native text fields, forms, input formatters and controlled selection controls; Navigator routes with browser history and hash URLs, dialogs, bottom sheets, `PopScope` and snack bars; foundation listenables and async builders.
