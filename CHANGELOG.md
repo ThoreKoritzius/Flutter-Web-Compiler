@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make `inspect` target-aware. The static score is now labelled "Static HTML compiler: parameterless widget acceptance", carries a `scope` note that it is not whole-app coverage, and splits blockers into `needs-inputs` (required parameters, runtime or inherited context, stateful-only), `unsupported-api`, `dependency` and `untested`. Syntax reports use schema 3, resolved reports schema 5.
+- Add `inspect --dart-runtime`: walks the `--source` entry's import graph as `build --dart-runtime` would and reports original project libraries (with their widget classes), Flutter facades, built-in/library/package bridges, rewritten third-party packages, pure Dart packages, and blocking imports with their import chains (for example `lib/main.dart → … → package:flutter/rendering.dart`). `--compile` opts into the real dart2js build and reports its first errors mapped back to source paths; `--runtime-bridges`, `--package-bridges` and `--dart-define` are accepted as for builds.
 - Compile third-party packages that reach Flutter against the runtime by rewriting their imports in the build graph (pure-Dart packages keep their identity); report them as `rewrittenPackages`. Map `package:url_launcher/link.dart`.
 - Add `GestureDetector` tap details with local positions, long presses (also on `InkWell`, `ListTile` and buttons), and pan/horizontal/vertical drags from pointer events.
 - Add popup menus, date/time/range pickers on native inputs, filter/choice/action/input chips and `SegmentedButton`; `MaterialApp(home:)` now always provides a `Navigator`.

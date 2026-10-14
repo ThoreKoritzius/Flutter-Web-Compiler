@@ -63,6 +63,17 @@ The CLI also dry-runs every recognized direct widget subclass as a parameterless
 
 Required constructor arguments, imported definitions, unsupported stateful widgets and unresolved context are conservatively blocked. Adapters and islands are disabled for this measurement. A reusable widget may therefore fail in isolation while compiling when called with static data from a supported parent. Indirect subclasses and aliased types are outside the denominator. This score measures compiler acceptance, not verified behavior or a percentage of the whole application. Run Flutter analysis separately.
 
+The score is labelled **static HTML compiler: parameterless widget acceptance** in every output, and each report carries a `scope` note that it is not whole-app coverage. Each blocked root has a `category` and `reason`:
+
+| Category | Reasons | Meaning |
+| --- | --- | --- |
+| `needs-inputs` | `required-parameters`, `runtime-context`, `inherited-context`, `stateful-only` | The isolated parameterless check cannot supply constructor data, enclosing values, inherited theme data or mutable state. Such widgets can still run through `--dart-runtime`. |
+| `unsupported-api` | `unknown-widget`, `static-subset` | A framework or package API outside the static subset. |
+| `dependency` | `imported-project-declaration`, `adapter-declaration` | The widget refers to a project declaration in another file that the single-file check does not load (use `--resolve-imports`). |
+| `untested` | `inconclusive`, `internal-error` | Evaluation limits or startup logic stopped the check; behaviour was not exercised. |
+
+Reports keep `needsInputs` and `unsupported` counts and add `categories`, `statefulOnly`, `dependency` and `untested`. Classification uses the first blocker's diagnostic code and message. The static score never measures the `--dart-runtime` target; `inspect --dart-runtime` reports that target separately (see [DART_RUNTIME_TARGET.md](DART_RUNTIME_TARGET.md#inspecting-an-app-for-the-runtime)), and without it reports contain `domRuntime.measured: false`.
+
 Static primitive string interpolation and boolean conditional expressions are now supported, including constructor-bound values. Only the selected static branch is compiled. Runtime conditions remain unsupported.
 
 ### Images and tables
@@ -122,7 +133,7 @@ Resolved builds and inspection use the same fixed `web-js` target, independent o
 
 The public analyzer factory cannot set declared variables in the pinned release. `analysis_environment.dart` isolates the internal factory needed to supply this environment. Resolver regression tests and real Flutter fixture builds guard the dependency. Build and inspection reports include `analysisTarget`, `conditionalEnvironment` and selected conditional directives.
 
-`inspect --resolve-imports [--source lib/main.dart]` emits schema version 4. Compatibility checks use direct, recognized widget subclasses from selected project libraries/parts, resolved by declaration identity. Each is compiled independently with no arguments, adapters or islands. Required inputs remain blockers; inactive platform implementations and unrelated libraries are excluded from this denominator. Inventory counts remain project-wide syntax counts and can include those files. Generated parts required by the selected graph are resolved even though inventory excludes generated files. Resolution errors abort inspection instead of producing a misleading score. This score is not directly comparable with the unflagged project-wide syntax score.
+`inspect --resolve-imports [--source lib/main.dart]` emits schema version 5 (version 4 before blocker categories were added; unflagged syntax inspection emits version 3). Compatibility checks use direct, recognized widget subclasses from selected project libraries/parts, resolved by declaration identity. Each is compiled independently with no arguments, adapters or islands. Required inputs remain blockers; inactive platform implementations and unrelated libraries are excluded from this denominator. Inventory counts remain project-wide syntax counts and can include those files. Generated parts required by the selected graph are resolved even though inventory excludes generated files. Resolution errors abort inspection instead of producing a misleading score. This score is not directly comparable with the unflagged project-wide syntax score.
 
 
 ### Input-aware inspection results
@@ -134,7 +145,7 @@ Resolved inspection now presents two separate breakdowns instead of a headline p
 
 The compiler evaluates the original resolved constructor AST, so it does not generate guessed arguments or substitute source strings. Calls in unused functions or inactive runtime branches are still source sites, and nested calls may each be counted. This is not runtime reachability, unique screen coverage or verified behavior. Inspection does not perform interprocedural propagation of enclosing locals, parameters or state.
 
-Checks are bounded to 1,000 constructor sites, sorted by source file and offset. `callSites` reports total, checked, skipped, limit, separate outcome counts and located entries. Skipped sites are not classified. Root records keep the prior `status`, `native`, `total` and `percent` fields for consumers, with new `category`, diagnostic `code`, `needsInputs` and `unsupported` fields. The resolved CLI/Markdown view uses categories; the legacy percentage still means parameterless-root acceptance only.
+Checks are bounded to 1,000 constructor sites, sorted by source file and offset. `callSites` reports total, checked, skipped, limit, separate outcome counts and located entries. Skipped sites are not classified. Root records keep the prior `status`, `native`, `total` and `percent` fields for consumers, with `category`, `reason`, diagnostic `code`, `needsInputs` and `unsupported` fields; `unsupported` counts the `unsupported-api` category. The resolved CLI/Markdown view uses categories; the legacy percentage still means parameterless-root acceptance only.
 
 An apparent score decrease can reflect a different graph: a whole-project syntax scan may accept a non-web fallback whose selected web implementation is unsupported. Compare graph and metric before interpreting differences as a regression.
 
