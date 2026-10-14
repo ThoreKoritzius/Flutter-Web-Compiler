@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add Autocomplete/RawAutocomplete, SearchBar and SearchAnchor with SearchController.
 - Add overlays, render-box geometry queries, state restoration types, more Navigator methods, ARIA-mapped Semantics, typed MouseRegion events, Container transforms and foreground decorations, sweep gradients and more shape borders, more transitions and implicit animations, and scroll-view parameters; decorations no longer throw for unsupported shapes, gradients or image opacity.
 - Map `package:flutter/cupertino.dart` and add Cupertino apps, themes, colors, all `CupertinoIcons`, navigation bars, buttons, switches, segmented controls, dialogs, action sheets, text fields, list sections, tab scaffolds and pickers; bundle fonts and assets declared by dependency packages (such as `cupertino_icons`) as Flutter does; keep every icon the runtime draws in subset fonts.
 - Add SwitchListTile/CheckboxListTile/RadioListTile, RangeSlider, ToggleButtons, Stepper, DataTable (real `<table>` with sorting and selection), ExpansionPanelList (+radio), NavigationRail, NavigationDrawer, BottomAppBar, MaterialBanner and GridTile.

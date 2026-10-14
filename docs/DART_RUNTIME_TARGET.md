@@ -313,6 +313,10 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `CupertinoTabBar`/`CupertinoTabView`, `CupertinoPicker` (snapping list),
   `CupertinoDatePicker` (native date/time inputs), `CupertinoContextMenu`
   (actions on long press). No iOS page transitions or bounce physics.
+- **Search:** `Autocomplete`/`RawAutocomplete` (ARIA combobox and listbox,
+  arrow keys, Enter, async options, custom field and options views),
+  `SearchBar`, `SearchAnchor` (+`.bar`) with `SearchController`
+  (`openView`/`closeView`, full-screen or dialog view, async suggestions).
 - **Framework services:** `Overlay`/`OverlayEntry`/`OverlayPortal` (every
   `Navigator` hosts an overlay; entries render in a fixed layer above the
   page, positioned like a `Stack`), `BuildContext.findRenderObject` and

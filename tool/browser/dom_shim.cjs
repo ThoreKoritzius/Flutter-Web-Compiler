@@ -64,6 +64,12 @@ class Element {
     (this.listeners[type] ??= []).push(fn);
     this.events[type] = event => { for (const listener of this.listeners[type]) listener(event); };
   }
+  removeEventListener(type, fn) {
+    const listeners = this.listeners[type];
+    if (!listeners) return;
+    const index = listeners.indexOf(fn);
+    if (index >= 0) listeners.splice(index, 1);
+  }
   focus() {
     const active = global.document.activeElement;
     if (active === this || !connected(this) || this.attributes.disabled !== undefined) return;
