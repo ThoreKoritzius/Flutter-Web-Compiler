@@ -135,8 +135,21 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `LinearGradient`, `RadialGradient`, `BoxShadow`, `Alignment(Directional)`,
   `EdgeInsets(Directional)`, `BorderRadius(Directional)`.
 - **Material:** `MaterialApp` (theme, dark theme/mode, routes, `builder`,
-  title; `home` always runs inside a `Navigator`), `Theme`, `ThemeData` (`colorScheme`, `colorSchemeSeed`,
-  `textTheme`, `fontFamily`, extensions), full Material 3 `ColorScheme`
+  title; `home` always runs inside a `Navigator`), `Theme`, `ThemeData`
+  with Flutter's constructor (colors, `platform`, `visualDensity`,
+  `splashFactory`, `pageTransitionsTheme`, `typography`, text/icon themes,
+  extensions and every component theme: app bar, card, buttons, input
+  decoration, chip, divider, list tile, navigation, tab bar, dialog, snack
+  bar, bottom sheet, switch/checkbox/radio, slider, progress, popup menu,
+  drawer, tooltip and the rest), `ThemeData.from`/`light`/`dark`/`copyWith`/
+  `lerp`/`estimateBrightnessForColor`, `CardTheme`/`CardThemeData` (and the
+  dialog/tab bar pairs) both accepted, inherited component theme widgets
+  (`ElevatedButtonTheme`, `TextButtonTheme`, `IconButtonTheme`,
+  `ListTileTheme`, `ChipTheme`, `DividerTheme`, `SliderTheme`, ...). Widgets
+  resolve widget value, then component theme, then Material 3 default
+  (buttons per property as `ButtonStyleButton` does; `InputDecoration`
+  through `applyDefaults`). Page transitions, ink splash shapes, slider
+  shapes and visual density are accepted but not rendered. Full Material 3 `ColorScheme`
   roles including `ColorScheme.fromSeed` (computed with the same
   `material_color_utilities` 0.13.0 schemes Flutter 3.41 uses), the Material 3
   type scale, `Colors`, `Scaffold` (app bar, body, FAB, bottom bar, drawers,

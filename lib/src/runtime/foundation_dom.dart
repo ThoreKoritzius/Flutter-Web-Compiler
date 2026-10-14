@@ -5,6 +5,26 @@ export 'dart:typed_data';
 
 import 'dart:async';
 
+import 'browser_platform_stub.dart'
+    if (dart.library.js_interop) 'browser_platform_web.dart';
+
+/// The platform conventions an app follows, as in Flutter.
+enum TargetPlatform { android, fuchsia, iOS, linux, macOS, windows }
+
+/// Overrides [defaultTargetPlatform] when non-null.
+TargetPlatform? debugDefaultTargetPlatformOverride;
+
+/// The platform the browser reports, classified like Flutter web does.
+TargetPlatform get defaultTargetPlatform =>
+    debugDefaultTargetPlatformOverride ??
+    switch (browserPlatformName()) {
+      'ios' => TargetPlatform.iOS,
+      'macos' => TargetPlatform.macOS,
+      'windows' => TargetPlatform.windows,
+      'linux' => TargetPlatform.linux,
+      _ => TargetPlatform.android,
+    };
+
 const bool kIsWeb = bool.fromEnvironment('dart.library.js_interop');
 const bool kReleaseMode = bool.fromEnvironment('dart.vm.product');
 const bool kProfileMode = bool.fromEnvironment('dart.vm.profile');

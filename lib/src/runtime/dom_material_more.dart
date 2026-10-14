@@ -30,9 +30,11 @@ class PopupMenuItem<T> extends PopupMenuEntry<T> {
     this.height = 48,
     this.padding,
     this.textStyle,
+    this.labelTextStyle,
     this.mouseCursor,
     required this.child,
   });
+  final WidgetStateProperty<TextStyle?>? labelTextStyle;
   final T? value;
   final VoidCallback? onTap;
   final bool enabled;
@@ -52,6 +54,7 @@ class PopupMenuItem<T> extends PopupMenuEntry<T> {
     final foreground = enabled
         ? scheme.onSurface
         : scheme.onSurface.withValues(alpha: 0.38);
+    final states = {if (!enabled) WidgetState.disabled};
     return _Box(
       tag: 'button',
       css:
@@ -73,11 +76,19 @@ class PopupMenuItem<T> extends PopupMenuEntry<T> {
       fill: _Fill.expand,
       children: [
         IconTheme.merge(
-          data: IconThemeData(color: scheme.onSurfaceVariant, size: 24),
+          data: IconThemeData(
+            color: theme.popupMenuTheme.iconColor ?? scheme.onSurfaceVariant,
+            size: theme.popupMenuTheme.iconSize ?? 24,
+          ),
           child: DefaultTextStyle(
             style: theme.textTheme.labelLarge!
                 .copyWith(color: foreground)
-                .merge(textStyle),
+                .merge(
+                  labelTextStyle?.resolve(states) ??
+                      theme.popupMenuTheme.labelTextStyle?.resolve(states) ??
+                      textStyle ??
+                      theme.popupMenuTheme.textStyle,
+                ),
             child: child ?? const SizedBox.shrink(),
           ),
         ),
@@ -123,17 +134,35 @@ class PopupMenuDivider extends PopupMenuEntry<Never> {
 }
 
 class _MenuPanel extends StatelessWidget {
-  const _MenuPanel({required this.items, this.color, this.shape});
+  const _MenuPanel({
+    required this.items,
+    this.color,
+    this.shape,
+    this.elevation,
+    this.shadowColor,
+    this.menuPadding,
+    this.constraints,
+    this.clipBehavior,
+    this.semanticLabel,
+  });
   final List<PopupMenuEntry<dynamic>> items;
-  final Color? color;
+  final Color? color, shadowColor;
   final ShapeBorder? shape;
+  final double? elevation;
+  final EdgeInsetsGeometry? menuPadding;
+  final BoxConstraints? constraints;
+  final Clip? clipBehavior;
+  final String? semanticLabel;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final menuTheme = PopupMenuTheme.of(context);
+    final menuShape = shape ?? menuTheme.shape;
+    final limits = constraints;
     return _Box(
       css:
-          'display:flex;flex-direction:column;box-sizing:border-box;min-width:112px;max-width:280px;padding:8px 0;background-color:${colorCss(color ?? scheme.surfaceContainer)};${shape == null ? 'border-radius:4px;' : shapeCss(shape)}${elevationCss(3, scheme.shadow)}',
-      attributes: const {'role': 'menu'},
+          'display:flex;flex-direction:column;box-sizing:border-box;min-width:${px(limits?.minWidth ?? 112)};max-width:${limits == null || !limits.maxWidth.isFinite ? '280px' : px(limits.maxWidth)};${edgeInsetsCss('padding', menuPadding ?? menuTheme.menuPadding ?? const EdgeInsets.symmetric(vertical: 8))}background-color:${colorCss(color ?? menuTheme.color ?? scheme.surfaceContainer)};${menuShape == null ? 'border-radius:4px;' : shapeCss(menuShape)}${elevationCss(elevation ?? menuTheme.elevation ?? 3, shadowColor ?? menuTheme.shadowColor ?? scheme.shadow)}${(clipBehavior ?? Clip.none) == Clip.none ? '' : 'overflow:hidden;'}',
+      attributes: {'role': 'menu', 'aria-label': ?semanticLabel},
       handlers: {
         'keydown': (event) {
           final key = event?.key;
@@ -179,9 +208,19 @@ Future<T?> showMenu<T>({
   required RelativeRect position,
   required List<PopupMenuEntry<T>> items,
   T? initialValue,
-  Color? color,
+  double? elevation,
+  Color? shadowColor,
+  Color? surfaceTintColor,
+  String? semanticLabel,
   ShapeBorder? shape,
+  EdgeInsetsGeometry? menuPadding,
+  Color? color,
   bool useRootNavigator = false,
+  BoxConstraints? constraints,
+  Clip clipBehavior = Clip.none,
+  RouteSettings? routeSettings,
+  AnimationStyle? popUpAnimationStyle,
+  bool? requestFocus,
 }) {
   final viewport = MediaQuery.maybeSizeOf(context) ?? const Size(1024, 768);
   final anchor = Rect.fromLTRB(
@@ -192,7 +231,17 @@ Future<T?> showMenu<T>({
   );
   return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
     _OverlayRoute<T>(
-      builder: (_) => _MenuPanel(items: items, color: color, shape: shape),
+      builder: (_) => _MenuPanel(
+        items: items,
+        color: color,
+        shape: shape,
+        elevation: elevation,
+        shadowColor: shadowColor,
+        menuPadding: menuPadding,
+        constraints: constraints,
+        clipBehavior: clipBehavior,
+        semanticLabel: semanticLabel,
+      ),
       dismissible: true,
       color: const Color(0x00000000),
       sheet: false,
@@ -219,10 +268,36 @@ class PopupMenuButton<T> extends StatelessWidget {
     this.icon,
     this.iconSize,
     this.offset = Offset.zero,
+    this.splashRadius,
+    this.iconColor,
     this.enabled = true,
+    this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
     this.color,
     this.shape,
+    this.menuPadding,
+    this.enableFeedback,
+    this.constraints,
+    this.position,
+    this.clipBehavior = Clip.none,
+    this.useRootNavigator = false,
+    this.popUpAnimationStyle,
+    this.routeSettings,
+    this.style,
+    this.requestFocus,
   });
+  final double? splashRadius, elevation;
+  final Color? iconColor, shadowColor, surfaceTintColor;
+  final EdgeInsetsGeometry? menuPadding;
+  final bool? enableFeedback, requestFocus;
+  final BoxConstraints? constraints;
+  final PopupMenuPosition? position;
+  final Clip clipBehavior;
+  final bool useRootNavigator;
+  final AnimationStyle? popUpAnimationStyle;
+  final RouteSettings? routeSettings;
+  final ButtonStyle? style;
   final PopupMenuItemBuilder<T> itemBuilder;
   final T? initialValue;
   final VoidCallback? onOpened, onCanceled;
@@ -252,6 +327,13 @@ class PopupMenuButton<T> extends StatelessWidget {
       initialValue: initialValue,
       color: color,
       shape: shape,
+      elevation: elevation,
+      shadowColor: shadowColor,
+      surfaceTintColor: surfaceTintColor,
+      menuPadding: menuPadding,
+      constraints: constraints,
+      clipBehavior: clipBehavior,
+      useRootNavigator: useRootNavigator,
     );
     if (value == null) {
       onCanceled?.call();
@@ -284,7 +366,9 @@ class PopupMenuButton<T> extends StatelessWidget {
         return IconButton(
           onPressed: open,
           tooltip: label,
-          iconSize: iconSize,
+          iconSize: iconSize ?? PopupMenuTheme.of(context).iconSize,
+          color: iconColor ?? PopupMenuTheme.of(context).iconColor,
+          style: style,
           padding: padding,
           icon: icon ?? Icon(Icons.adaptive.more),
         );
@@ -628,23 +712,40 @@ class _SelectableChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final chipTheme = ChipTheme.of(context);
     final isSelected = selected ?? false;
     final enabled = onPressed != null;
+    final states = {
+      if (isSelected) WidgetState.selected,
+      if (!enabled) WidgetState.disabled,
+    };
+    final themed = chipTheme.color?.resolve(states);
+    final selectedBackground =
+        selectedColor ?? themed ?? chipTheme.selectedColor;
+    final idleBackground =
+        backgroundColor ?? themed ?? chipTheme.backgroundColor;
+    final labelStyle = chipTheme.labelStyle;
     final foreground = !enabled
         ? scheme.onSurface.withValues(alpha: 0.38)
         : isSelected
         ? scheme.onSecondaryContainer
-        : scheme.onSurfaceVariant;
+        : labelStyle?.color ?? scheme.onSurfaceVariant;
+    final side = chipTheme.side;
+    final chipShape = chipTheme.shape;
     return _Box(
       tag: 'button',
       css:
-          'display:inline-flex;align-items:center;gap:8px;flex-shrink:0;box-sizing:border-box;margin:0;min-height:32px;padding:0 ${onDeleted == null ? 16 : 8}px 0 ${avatar != null || (checkmark && isSelected) ? 8 : 16}px;border-radius:8px;font:inherit;'
+          'display:inline-flex;align-items:center;gap:8px;flex-shrink:0;box-sizing:border-box;margin:0;min-height:32px;padding:0 ${onDeleted == null ? 16 : 8}px 0 ${avatar != null || (checkmark && isSelected) ? 8 : 16}px;${chipShape == null ? 'border-radius:8px;' : shapeCss(chipShape)}font:inherit;'
           'background-color:${isSelected
-              ? colorCss(selectedColor ?? scheme.secondaryContainer)
-              : backgroundColor == null
+              ? colorCss(selectedBackground ?? scheme.secondaryContainer)
+              : idleBackground == null
               ? 'transparent'
-              : colorCss(backgroundColor!)};'
-          'border:1px solid ${isSelected ? 'transparent' : colorCss(scheme.outlineVariant)};${_stateLayerCss(foreground)}',
+              : colorCss(idleBackground)};'
+          '${isSelected
+              ? 'border:1px solid transparent;'
+              : side != null
+              ? borderSideCss('border', side)
+              : 'border:1px solid ${colorCss(scheme.outlineVariant)};'}${_stateLayerCss(foreground)}',
       attributes: {
         'type': 'button',
         'class': 'fd-ink fd-button',
@@ -659,12 +760,15 @@ class _SelectableChip extends StatelessWidget {
         IconTheme.merge(
           data: IconThemeData(color: foreground, size: 18),
           child: DefaultTextStyle(
-            style: theme.textTheme.labelLarge!.copyWith(color: foreground),
+            style: theme.textTheme.labelLarge!
+                .merge(labelStyle)
+                .copyWith(color: foreground),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               spacing: 8,
               children: [
-                if (checkmark && isSelected) const Icon(Icons.check),
+                if (checkmark && isSelected)
+                  Icon(Icons.check, color: chipTheme.checkmarkColor),
                 if (avatar != null && !(checkmark && isSelected)) avatar!,
                 label,
                 if (onDeleted != null)

@@ -3,6 +3,8 @@ library;
 
 import 'dart:math' as math;
 
+enum Brightness { light, dark }
+
 /// 32-bit sRGB colors. Components are stored as 8-bit channels.
 class Color {
   const Color(int value) : _value = value;

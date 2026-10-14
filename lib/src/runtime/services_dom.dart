@@ -3,6 +3,8 @@ library;
 
 import 'dart:async';
 
+import 'visual_metadata.dart' show Brightness, Color;
+
 export 'dart:typed_data';
 
 class MissingPluginException implements Exception {
@@ -304,3 +306,95 @@ enum TextInputAction {
 enum TextCapitalization { words, sentences, characters, none }
 
 enum MaxLengthEnforcement { none, enforced, truncateAfterCompositionEnds }
+
+/// System chrome colors an app requests. Browsers have no status or
+/// navigation bars to style, so the values are carried but not applied.
+class SystemUiOverlayStyle {
+  const SystemUiOverlayStyle({
+    this.systemNavigationBarColor,
+    this.systemNavigationBarDividerColor,
+    this.systemNavigationBarIconBrightness,
+    this.systemNavigationBarContrastEnforced,
+    this.statusBarColor,
+    this.statusBarBrightness,
+    this.statusBarIconBrightness,
+    this.systemStatusBarContrastEnforced,
+  });
+  final Color? systemNavigationBarColor, systemNavigationBarDividerColor;
+  final Brightness? systemNavigationBarIconBrightness;
+  final bool? systemNavigationBarContrastEnforced;
+  final Color? statusBarColor;
+  final Brightness? statusBarBrightness, statusBarIconBrightness;
+  final bool? systemStatusBarContrastEnforced;
+
+  /// Light icons, for dark backgrounds.
+  static const light = SystemUiOverlayStyle(
+    systemNavigationBarColor: Color(0xff000000),
+    systemNavigationBarIconBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  );
+
+  /// Dark icons, for light backgrounds.
+  static const dark = SystemUiOverlayStyle(
+    systemNavigationBarColor: Color(0xff000000),
+    systemNavigationBarIconBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+  );
+
+  SystemUiOverlayStyle copyWith({
+    Color? systemNavigationBarColor,
+    Color? systemNavigationBarDividerColor,
+    bool? systemNavigationBarContrastEnforced,
+    Color? statusBarColor,
+    Brightness? statusBarBrightness,
+    Brightness? statusBarIconBrightness,
+    bool? systemStatusBarContrastEnforced,
+    Brightness? systemNavigationBarIconBrightness,
+  }) => SystemUiOverlayStyle(
+    systemNavigationBarColor:
+        systemNavigationBarColor ?? this.systemNavigationBarColor,
+    systemNavigationBarDividerColor:
+        systemNavigationBarDividerColor ?? this.systemNavigationBarDividerColor,
+    systemNavigationBarContrastEnforced:
+        systemNavigationBarContrastEnforced ??
+        this.systemNavigationBarContrastEnforced,
+    statusBarColor: statusBarColor ?? this.statusBarColor,
+    statusBarBrightness: statusBarBrightness ?? this.statusBarBrightness,
+    statusBarIconBrightness:
+        statusBarIconBrightness ?? this.statusBarIconBrightness,
+    systemStatusBarContrastEnforced:
+        systemStatusBarContrastEnforced ?? this.systemStatusBarContrastEnforced,
+    systemNavigationBarIconBrightness:
+        systemNavigationBarIconBrightness ??
+        this.systemNavigationBarIconBrightness,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SystemUiOverlayStyle &&
+      other.systemNavigationBarColor == systemNavigationBarColor &&
+      other.systemNavigationBarDividerColor ==
+          systemNavigationBarDividerColor &&
+      other.systemNavigationBarIconBrightness ==
+          systemNavigationBarIconBrightness &&
+      other.systemNavigationBarContrastEnforced ==
+          systemNavigationBarContrastEnforced &&
+      other.statusBarColor == statusBarColor &&
+      other.statusBarBrightness == statusBarBrightness &&
+      other.statusBarIconBrightness == statusBarIconBrightness &&
+      other.systemStatusBarContrastEnforced == systemStatusBarContrastEnforced;
+
+  @override
+  int get hashCode => Object.hash(
+    systemNavigationBarColor,
+    systemNavigationBarDividerColor,
+    systemNavigationBarIconBrightness,
+    systemNavigationBarContrastEnforced,
+    statusBarColor,
+    statusBarBrightness,
+    statusBarIconBrightness,
+    systemStatusBarContrastEnforced,
+  );
+}
