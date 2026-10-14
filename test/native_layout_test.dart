@@ -14,8 +14,17 @@ import 'package:flutter/material.dart';
 void main() => runApp(const LayoutBuilder(builder: buildGrid));
 Widget buildGrid(BuildContext context, BoxConstraints constraints) => Wrap(spacing: 10, runSpacing: 12, children: [
  SizedBox(width: (constraints.maxWidth - 10) / 2, child: Text('Measured ${constraints.maxWidth} / ${MediaQuery.sizeOf(context).width}')),
+ const DeferredCounter(),
  ElevatedButton(onPressed: () => runApp(const Text('Disposed')), child: const Text('Replace')),
 ]);
+class DeferredCounter extends StatefulWidget {
+ const DeferredCounter(); State<DeferredCounter> createState() => DeferredState();
+}
+class DeferredState extends State<DeferredCounter> {
+ int count=0;
+ Widget build(BuildContext context) => ElevatedButton(onPressed:()=>setState(()=>count++),child:Text('Deferred $count'));
+ void dispose(){print('deferred disposed');super.dispose();}
+}
 """);
       final app = await buildNativeApp(directory.path, 'lib/main.dart');
       final file = File('${directory.path}/app.js')

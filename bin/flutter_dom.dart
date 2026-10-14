@@ -193,14 +193,14 @@ Future<void> main(List<String> arguments) async {
           'dartDefinitionKeys': defines.keys.toList(),
           'javascriptBytes': utf8.encode(app.javascript).length,
           'automaticFlutterCompatibility': false,
-          'stateLifecycle': 'root-only-replace-view',
+          'stateLifecycle': 'unkeyed-structural-state-replace-view',
           'providerIntegration': app.riverpodConsumers
               ? 'bounded-root-riverpod-2.6.1'
               : 'none',
         }),
       );
       stdout.writeln(
-        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  Experimental: root state only; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
+        '  ✓ Built ${output.path}\n  Dart source graph · ${app.libraries} libraries · ${app.libraryAdapters.length} library adapters · ${app.packageAdapters.length} package adapters · ${app.sourceSelections.length} explicit component selections\n  Experimental: unkeyed structural state; ${app.riverpodConsumers ? 'bounded Riverpod 2.6.1 consumers' : 'no provider integration'}; no retained-view reconciliation.',
       );
       return;
     }

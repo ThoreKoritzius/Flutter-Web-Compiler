@@ -88,9 +88,9 @@ same identity as the material bridge. It does not export MaterialApp, Scaffold o
 ElevatedButton. This does not add IndexedStack or other undeclared Flutter APIs.
 
 - `runApp`, `MaterialApp(home:)`, `Scaffold(body:)`, nested `StatelessWidget`s.
-- One root `StatefulWidget`, optionally inside application wrappers.
+- Root and unkeyed descendant `StatefulWidget`s, optionally inside application wrappers.
 - `State.widget`, `context`, `initState`, `mounted`, synchronous `setState`
-  callbacks and `dispose` when replacing the root with another `runApp` call.
+  callbacks, `didUpdateWidget` and `dispose` on removal or replacement.
 - `Text`, `Row`, `Column`, `SizedBox` and `ElevatedButton` with the arguments
   declared in `lib/src/runtime/flutter_dom.dart`. Buttons preserve native HTML
   semantics. Text uses `textContent` and never parses application text as HTML.
@@ -101,7 +101,7 @@ Updates coalesce in a microtask and replace the root's DOM view. Detached event
 handlers become inert after the next render or disposal. Root replacement
 invalidates the mounted state before disposal. This is not retained-element
 reconciliation: updates can lose focus and native selection. Widget keys,
-descendant StatefulWidgets, controllers, inherited context, Flutter themes,
+controllers, general inherited context, full Flutter theme generation,
 assets and general inherited/provider widget integration are unsupported. A
 bounded root Riverpod consumer is supported as described below. CSS approximates layout.
 
@@ -151,7 +151,7 @@ background isolate support. Browser/plugin implementations are application
 adapters and require their own behavior tests. Other services APIs are not
 provided and fail compilation. A missing-plugin failure is not plugin support.
 Undeclared widget classes/properties fail official compilation. Structural cases
-such as nested StatefulWidgets fail at runtime; they are not yet preflighted.
+such as nested consumer widgets fail at runtime; they are not yet preflighted.
 The local graph limit is 500 libraries; dependencies outside the project through
 relative imports are rejected. Package dependencies use the project's existing
 package configuration when present. Flutter-dependent transitive packages can
@@ -322,5 +322,23 @@ CSS flex wrapping and source-defined gaps. `SizedBox` retains explicit widths.
 Viewport resize rebuilds the root; disposal removes its listener. `MediaQuery.sizeOf`
 reads the browser viewport. Only horizontal constraints are supported; vertical
 constraints remain unbounded. Element-only resizing, intrinsic Flutter layout,
-slivers and nested state are still unsupported. The native host has no demo frame,
+slivers and nested consumer scopes are still unsupported. The native host has no demo frame,
 heading or card; application source supplies its own layout and theme.
+
+
+### Unkeyed descendant state
+
+Nested plain `StatefulWidget`s now retain state at their structural position when
+all ancestor widget types remain the same. They receive `initState` once,
+`didUpdateWidget` when a new widget instance occupies that position, refreshed
+context, and `dispose` on removal or replacement. Children created inside an
+attached `LayoutBuilder` participate in the same lifecycle. Removed descendants
+are disposed before their parents; stale DOM event callbacks cannot update them.
+
+This is bounded state retention, not Flutter element-tree parity: keys and list
+reordering identities, nested consumer/provider scopes, inherited dependency
+notifications and `didChangeDependencies` remain unsupported. Every rebuild still
+replaces DOM nodes, so input focus and selection are not retained. Child `setState`
+currently schedules a full-root rebuild. Build failures dispose the mount and its
+provider scope rather than leaving partially active state behind. Reports describe
+this as `unkeyed-structural-state-replace-view`.

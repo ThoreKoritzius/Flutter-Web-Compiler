@@ -105,3 +105,8 @@
   ambiguous library forms. Added attached-DOM horizontal `LayoutBuilder`, viewport
   `MediaQuery.sizeOf`, responsive `Wrap`, and resize-listener disposal. Removed
   compiler-authored demo framing from the native app host.
+
+- Experimental runtime: plain unkeyed descendant state persists by structural
+  position and ancestor type, receives widget updates, and disposes on removal.
+  Failed builds clean up all mounted state. Nested consumer scopes, keys and
+  retained DOM reconciliation remain unsupported.

@@ -128,6 +128,7 @@ abstract class State<T extends StatefulWidget> {
   void Function()? _invalidate;
   void initState() {}
   void dispose() {}
+  void didUpdateWidget(covariant T oldWidget) {}
   Widget build(BuildContext context);
   void setState(void Function() update) {
     if (!mounted) throw StateError('setState after disposal.');
@@ -219,8 +220,20 @@ class Scaffold extends Widget {
   final Widget body;
 }
 
-/// Root-only state lifecycle. Descendant StatefulWidgets fail explicitly.
-/// Each update replaces the view; retained focus/child reconciliation is pending.
+class _StateSlot {
+  _StateSlot(this.state, this.ancestry);
+  final State state;
+  final List<Type> ancestry;
+  bool matches(List<Type> other) =>
+      ancestry.length == other.length &&
+      List.generate(
+        ancestry.length,
+        (i) => ancestry[i] == other[i],
+      ).every((v) => v);
+}
+
+/// Unkeyed state persists by structural position and ancestor widget types.
+/// Each update replaces DOM nodes; focus and DOM reconciliation remain pending.
 class DomMount {
   DomMount._(this._host);
   final _Element _host;
@@ -233,6 +246,31 @@ class DomMount {
   int _renderGeneration = 0;
   final _layoutJobs = <void Function()>[];
   JSFunction? _resizeListener;
+  final _childStates = <String, _StateSlot>{};
+  final _usedSlots = <String>{};
+
+  void _disposeState(State state) {
+    state._mounted = false;
+    state._invalidate = null;
+    try {
+      state.dispose();
+    } finally {
+      if (state is DomBuildLifecycle)
+        (state as DomBuildLifecycle).disposeDomBuild();
+    }
+  }
+
+  Widget _buildState(State state) {
+    final lifecycle = state is DomBuildLifecycle
+        ? state as DomBuildLifecycle
+        : null;
+    lifecycle?.beginDomBuild();
+    try {
+      return state.build(state.context);
+    } finally {
+      lifecycle?.endDomBuild();
+    }
+  }
 
   void _schedule() {
     if (_disposed || _scheduled) return;
@@ -246,33 +284,34 @@ class DomMount {
   void _render() {
     final generation = ++_renderGeneration;
     _layoutJobs.clear();
-    final state = _state;
-    final lifecycle = state is DomBuildLifecycle
-        ? state as DomBuildLifecycle
-        : null;
-    lifecycle?.beginDomBuild();
-    late Widget built;
+    _usedSlots.clear();
     try {
-      built = state?.build(state.context) ?? _root!;
-    } finally {
-      lifecycle?.endDomBuild();
-    }
-    final node = _node(built, generation, _context);
-    _host.replaceChildren();
-    _host.setAttribute(
-      'style',
-      'background:${colorCss(_context.theme.colorScheme.surface)};color:${colorCss(_context.theme.colorScheme.onSurface)};min-height:100vh;',
-    );
-    _host.appendChild(node);
-    // Measure attached DOM boxes, rather than estimating Flutter constraints.
-    for (var index = 0; index < _layoutJobs.length; index++) {
-      if (index >= 500)
-        throw StateError('Native layout builder limit exceeded.');
-      _layoutJobs[index]();
-    }
-    if (_layoutJobs.isNotEmpty && _resizeListener == null) {
-      _resizeListener = (() => _schedule()).toJS;
-      _window.addEventListener('resize', _resizeListener!);
+      final state = _state;
+      final built = state == null ? _root! : _buildState(state);
+      final node = _node(built, generation, _context);
+      _host.replaceChildren();
+      _host.setAttribute(
+        'style',
+        'background:${colorCss(_context.theme.colorScheme.surface)};color:${colorCss(_context.theme.colorScheme.onSurface)};min-height:100vh;',
+      );
+      _host.appendChild(node);
+      // Measure attached DOM boxes, rather than estimating Flutter constraints.
+      for (var index = 0; index < _layoutJobs.length; index++) {
+        if (index >= 500)
+          throw StateError('Native layout builder limit exceeded.');
+        _layoutJobs[index]();
+      }
+      if (_layoutJobs.isNotEmpty && _resizeListener == null) {
+        _resizeListener = (() => _schedule()).toJS;
+        _window.addEventListener('resize', _resizeListener!);
+      }
+      for (final slot in _childStates.keys.toList().reversed) {
+        if (!_usedSlots.contains(slot))
+          _disposeState(_childStates.remove(slot)!.state);
+      }
+    } catch (_) {
+      dispose();
+      rethrow;
     }
   }
 
@@ -281,34 +320,74 @@ class DomMount {
     int generation,
     BuildContext context, {
     bool flexChild = false,
+    String slot = 'view',
+    List<Type> ancestry = const [],
   }) {
+    final lineage = [...ancestry, widget.runtimeType];
+    var childIndex = 0;
+    _Element child(
+      Widget value, {
+      BuildContext? scope,
+      bool flexChild = false,
+    }) => _node(
+      value,
+      generation,
+      scope ?? context,
+      flexChild: flexChild,
+      slot: '$slot/${childIndex++}',
+      ancestry: lineage,
+    );
     if (widget.key != null)
       throw UnsupportedError(
-        'Widget keys are not supported by the root-only runtime.',
+        'Widget keys are not supported by the structural-state runtime.',
       );
     if (widget is StatelessWidget)
-      return _node(
-        widget.build(context),
-        generation,
-        context,
-        flexChild: flexChild,
-      );
-    if (widget is StatefulWidget)
-      throw UnsupportedError('Only a root StatefulWidget is supported.');
+      return child(widget.build(context), flexChild: flexChild);
+    if (widget is StatefulWidget) {
+      var entry = _childStates[slot];
+      if (entry != null && !entry.matches(lineage)) {
+        for (final oldSlot in _childStates.keys.toList().reversed) {
+          if (oldSlot == slot || oldSlot.startsWith('$slot/')) {
+            _disposeState(_childStates.remove(oldSlot)!.state);
+          }
+        }
+        entry = null;
+      }
+      _usedSlots.add(slot);
+      if (entry == null) {
+        final state = widget.createState();
+        // Provider scopes currently attach only their root consumer.
+        if (state is DomBuildLifecycle)
+          throw UnsupportedError(
+            'Nested consumer lifecycle requires descendant provider scope support.',
+          );
+        state.widget = widget;
+        state._context = context;
+        state._mounted = true;
+        state._invalidate = _schedule;
+        entry = _StateSlot(state, lineage);
+        _childStates[slot] = entry;
+        state.initState();
+      } else {
+        final old = entry.state.widget;
+        entry.state.widget = widget;
+        entry.state._context = context;
+        if (!identical(old, widget)) entry.state.didUpdateWidget(old);
+      }
+      return child(_buildState(entry.state), flexChild: flexChild);
+    }
     if (widget is Theme)
-      return _node(
+      return child(
         widget.child,
-        generation,
-        BuildContext(theme: widget.data),
+        scope: BuildContext(theme: widget.data),
         flexChild: flexChild,
       );
     if (widget is MaterialApp)
-      return _node(
+      return child(
         widget.home,
-        generation,
-        BuildContext(theme: widget.theme ?? context.theme),
+        scope: BuildContext(theme: widget.theme ?? context.theme),
       );
-    if (widget is Scaffold) return _node(widget.body, generation, context);
+    if (widget is Scaffold) return child(widget.body);
     final node = _document.createElement(
       widget is ElevatedButton
           ? 'button'
@@ -330,11 +409,7 @@ class DomMount {
       _layoutJobs.add(() {
         final width = checkedDimension(node.clientWidth);
         node.appendChild(
-          _node(
-            widget.builder(context, BoxConstraints(maxWidth: width)),
-            generation,
-            context,
-          ),
+          child(widget.builder(context, BoxConstraints(maxWidth: width))),
         );
       });
     } else if (widget is Wrap) {
@@ -342,15 +417,14 @@ class DomMount {
         'style',
         'display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:${checkedDimension(widget.spacing)}px;row-gap:${checkedDimension(widget.runSpacing)}px;',
       );
-      for (final child in widget.children)
-        node.appendChild(_node(child, generation, context));
+      for (final item in widget.children) node.appendChild(child(item));
     } else if (widget is Padding) {
       final p = widget.padding;
       node.setAttribute(
         'style',
         'box-sizing:border-box;padding:${checkedDimension(p.top)}px ${checkedDimension(p.right)}px ${checkedDimension(p.bottom)}px ${checkedDimension(p.left)}px;',
       );
-      node.appendChild(_node(widget.child, generation, context));
+      node.appendChild(child(widget.child));
     } else if (widget is Expanded) {
       if (!flexChild)
         throw UnsupportedError('Expanded requires a Row or Column parent.');
@@ -360,14 +434,14 @@ class DomMount {
         'style',
         'flex:${widget.flex} 1 0;min-width:0;min-height:0;',
       );
-      node.appendChild(_node(widget.child, generation, context));
+      node.appendChild(child(widget.child));
     } else if (widget is Card) {
       final shape = widget.shape;
       node.setAttribute(
         'style',
         'box-sizing:border-box;min-width:0;background:${colorCss(widget.color ?? context.theme.colorScheme.surfaceContainerLow)};border-radius:${checkedDimension(shape?.borderRadius.radius ?? 12)}px;border:${checkedDimension(shape?.side.width ?? 0)}px solid ${colorCss(shape?.side.color ?? context.theme.colorScheme.outlineVariant)};',
       );
-      node.appendChild(_node(widget.child, generation, context));
+      node.appendChild(child(widget.child));
     } else if (widget is Column) {
       final alignment = switch (widget.crossAxisAlignment) {
         CrossAxisAlignment.start => 'flex-start',
@@ -379,8 +453,8 @@ class DomMount {
         'style',
         'display:flex;flex-direction:column;align-items:$alignment',
       );
-      for (final child in widget.children) {
-        node.appendChild(_node(child, generation, context, flexChild: true));
+      for (final item in widget.children) {
+        node.appendChild(child(item, flexChild: true));
       }
     } else if (widget is Row) {
       node.setAttribute(
@@ -392,8 +466,8 @@ class DomMount {
           CrossAxisAlignment.stretch => 'stretch',
         }}',
       );
-      for (final child in widget.children) {
-        node.appendChild(_node(child, generation, context, flexChild: true));
+      for (final item in widget.children) {
+        node.appendChild(child(item, flexChild: true));
       }
     } else if (widget is SizedBox) {
       for (final size in [widget.height, widget.width]) {
@@ -404,8 +478,7 @@ class DomMount {
         'style',
         'flex-shrink:0;${widget.height == null ? '' : 'height:${widget.height}px;'}${widget.width == null ? '' : 'width:${widget.width}px;'}',
       );
-      if (widget.child != null)
-        node.appendChild(_node(widget.child!, generation, context));
+      if (widget.child != null) node.appendChild(child(widget.child!));
     } else if (widget is ElevatedButton) {
       node.setAttribute('type', 'button');
       node.setAttribute(
@@ -413,10 +486,9 @@ class DomMount {
         'background:${colorCss(context.theme.colorScheme.primary)};border:0;border-radius:10px;padding:10px 16px;',
       );
       node.appendChild(
-        _node(
+        child(
           widget.child,
-          generation,
-          BuildContext(
+          scope: BuildContext(
             theme: context.theme,
             foreground: context.theme.colorScheme.onPrimary,
           ),
@@ -446,25 +518,25 @@ class DomMount {
       _window.removeEventListener('resize', _resizeListener!);
     _layoutJobs.clear();
     _renderGeneration++;
-    final state = _state;
-    if (state != null) {
-      state._mounted = false;
-      state._invalidate = null;
+    Object? failure;
+    StackTrace? failureStack;
+    void cleanup(void Function() action) {
       try {
-        state.dispose();
-      } finally {
-        try {
-          if (state is DomBuildLifecycle)
-            (state as DomBuildLifecycle).disposeDomBuild();
-        } finally {
-          _disposeScope?.call();
-          _host.replaceChildren();
-        }
+        action();
+      } catch (error, stack) {
+        failure ??= error;
+        failureStack ??= stack;
       }
-    } else {
-      _disposeScope?.call();
-      _host.replaceChildren();
     }
+
+    for (final entry in _childStates.values.toList().reversed) {
+      cleanup(() => _disposeState(entry.state));
+    }
+    _childStates.clear();
+    if (_state != null) cleanup(() => _disposeState(_state!));
+    cleanup(() => _disposeScope?.call());
+    cleanup(() => _host.replaceChildren());
+    if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
   }
 }
 
