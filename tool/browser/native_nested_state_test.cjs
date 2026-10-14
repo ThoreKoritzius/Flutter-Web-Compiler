@@ -1,16 +1,7 @@
 const assert=require('node:assert/strict');
 const path=require('node:path');
-class Element {
- constructor(tag){this.tag=tag;this.children=[];this.events={};this.textContent='';}
- appendChild(child){this.children.push(child);}
- replaceChildren(){this.children=[];}
- setAttribute(){}
- addEventListener(event,fn){this.events[event]=fn;}
-}
-const host=new Element('main');global.self=global;
-global.document={currentScript:null,querySelector:()=>host,createElement:tag=>new Element(tag)};
-function label(n){return n.textContent+n.children.map(label).join('');}
-function find(n,p){if(p(n))return n;for(const c of n.children){const result=find(c,p);if(result)return result;}}
+const {install,label,find}=require('./dom_shim.cjs');
+const {host}=install();
 function button(text){return find(host,n=>n.tag==='button'&&label(n)===text);}
 async function until(p){const deadline=Date.now()+5000;while(!p()){if(Date.now()>deadline)throw Error('Expected render missing: '+label(host));await new Promise(resolve=>setTimeout(resolve,5));}}
 async function click(text,expected){assert(button(text),text);button(text).events.click();await until(()=>button(expected));}

@@ -99,4 +99,52 @@ class CounterState extends ConsumerState<Counter> {
       );
     },
   );
+
+  test('nested scopes, consumer widgets and build listeners', () async {
+    final directory = Directory.systemTemp.createTempSync('native-scopes-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    Directory('${directory.path}/lib').createSync();
+    File('${directory.path}/lib/main.dart').writeAsStringSync(r"""
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+final label = Provider<String>((ref) => 'root');
+final count = StateProvider<int>((ref) => 0);
+void main() => runApp(const ProviderScope(child: MaterialApp(home: Page())));
+class Page extends ConsumerWidget {
+  const Page({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<int>(count, (previous, next) => print('listen $previous->$next'));
+    return Column(children: [
+      Text('outer ${ref.watch(label)} ${ref.watch(count)}'),
+      ElevatedButton(onPressed: () => ref.read(count.notifier).state++, child: const Text('Add')),
+      ProviderScope(
+        overrides: [label.overrideWithValue('inner')],
+        child: Consumer(builder: (context, ref, _) => Text('inner ${ref.watch(label)} ${ref.watch(count)}')),
+      ),
+    ]);
+  }
+}
+""");
+    final app = await buildNativeApp(directory.path, 'lib/main.dart');
+    final file = File('${directory.path}/app.js')
+      ..writeAsStringSync(app.javascript);
+    final run = await Process.run('node', [
+      '-e',
+      r"""
+const {install,find,until}=require('./tool/browser/dom_shim.cjs');
+const {host}=install();const logs=[];const log=console.log;console.log=(...a)=>logs.push(a.join(' '));
+const text=v=>find(host,n=>n.tag==='p'&&n.textContent===v);
+(async()=>{require(process.argv[1]);
+ if(!text('outer root 0')||!text('inner inner 0'))throw Error('initial');
+ find(host,n=>n.tag==='button').events.click();
+ await until(()=>text('outer root 1')&&text('inner inner 1'));
+ if(!logs.includes('listen 0->1'))throw Error('listen');
+ log('Nested scopes passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+""",
+      file.path,
+    ]);
+    expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+    expect(run.stdout, contains('Nested scopes passed'));
+  });
 }

@@ -1,20 +1,10 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 let width = 500;
-class Element {
- constructor(tag) { this.tag=tag; this.children=[]; this.attributes={}; this.events={}; this.textContent=''; this.parent=null; }
- appendChild(node) { node.parent=this; this.children.push(node); }
- replaceChildren() { this.children=[]; }
- setAttribute(key,value) { this.attributes[key]=value; }
- addEventListener(event,fn) { this.events[event]=fn; }
- get clientWidth() { assert(this.parent, 'Must measure an attached container'); return width; }
-}
-const host=new Element('main');
-const listeners=new Set();
-global.self=global;
-global.window={innerWidth:700,innerHeight:800,addEventListener:(event,fn)=>{assert.equal(event,'resize');listeners.add(fn);},removeEventListener:(event,fn)=>listeners.delete(fn)};
-global.document={currentScript:null,querySelector:()=>host,createElement:tag=>new Element(tag)};
-function find(node,predicate) { if(predicate(node))return node; for(const child of node.children){const result=find(child,predicate);if(result)return result;} }
+const {Element,install,find}=require('./dom_shim.cjs');
+Element.measure=()=>width;
+const {host,windowListeners}=install({width:700,height:800});
+const listeners={get size(){return windowListeners.resize?.size??0;},[Symbol.iterator](){return (windowListeners.resize??new Set())[Symbol.iterator]();}};
 async function until(predicate){const deadline=Date.now()+5000;while(!predicate()){if(Date.now()>deadline)throw Error('Resize did not render');await new Promise(resolve=>setTimeout(resolve,5));}}
 (async()=>{
  require(path.resolve(process.argv[2]));

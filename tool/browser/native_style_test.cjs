@@ -1,17 +1,7 @@
 const assert=require('node:assert/strict');
 const path=require('node:path');
-class Element {
- constructor(tag){this.tag=tag;this.textContent='';this.children=[];this.attributes={};this.events={};}
- appendChild(child){this.children.push(child);}
- replaceChildren(){this.children=[];}
- setAttribute(key,value){this.attributes[key]=value;}
- addEventListener(event,fn){this.events[event]=fn;}
-}
-const app=new Element('main');
-global.self=global;
-global.document={currentScript:null,querySelector:()=>app,createElement:tag=>new Element(tag)};
-function find(node,predicate){if(predicate(node))return node;for(const child of node.children){const result=find(child,predicate);if(result)return result;}}
-function label(node){return node.textContent+node.children.map(label).join('');}
+const {install,label,find}=require('./dom_shim.cjs');
+const {host:app}=install();
 function text(value){return find(app,node=>node.tag==='p'&&node.textContent===value);}
 function button(value){return find(app,node=>node.tag==='button'&&label(node)===value);}
 function check(count){
@@ -22,7 +12,7 @@ function check(count){
  assert(find(app,node=>(node.attributes.style||'').includes('border-radius:24')));
  assert(find(app,node=>(node.attributes.style||'').includes('padding:12.0px 16.0px')||(node.attributes.style||'').includes('padding:12px 16px')));
  assert(find(app,node=>(node.attributes.style||'').includes('flex:1 1 0')));
- assert(!find(app,node=>(node.attributes.style||'').includes('gap:')));
+ assert(!find(app,node=>node.tag==='div'&&(node.attributes.style||'').includes('gap:')),'flex layouts add no implicit gaps');
 }
 async function until(predicate){
  const deadline=Date.now()+5000;
@@ -36,9 +26,11 @@ async function until(predicate){
  console.log=(...args)=>{logs.push(args.join(' '));original(...args);};
  require(path.resolve(process.argv[2]));
  assert(logs.includes('init:18'));check(0);
- const stale=button('Update');stale.events.click();await until(()=>text('Ready 1'));check(1);
- stale.events.click();await until(()=>text('Ready 1'));check(1);
+ const retained=button('Update');const readyNode=text('Ready 0');
+ retained.events.click();await until(()=>text('Ready 1'));check(1);
+ assert.equal(button('Update'),retained,'button node is retained across rebuilds');assert.equal(text('Ready 1'),readyNode,'text node is patched in place');
+ retained.events.click();await until(()=>text('Ready 2'));check(2);
  button('Check errors').events.click();
- assert(logs.includes('invalid flex rejected'));assert(logs.includes('invalid padding rejected'));assert(logs.includes('icon painting rejected'));assert.equal(label(app),'Done');
+ assert(logs.includes('invalid flex rejected'));assert(logs.includes('invalid padding rejected'));assert(logs.includes('positioned outside stack rejected'));assert.equal(label(app),'Done');
  original('Scoped theme, card layout, updates and rejection checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

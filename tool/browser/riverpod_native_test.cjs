@@ -1,21 +1,13 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-class Element {
-  constructor(tag) { this.tag=tag; this.textContent=''; this.children=[]; this.events={}; }
-  appendChild(child) { this.children.push(child); }
-  replaceChildren() { this.children=[]; }
-  setAttribute() {}
-  addEventListener(event,fn) { this.events[event]=fn; }
-}
+const {install}=require('./dom_shim.cjs');
 function text(node) { return node.textContent + node.children.map(text).join(' '); }
 function find(node,label) {
   if(node.tag==='button' && text(node)===label) return node;
   for(const child of node.children) { const result=find(child,label); if(result) return result; }
 }
 async function main() {
-  const app = new Element('div');
-  global.self=global;
-  global.document={currentScript:null,querySelector:()=>app,createElement:tag=>new Element(tag)};
+  const {host:app}=install();
   const logs=[];
   const log=console.log;
   console.log=(...args)=> {logs.push(args.join(' '));log(...args);};

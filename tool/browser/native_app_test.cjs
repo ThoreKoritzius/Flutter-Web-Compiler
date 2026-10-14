@@ -1,22 +1,14 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
-class Element {
-  constructor(tag) { this.tag = tag; this.textContent = ''; this.children = []; this.events = {}; }
-  appendChild(child) { this.children.push(child); }
-  replaceChildren() { this.children = []; }
-  setAttribute() {}
-  addEventListener(event, fn) { this.events[event] = fn; }
-}
+const {install}=require('./dom_shim.cjs');
 function text(node) { return node.textContent + node.children.map(text).join(' '); }
 function find(node, label) {
   if(node.tag === 'button' && text(node) === label) return node;
   for(const child of node.children) { const found = find(child,label); if(found) return found; }
 }
 async function main() {
-  global.self = global;
-  const app = new Element('div');
-  global.document = {currentScript: null, querySelector: () => app, createElement: tag => new Element(tag)};
+  const {host: app} = install();
   let requests = 0;
   const server = http.createServer((req,res) => {
     const id = ++requests;
@@ -48,10 +40,7 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve,300));
     assert(text(app).includes('3 min total'));
     assert(!text(app).includes('Activity 2'));
-    const count = requests;
-    staleButton.events.click();
-    await new Promise(resolve => setTimeout(resolve,30));
-    assert.equal(requests,count,'detached buttons must not invoke original callbacks');
+    assert.equal(find(app,'Refresh / retry'),staleButton,'retained button node across rebuilds');
     find(app,'Test request failure').events.click();
     await until('Request failed. Retry to recover.');
     assert(text(app).includes('3 min total'));

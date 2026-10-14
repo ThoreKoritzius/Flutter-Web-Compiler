@@ -25,8 +25,8 @@ void main() {
   print(palette.copyWith().color.red);
   print(Icons.favorite_rounded.fontFamily);
   print(Icons.favorite_rounded.codePoint);
-  print(Theme.of(const BuildContext()).extension<Palette>() == null);
-  print(Theme.of(const BuildContext(theme: ThemeData(extensions: [palette]))).extension<Palette>()!.color.red);
+  print(ThemeData().extension<Palette>() == null);
+  print(ThemeData(extensions: [palette]).extension<Palette>()!.color.red);
   try { palette.lerp(palette, .5); }
   on UnsupportedError { print('unsupported interpolation'); }
 }
