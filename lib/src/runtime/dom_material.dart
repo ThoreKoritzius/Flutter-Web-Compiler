@@ -1523,7 +1523,13 @@ class CircleAvatar extends StatelessWidget {
     this.radius,
     this.minRadius,
     this.maxRadius,
+    this.foregroundImage,
+    this.onBackgroundImageError,
+    this.onForegroundImageError,
   });
+  final ImageProvider? foregroundImage;
+  final void Function(Object exception, StackTrace? stackTrace)?
+  onBackgroundImageError, onForegroundImageError;
   final Widget? child;
   final ImageProvider? backgroundImage;
   final Color? backgroundColor, foregroundColor;
@@ -1536,11 +1542,12 @@ class CircleAvatar extends StatelessWidget {
     final foreground = foregroundColor ?? scheme.onPrimaryContainer;
     return _Box(
       css:
-          'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;box-sizing:border-box;overflow:hidden;border-radius:50%;width:${px(size)};height:${px(size)};background-color:${colorCss(backgroundColor ?? scheme.primaryContainer)};${backgroundImage == null ? '' : decorationImageCss(DecorationImage(image: backgroundImage!, fit: BoxFit.cover))}',
+          'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;box-sizing:border-box;overflow:hidden;border-radius:50%;width:${px(size)};height:${px(size)};background-color:${colorCss(backgroundColor ?? scheme.primaryContainer)};${(foregroundImage ?? backgroundImage) == null ? '' : decorationImageCss(DecorationImage(image: (foregroundImage ?? backgroundImage)!, fit: BoxFit.cover))}',
       layout: _DomLayout.align,
       fill: _Fill.none,
       children: [
-        if (child != null)
+        // A foreground image covers the child, as in Flutter.
+        if (child != null && foregroundImage == null)
           IconTheme.merge(
             data: IconThemeData(color: foreground),
             child: DefaultTextStyle(
@@ -1567,10 +1574,37 @@ class Chip extends StatelessWidget {
     this.onDeleted,
     this.deleteIcon,
     this.deleteButtonTooltipMessage,
+    this.labelPadding,
+    this.deleteIconColor,
+    this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.iconTheme,
+    this.color,
+    this.materialTapTargetSize,
+    this.visualDensity,
+    this.focusNode,
+    this.autofocus = false,
+    this.avatarBoxConstraints,
+    this.deleteIconBoxConstraints,
+    this.chipAnimationStyle,
+    this.mouseCursor,
   });
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
   final Clip? clipBehavior;
+  final EdgeInsetsGeometry? labelPadding;
+  final Color? deleteIconColor, shadowColor, surfaceTintColor;
+  final double? elevation;
+  final IconThemeData? iconTheme;
+  final WidgetStateProperty<Color?>? color;
+  final MaterialTapTargetSize? materialTapTargetSize;
+  final VisualDensity? visualDensity;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final BoxConstraints? avatarBoxConstraints, deleteIconBoxConstraints;
+  final Object? chipAnimationStyle;
+  final MouseCursor? mouseCursor;
   final Widget label;
   final Widget? avatar, deleteIcon;
   final TextStyle? labelStyle;

@@ -3,7 +3,9 @@
 /// painting library and does not claim pixel parity.
 library;
 
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:material_color_utilities/material_color_utilities.dart';
 
@@ -35,6 +37,37 @@ enum TextOverflow { clip, fade, ellipsis, visible }
 enum TextDirection { ltr, rtl }
 
 enum TextBaseline { alphabetic, ideographic }
+
+enum TextDecorationStyle { solid, double, dotted, dashed, wavy }
+
+enum TextLeadingDistribution { proportional, even }
+
+class TextHeightBehavior {
+  const TextHeightBehavior({
+    this.applyHeightToFirstAscent = true,
+    this.applyHeightToLastDescent = true,
+    this.leadingDistribution = TextLeadingDistribution.proportional,
+  });
+  final bool applyHeightToFirstAscent, applyHeightToLastDescent;
+  final TextLeadingDistribution leadingDistribution;
+}
+
+/// A variable-font axis setting (`font-variation-settings`).
+class FontVariation {
+  const FontVariation(this.axis, this.value);
+  const FontVariation.weight(this.value) : axis = 'wght';
+  const FontVariation.width(this.value) : axis = 'wdth';
+  const FontVariation.slant(this.value) : axis = 'slnt';
+  const FontVariation.italic(this.value) : axis = 'ital';
+  const FontVariation.opticalSize(this.value) : axis = 'opsz';
+  final String axis;
+  final double value;
+  @override
+  bool operator ==(Object other) =>
+      other is FontVariation && other.axis == axis && other.value == value;
+  @override
+  int get hashCode => Object.hash(axis, value);
+}
 
 /// A language/script/country identifier, as in `dart:ui`.
 class Locale {
@@ -423,7 +456,27 @@ class TextStyle {
     this.fontFamilyFallback,
     this.fontFeatures,
     this.overflow,
+    this.decorationStyle,
+    this.decorationThickness,
+    this.shadows,
+    this.textBaseline,
+    this.leadingDistribution,
+    this.locale,
+    this.foreground,
+    this.background,
+    this.fontVariations,
+    this.debugLabel,
+    String? package,
   });
+  final TextDecorationStyle? decorationStyle;
+  final double? decorationThickness;
+  final List<Shadow>? shadows;
+  final TextBaseline? textBaseline;
+  final TextLeadingDistribution? leadingDistribution;
+  final Object? locale;
+  final Paint? foreground, background;
+  final List<FontVariation>? fontVariations;
+  final String? debugLabel;
   final bool inherit;
   final Color? color, backgroundColor, decorationColor;
   final double? fontSize, letterSpacing, wordSpacing, height;
@@ -451,7 +504,28 @@ class TextStyle {
     List<String>? fontFamilyFallback,
     List<FontFeature>? fontFeatures,
     TextOverflow? overflow,
+    TextDecorationStyle? decorationStyle,
+    double? decorationThickness,
+    List<Shadow>? shadows,
+    TextBaseline? textBaseline,
+    TextLeadingDistribution? leadingDistribution,
+    Object? locale,
+    Paint? foreground,
+    Paint? background,
+    List<FontVariation>? fontVariations,
+    String? debugLabel,
+    String? package,
   }) => TextStyle(
+    decorationStyle: decorationStyle ?? this.decorationStyle,
+    decorationThickness: decorationThickness ?? this.decorationThickness,
+    shadows: shadows ?? this.shadows,
+    textBaseline: textBaseline ?? this.textBaseline,
+    leadingDistribution: leadingDistribution ?? this.leadingDistribution,
+    locale: locale ?? this.locale,
+    foreground: foreground ?? this.foreground,
+    background: background ?? this.background,
+    fontVariations: fontVariations ?? this.fontVariations,
+    debugLabel: debugLabel ?? this.debugLabel,
     inherit: inherit ?? this.inherit,
     color: color ?? this.color,
     backgroundColor: backgroundColor ?? this.backgroundColor,
@@ -488,22 +562,82 @@ class TextStyle {
       fontFamilyFallback: other.fontFamilyFallback,
       fontFeatures: other.fontFeatures,
       overflow: other.overflow,
+      decorationStyle: other.decorationStyle,
+      decorationThickness: other.decorationThickness,
+      shadows: other.shadows,
+      textBaseline: other.textBaseline,
+      leadingDistribution: other.leadingDistribution,
+      locale: other.locale,
+      foreground: other.foreground,
+      background: other.background,
+      fontVariations: other.fontVariations,
     );
   }
 
   TextStyle apply({
     Color? color,
+    Color? backgroundColor,
+    TextDecoration? decoration,
     Color? decorationColor,
+    TextDecorationStyle? decorationStyle,
+    double decorationThicknessFactor = 1,
+    double decorationThicknessDelta = 0,
     String? fontFamily,
+    List<String>? fontFamilyFallback,
     double fontSizeFactor = 1,
     double fontSizeDelta = 0,
+    int fontWeightDelta = 0,
+    FontStyle? fontStyle,
+    double letterSpacingFactor = 1,
+    double letterSpacingDelta = 0,
+    double wordSpacingFactor = 1,
+    double wordSpacingDelta = 0,
+    double heightFactor = 1,
+    double heightDelta = 0,
+    TextBaseline? textBaseline,
+    TextLeadingDistribution? leadingDistribution,
+    Object? locale,
+    List<Shadow>? shadows,
+    List<FontFeature>? fontFeatures,
+    List<FontVariation>? fontVariations,
+    String? package,
+    TextOverflow? overflow,
   }) => copyWith(
     color: color,
+    backgroundColor: backgroundColor,
+    decoration: decoration,
     decorationColor: decorationColor,
+    decorationStyle: decorationStyle,
+    decorationThickness: decorationThickness == null
+        ? null
+        : decorationThickness! * decorationThicknessFactor +
+              decorationThicknessDelta,
     fontFamily: fontFamily,
+    fontFamilyFallback: fontFamilyFallback,
     fontSize: fontSize == null
         ? null
         : fontSize! * fontSizeFactor + fontSizeDelta,
+    fontWeight: fontWeight == null
+        ? null
+        : FontWeight.values[(fontWeight!.index + fontWeightDelta).clamp(
+            0,
+            FontWeight.values.length - 1,
+          )],
+    fontStyle: fontStyle,
+    letterSpacing: letterSpacing == null
+        ? null
+        : letterSpacing! * letterSpacingFactor + letterSpacingDelta,
+    wordSpacing: wordSpacing == null
+        ? null
+        : wordSpacing! * wordSpacingFactor + wordSpacingDelta,
+    height: height == null ? null : height! * heightFactor + heightDelta,
+    textBaseline: textBaseline,
+    leadingDistribution: leadingDistribution,
+    locale: locale,
+    shadows: shadows,
+    fontFeatures: fontFeatures,
+    fontVariations: fontVariations,
+    overflow: overflow,
   );
 }
 
@@ -1600,6 +1734,73 @@ class NetworkImage extends ImageProvider<NetworkImage> {
   }
 }
 
+/// Encoded image bytes, served to the browser as a data URL.
+class MemoryImage extends ImageProvider<MemoryImage> {
+  const MemoryImage(this.bytes, {this.scale = 1});
+  final Uint8List bytes;
+  final double scale;
+
+  static String _mime(Uint8List bytes) {
+    bool starts(List<int> magic) =>
+        bytes.length >= magic.length &&
+        Iterable.generate(magic.length).every((i) => bytes[i] == magic[i]);
+    if (starts([0x89, 0x50, 0x4e, 0x47])) return 'image/png';
+    if (starts([0xff, 0xd8, 0xff])) return 'image/jpeg';
+    if (starts([0x47, 0x49, 0x46])) return 'image/gif';
+    if (starts([0x52, 0x49, 0x46, 0x46]) &&
+        bytes.length > 11 &&
+        String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
+      return 'image/webp';
+    }
+    if (starts([0x42, 0x4d])) return 'image/bmp';
+    final head = String.fromCharCodes(bytes.take(256)).trimLeft();
+    if (head.startsWith('<svg') || head.startsWith('<?xml')) {
+      return 'image/svg+xml';
+    }
+    return 'application/octet-stream';
+  }
+
+  @override
+  String get url => 'data:${_mime(bytes)};base64,${base64Encode(bytes)}';
+
+  @override
+  bool operator ==(Object other) =>
+      other is MemoryImage && identical(other.bytes, bytes);
+  @override
+  int get hashCode => identityHashCode(bytes);
+}
+
+/// Decoding sizes are a hint for native engines; browsers decode the
+/// source image, so the inner provider's URL is used as is.
+class ResizeImage extends ImageProvider<ResizeImage> {
+  const ResizeImage(
+    this.imageProvider, {
+    this.width,
+    this.height,
+    this.allowUpscaling = false,
+  });
+  final ImageProvider imageProvider;
+  final int? width, height;
+  final bool allowUpscaling;
+  @override
+  String get url => imageProvider.url;
+
+  static ImageProvider<Object> resizeIfNeeded(
+    int? cacheWidth,
+    int? cacheHeight,
+    ImageProvider<Object> provider,
+  ) => provider;
+}
+
+class ImageChunkEvent {
+  const ImageChunkEvent({
+    required this.cumulativeBytesLoaded,
+    required this.expectedTotalBytes,
+  });
+  final int cumulativeBytesLoaded;
+  final int? expectedTotalBytes;
+}
+
 String cssUrl(String url) =>
     'url("${url.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '')}")';
 
@@ -1776,6 +1977,29 @@ String textStyleCss(TextStyle? style) {
     out.write('text-decoration:${lines.isEmpty ? 'none' : lines.join(' ')};');
     if (style.decorationColor != null)
       out.write('text-decoration-color:${colorCss(style.decorationColor!)};');
+    if (style.decorationStyle != null)
+      out.write('text-decoration-style:${style.decorationStyle!.name};');
+    if (style.decorationThickness != null)
+      out.write(
+        'text-decoration-thickness:${cssNumber(style.decorationThickness!)}px;',
+      );
+  }
+  final shadows = style.shadows;
+  if (shadows != null) {
+    out.write(
+      shadows.isEmpty
+          ? 'text-shadow:none;'
+          : 'text-shadow:${shadows.map((s) => '${cssNumber(s.offset.dx)}px ${cssNumber(s.offset.dy)}px ${cssNumber(s.blurRadius)}px ${colorCss(s.color)}').join(',')};',
+    );
+  }
+  final variations = style.fontVariations;
+  if (variations != null && variations.isNotEmpty) {
+    out.write(
+      'font-variation-settings:${variations.where((v) => RegExp(r'^[a-zA-Z0-9]{4}$').hasMatch(v.axis)).map((v) => '"${v.axis}" ${cssNumber(v.value)}').join(',')};',
+    );
+  }
+  if (style.foreground?.color case final paint? when style.color == null) {
+    out.write('color:${colorCss(paint)};');
   }
   out.write(fontFamilyCss(style));
   final features = style.fontFeatures;
@@ -2106,4 +2330,196 @@ Size? lerpSize(Size? a, Size? b, double t) {
   if (a == null && b == null) return null;
   final x = a ?? Size.zero, y = b ?? Size.zero;
   return Size(_mix(x.width, y.width, t), _mix(x.height, y.height, t));
+}
+
+/// Line-box settings for a paragraph. The runtime applies `height` and
+/// `fontSize` when [forceStrutHeight] is set.
+class StrutStyle {
+  const StrutStyle({
+    this.fontFamily,
+    this.fontFamilyFallback,
+    this.fontSize,
+    this.height,
+    this.leadingDistribution,
+    this.leading,
+    this.fontWeight,
+    this.fontStyle,
+    this.forceStrutHeight,
+    this.debugLabel,
+    String? package,
+  });
+  StrutStyle.fromTextStyle(
+    TextStyle textStyle, {
+    String? fontFamily,
+    List<String>? fontFamilyFallback,
+    double? fontSize,
+    double? height,
+    TextLeadingDistribution? leadingDistribution,
+    this.leading,
+    FontWeight? fontWeight,
+    FontStyle? fontStyle,
+    this.forceStrutHeight,
+    String? debugLabel,
+    String? package,
+  }) : fontFamily = fontFamily ?? textStyle.fontFamily,
+       fontFamilyFallback = fontFamilyFallback ?? textStyle.fontFamilyFallback,
+       fontSize = fontSize ?? textStyle.fontSize,
+       height = height ?? textStyle.height,
+       leadingDistribution =
+           leadingDistribution ?? textStyle.leadingDistribution,
+       fontWeight = fontWeight ?? textStyle.fontWeight,
+       fontStyle = fontStyle ?? textStyle.fontStyle,
+       debugLabel = debugLabel ?? textStyle.debugLabel;
+  final String? fontFamily, debugLabel;
+  final List<String>? fontFamilyFallback;
+  final double? fontSize, height, leading;
+  final TextLeadingDistribution? leadingDistribution;
+  final FontWeight? fontWeight;
+  final FontStyle? fontStyle;
+  final bool? forceStrutHeight;
+  static const disabled = StrutStyle(height: 0, leading: 0);
+}
+
+/// A color in hue, saturation and lightness, as in Flutter.
+class HSLColor {
+  const HSLColor.fromAHSL(
+    this.alpha,
+    this.hue,
+    this.saturation,
+    this.lightness,
+  );
+
+  factory HSLColor.fromColor(Color color) {
+    final red = color.r, green = color.g, blue = color.b;
+    final max = math.max(red, math.max(green, blue));
+    final min = math.min(red, math.min(green, blue));
+    final delta = max - min;
+    final hue = _hue(red, green, blue, max, delta);
+    final lightness = (max + min) / 2;
+    final saturation = lightness == 1
+        ? 0.0
+        : (delta / (1 - (2 * lightness - 1).abs())).clamp(0.0, 1.0);
+    return HSLColor.fromAHSL(color.a, hue, saturation, lightness);
+  }
+
+  final double alpha, hue, saturation, lightness;
+
+  HSLColor withAlpha(double alpha) =>
+      HSLColor.fromAHSL(alpha, hue, saturation, lightness);
+  HSLColor withHue(double hue) =>
+      HSLColor.fromAHSL(alpha, hue, saturation, lightness);
+  HSLColor withSaturation(double saturation) =>
+      HSLColor.fromAHSL(alpha, hue, saturation, lightness);
+  HSLColor withLightness(double lightness) =>
+      HSLColor.fromAHSL(alpha, hue, saturation, lightness);
+
+  Color toColor() {
+    final chroma = (1 - (2 * lightness - 1).abs()) * saturation;
+    final secondary = chroma * (1 - (((hue / 60) % 2) - 1).abs());
+    final match = lightness - chroma / 2;
+    return _colorFromHue(alpha, hue, chroma, secondary, match);
+  }
+
+  static HSLColor? lerp(HSLColor? a, HSLColor? b, double t) {
+    if (a == null || b == null) return a ?? b;
+    return HSLColor.fromAHSL(
+      a.alpha + (b.alpha - a.alpha) * t,
+      (a.hue + (b.hue - a.hue) * t) % 360,
+      a.saturation + (b.saturation - a.saturation) * t,
+      a.lightness + (b.lightness - a.lightness) * t,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is HSLColor &&
+      other.alpha == alpha &&
+      other.hue == hue &&
+      other.saturation == saturation &&
+      other.lightness == lightness;
+  @override
+  int get hashCode => Object.hash(alpha, hue, saturation, lightness);
+}
+
+class HSVColor {
+  const HSVColor.fromAHSV(this.alpha, this.hue, this.saturation, this.value);
+
+  factory HSVColor.fromColor(Color color) {
+    final red = color.r, green = color.g, blue = color.b;
+    final max = math.max(red, math.max(green, blue));
+    final min = math.min(red, math.min(green, blue));
+    final delta = max - min;
+    return HSVColor.fromAHSV(
+      color.a,
+      _hue(red, green, blue, max, delta),
+      max == 0 ? 0 : delta / max,
+      max,
+    );
+  }
+
+  final double alpha, hue, saturation, value;
+
+  HSVColor withAlpha(double alpha) =>
+      HSVColor.fromAHSV(alpha, hue, saturation, value);
+  HSVColor withHue(double hue) =>
+      HSVColor.fromAHSV(alpha, hue, saturation, value);
+  HSVColor withSaturation(double saturation) =>
+      HSVColor.fromAHSV(alpha, hue, saturation, value);
+  HSVColor withValue(double value) =>
+      HSVColor.fromAHSV(alpha, hue, saturation, value);
+
+  Color toColor() {
+    final chroma = saturation * value;
+    final secondary = chroma * (1 - (((hue / 60) % 2) - 1).abs());
+    return _colorFromHue(alpha, hue, chroma, secondary, value - chroma);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is HSVColor &&
+      other.alpha == alpha &&
+      other.hue == hue &&
+      other.saturation == saturation &&
+      other.value == value;
+  @override
+  int get hashCode => Object.hash(alpha, hue, saturation, value);
+}
+
+double _hue(double red, double green, double blue, double max, double delta) {
+  if (max == 0 || delta == 0) return 0;
+  final double hue;
+  if (max == red) {
+    hue = 60 * (((green - blue) / delta) % 6);
+  } else if (max == green) {
+    hue = 60 * (((blue - red) / delta) + 2);
+  } else {
+    hue = 60 * (((red - green) / delta) + 4);
+  }
+  return hue.isNaN ? 0 : hue;
+}
+
+Color _colorFromHue(
+  double alpha,
+  double hue,
+  double chroma,
+  double secondary,
+  double match,
+) {
+  final (r, g, b) = hue < 60
+      ? (chroma, secondary, 0.0)
+      : hue < 120
+      ? (secondary, chroma, 0.0)
+      : hue < 180
+      ? (0.0, chroma, secondary)
+      : hue < 240
+      ? (0.0, secondary, chroma)
+      : hue < 300
+      ? (secondary, 0.0, chroma)
+      : (chroma, 0.0, secondary);
+  return Color.from(
+    alpha: alpha,
+    red: r + match,
+    green: g + match,
+    blue: b + match,
+  );
 }

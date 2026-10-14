@@ -108,9 +108,25 @@ class TextSpan extends InlineSpan {
       '${text ?? ''}${children?.map((c) => c.toPlainText()).join() ?? ''}';
 }
 
+enum PlaceholderAlignment {
+  baseline,
+  aboveBaseline,
+  belowBaseline,
+  top,
+  bottom,
+  middle,
+}
+
 class WidgetSpan extends InlineSpan {
-  const WidgetSpan({required this.child, super.style});
+  const WidgetSpan({
+    required this.child,
+    this.alignment = PlaceholderAlignment.bottom,
+    this.baseline,
+    super.style,
+  });
   final Widget child;
+  final PlaceholderAlignment alignment;
+  final TextBaseline? baseline;
   @override
   String toPlainText() => '￼';
 }
@@ -137,6 +153,14 @@ class Text extends _DomWidget {
     this.maxLines,
     this.semanticsLabel,
     this.textScaler,
+    this.strutStyle,
+    this.textDirection,
+    this.locale,
+    this.textScaleFactor,
+    this.semanticsIdentifier,
+    this.textWidthBasis,
+    this.textHeightBehavior,
+    this.selectionColor,
   }) : textSpan = null;
   const Text.rich(
     InlineSpan this.textSpan, {
@@ -148,6 +172,14 @@ class Text extends _DomWidget {
     this.maxLines,
     this.semanticsLabel,
     this.textScaler,
+    this.strutStyle,
+    this.textDirection,
+    this.locale,
+    this.textScaleFactor,
+    this.semanticsIdentifier,
+    this.textWidthBasis,
+    this.textHeightBehavior,
+    this.selectionColor,
   }) : data = null;
   final String? data;
   final InlineSpan? textSpan;
@@ -158,6 +190,14 @@ class Text extends _DomWidget {
   final int? maxLines;
   final String? semanticsLabel;
   final TextScaler? textScaler;
+  final StrutStyle? strutStyle;
+  final TextDirection? textDirection;
+  final Locale? locale;
+  final double? textScaleFactor;
+  final String? semanticsIdentifier;
+  final TextWidthBasis? textWidthBasis;
+  final TextHeightBehavior? textHeightBehavior;
+  final Color? selectionColor;
 
   @override
   String get _tag => 'p';
@@ -219,7 +259,16 @@ class _Span extends _DomWidget {
     final span = this.span;
     out.css(textStyleCss(span.style));
     if (span is WidgetSpan) {
-      out.css('display:inline-block;vertical-align:middle;');
+      out.css(
+        'display:inline-block;vertical-align:${switch (span.alignment) {
+          PlaceholderAlignment.baseline => 'baseline',
+          PlaceholderAlignment.aboveBaseline => 'text-bottom',
+          PlaceholderAlignment.belowBaseline => 'text-top',
+          PlaceholderAlignment.top => 'top',
+          PlaceholderAlignment.bottom => 'bottom',
+          PlaceholderAlignment.middle => 'middle',
+        }};',
+      );
       out.child(span.child);
       return;
     }
@@ -263,7 +312,25 @@ class RichText extends StatelessWidget {
     this.softWrap = true,
     this.overflow = TextOverflow.clip,
     this.maxLines,
+    this.textDirection,
+    this.textScaleFactor = 1,
+    this.textScaler = TextScaler.noScaling,
+    this.locale,
+    this.strutStyle,
+    this.textWidthBasis = TextWidthBasis.parent,
+    this.textHeightBehavior,
+    this.selectionRegistrar,
+    this.selectionColor,
   });
+  final TextDirection? textDirection;
+  final double textScaleFactor;
+  final TextScaler textScaler;
+  final Locale? locale;
+  final StrutStyle? strutStyle;
+  final TextWidthBasis textWidthBasis;
+  final TextHeightBehavior? textHeightBehavior;
+  final Object? selectionRegistrar;
+  final Color? selectionColor;
   final InlineSpan text;
   final TextAlign textAlign;
   final bool softWrap;
@@ -284,14 +351,74 @@ class SelectableText extends Text {
   const SelectableText(
     super.data, {
     super.key,
+    this.focusNode,
     super.style,
+    super.strutStyle,
     super.textAlign,
+    super.textDirection,
+    super.textScaler,
+    this.showCursor = false,
+    this.autofocus = false,
+    this.minLines,
     super.maxLines,
+    this.cursorWidth = 2,
+    this.cursorColor,
+    this.enableInteractiveSelection = true,
+    this.onTap,
+    this.scrollPhysics,
+    super.semanticsLabel,
+    super.textHeightBehavior,
+    super.textWidthBasis,
+    this.onSelectionChanged,
+    this.contextMenuBuilder,
   });
+  const SelectableText.rich(
+    TextSpan super.textSpan, {
+    super.key,
+    this.focusNode,
+    super.style,
+    super.strutStyle,
+    super.textAlign,
+    super.textDirection,
+    super.textScaler,
+    this.showCursor = false,
+    this.autofocus = false,
+    this.minLines,
+    super.maxLines,
+    this.cursorWidth = 2,
+    this.cursorColor,
+    this.enableInteractiveSelection = true,
+    this.onTap,
+    this.scrollPhysics,
+    super.semanticsLabel,
+    super.textHeightBehavior,
+    super.textWidthBasis,
+    this.onSelectionChanged,
+    this.contextMenuBuilder,
+  }) : super.rich();
+  final FocusNode? focusNode;
+  final bool showCursor, autofocus, enableInteractiveSelection;
+  final int? minLines;
+  final double cursorWidth;
+  final Color? cursorColor;
+  final VoidCallback? onTap;
+  final ScrollPhysics? scrollPhysics;
+  final Object? onSelectionChanged, contextMenuBuilder;
 }
 
 class SelectionArea extends StatelessWidget {
-  const SelectionArea({super.key, required this.child});
+  const SelectionArea({
+    super.key,
+    required this.child,
+    this.focusNode,
+    this.selectionControls,
+    this.contextMenuBuilder,
+    this.magnifierConfiguration,
+    this.onSelectionChanged,
+  });
+  final FocusNode? focusNode;
+  final Object? selectionControls, contextMenuBuilder, magnifierConfiguration;
+  final Object? onSelectionChanged;
   final Widget child;
   @override
   Widget build(BuildContext context) => child;
@@ -1290,7 +1417,11 @@ class _ScrollList extends _DomWidget {
     required this.scrolls,
     required this.children,
     this.overflowVisible = false,
+    this.pageFraction,
   });
+
+  /// Children are pages snapping at this fraction of the viewport.
+  final double? pageFraction;
   final Axis axis;
   final EdgeInsetsGeometry? padding;
   final bool scrolls;
@@ -1315,6 +1446,24 @@ class _ScrollList extends _DomWidget {
         vertical ? 'overflow-y:auto;' : 'overflow-x:auto;overflow-y:hidden;',
       );
     out.css(edgeInsetsCss('padding', padding));
+    final fraction = pageFraction;
+    if (fraction != null) {
+      out.css(
+        '${vertical ? 'scroll-snap-type:y mandatory;height:100%;' : 'scroll-snap-type:x mandatory;'}scrollbar-width:none;',
+      );
+      out.children = [
+        for (final child in children)
+          _Box(
+            key: child.key,
+            css:
+                'flex:0 0 ${cssNumber(fraction * 100)}%;${vertical ? 'min-height:0;' : 'min-width:0;'}scroll-snap-align:center;scroll-snap-stop:always;display:grid;grid-template-columns:minmax(0,1fr);',
+            layout: _DomLayout.grid,
+            fill: _Fill.expand,
+            children: [child],
+          ),
+      ];
+      return;
+    }
     out.children = vertical
         ? children
         : [
@@ -1947,46 +2096,135 @@ class PaintingBinding {
 typedef ImageErrorWidgetBuilder =
     Widget Function(BuildContext context, Object error, StackTrace? stackTrace);
 
+typedef ImageLoadingBuilder =
+    Widget Function(
+      BuildContext context,
+      Widget child,
+      ImageChunkEvent? loadingProgress,
+    );
+typedef ImageFrameBuilder =
+    Widget Function(
+      BuildContext context,
+      Widget child,
+      int? frame,
+      bool wasSynchronouslyLoaded,
+    );
+
 class Image extends StatefulWidget {
   const Image({
     super.key,
     required this.image,
-    this.width,
-    this.height,
-    this.fit,
-    this.alignment = Alignment.center,
+    this.frameBuilder,
+    this.loadingBuilder,
+    this.errorBuilder,
     this.semanticLabel,
     this.excludeFromSemantics = false,
-    this.errorBuilder,
+    this.width,
+    this.height,
+    this.color,
+    this.opacity,
+    this.colorBlendMode,
+    this.fit,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.centerSlice,
+    this.matchTextDirection = false,
+    this.gaplessPlayback = false,
+    this.isAntiAlias = false,
+    this.filterQuality = FilterQuality.medium,
   });
   Image.asset(
     String name, {
     super.key,
-    String? package,
-    this.width,
-    this.height,
-    this.fit,
-    this.alignment = Alignment.center,
+    AssetBundle? bundle,
+    this.frameBuilder,
+    this.errorBuilder,
     this.semanticLabel,
     this.excludeFromSemantics = false,
-    this.errorBuilder,
-  }) : image = AssetImage(name, package: package);
+    double? scale,
+    this.width,
+    this.height,
+    this.color,
+    this.opacity,
+    this.colorBlendMode,
+    this.fit,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.centerSlice,
+    this.matchTextDirection = false,
+    this.gaplessPlayback = false,
+    this.isAntiAlias = false,
+    String? package,
+    this.filterQuality = FilterQuality.medium,
+    int? cacheWidth,
+    int? cacheHeight,
+  }) : image = AssetImage(name, package: package),
+       loadingBuilder = null;
   Image.network(
     String src, {
     super.key,
-    this.width,
-    this.height,
-    this.fit,
-    this.alignment = Alignment.center,
+    double scale = 1.0,
+    this.frameBuilder,
+    this.loadingBuilder,
+    this.errorBuilder,
     this.semanticLabel,
     this.excludeFromSemantics = false,
-    this.errorBuilder,
+    this.width,
+    this.height,
+    this.color,
+    this.opacity,
+    this.colorBlendMode,
+    this.fit,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.centerSlice,
+    this.matchTextDirection = false,
+    this.gaplessPlayback = false,
+    this.filterQuality = FilterQuality.medium,
+    this.isAntiAlias = false,
     Map<String, String>? headers,
-  }) : image = NetworkImage(src, headers: headers);
+    int? cacheWidth,
+    int? cacheHeight,
+    Object? webHtmlElementStrategy,
+  }) : image = NetworkImage(src, scale: scale, headers: headers);
+  Image.memory(
+    Uint8List bytes, {
+    super.key,
+    double scale = 1.0,
+    this.frameBuilder,
+    this.errorBuilder,
+    this.semanticLabel,
+    this.excludeFromSemantics = false,
+    this.width,
+    this.height,
+    this.color,
+    this.opacity,
+    this.colorBlendMode,
+    this.fit,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.centerSlice,
+    this.matchTextDirection = false,
+    this.gaplessPlayback = false,
+    this.isAntiAlias = false,
+    this.filterQuality = FilterQuality.medium,
+    int? cacheWidth,
+    int? cacheHeight,
+  }) : image = MemoryImage(bytes, scale: scale),
+       loadingBuilder = null;
   final ImageProvider image;
+  final ImageFrameBuilder? frameBuilder;
+  final ImageLoadingBuilder? loadingBuilder;
   final double? width, height;
+  final Color? color;
+  final Animation<double>? opacity;
+  final BlendMode? colorBlendMode;
   final BoxFit? fit;
   final AlignmentGeometry alignment;
+  final ImageRepeat repeat;
+  final Rect? centerSlice;
+  final bool matchTextDirection, gaplessPlayback, isAntiAlias;
+  final FilterQuality filterQuality;
   final String? semanticLabel;
   final bool excludeFromSemantics;
   final ImageErrorWidgetBuilder? errorBuilder;
@@ -1995,11 +2233,14 @@ class Image extends StatefulWidget {
 }
 
 class _ImageState extends State<Image> {
-  bool _failed = false;
+  bool _failed = false, _loaded = false;
   @override
   void didUpdateWidget(Image oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.image.url != widget.image.url) _failed = false;
+    if (oldWidget.image.url != widget.image.url) {
+      _failed = false;
+      if (!widget.gaplessPlayback) _loaded = false;
+    }
   }
 
   @override
@@ -2011,21 +2252,47 @@ class _ImageState extends State<Image> {
         null,
       );
     }
-    return _Img(
+    final observe =
+        widget.loadingBuilder != null || widget.frameBuilder != null;
+    Widget result = _Img(
       widget: widget,
       onError: widget.errorBuilder == null
           ? null
           : () {
               if (mounted) setState(() => _failed = true);
             },
+      onLoad: !observe || _loaded
+          ? null
+          : () {
+              if (mounted) setState(() => _loaded = true);
+            },
     );
+    if (widget.opacity != null) {
+      result = FadeTransition(opacity: widget.opacity!, child: result);
+    }
+    if (widget.frameBuilder != null) {
+      result = widget.frameBuilder!(context, result, _loaded ? 0 : null, false);
+    }
+    if (widget.loadingBuilder != null) {
+      result = widget.loadingBuilder!(
+        context,
+        result,
+        _loaded
+            ? null
+            : const ImageChunkEvent(
+                cumulativeBytesLoaded: 0,
+                expectedTotalBytes: null,
+              ),
+      );
+    }
+    return result;
   }
 }
 
 class _Img extends _DomWidget {
-  const _Img({required this.widget, required this.onError});
+  const _Img({required this.widget, required this.onError, this.onLoad});
   final Image widget;
-  final VoidCallback? onError;
+  final VoidCallback? onError, onLoad;
   @override
   String get _tag => 'img';
   @override
@@ -2044,13 +2311,207 @@ class _Img extends _DomWidget {
     out.css(_dimension('width', image.width));
     out.css(_dimension('height', image.height));
     out.css(objectFitCss(image.fit));
+    if (image.filterQuality == FilterQuality.none) {
+      out.css('image-rendering:pixelated;');
+    }
     final a = image.alignment.resolve(TextDirection.ltr);
     if (a.x != 0 || a.y != 0)
       out.css(
         'object-position:${cssNumber((a.x + 1) * 50)}% ${cssNumber((a.y + 1) * 50)}%;',
       );
     if (onError != null) out.on('error', (_) => onError!());
+    if (onLoad != null) {
+      out.on('load', (_) => onLoad!());
+      // Cached images may already be complete when the listener attaches.
+      final element = out.context;
+      scheduleMicrotask(() {
+        final node = element.mounted ? element.node as JSObject : null;
+        if (node != null &&
+            node.getProperty<JSBoolean?>('complete'.toJS)?.toDart == true &&
+            _jsNumber(node, 'naturalWidth') > 0) {
+          onLoad!();
+        }
+      });
+    }
   }
+}
+
+/// Shows [placeholder] until [image] loads, then fades the image in.
+class FadeInImage extends StatefulWidget {
+  const FadeInImage({
+    super.key,
+    required this.placeholder,
+    this.placeholderErrorBuilder,
+    required this.image,
+    this.imageErrorBuilder,
+    this.excludeFromSemantics = false,
+    this.imageSemanticLabel,
+    this.fadeOutDuration = const Duration(milliseconds: 300),
+    this.fadeOutCurve = Curves.easeOut,
+    this.fadeInDuration = const Duration(milliseconds: 700),
+    this.fadeInCurve = Curves.easeIn,
+    this.width,
+    this.height,
+    this.fit,
+    this.placeholderFit,
+    this.filterQuality = FilterQuality.medium,
+    this.placeholderFilterQuality,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.matchTextDirection = false,
+    this.placeholderColor,
+    this.placeholderColorBlendMode,
+  });
+  FadeInImage.memoryNetwork({
+    super.key,
+    required Uint8List placeholder,
+    this.placeholderErrorBuilder,
+    required String image,
+    this.imageErrorBuilder,
+    double placeholderScale = 1.0,
+    double imageScale = 1.0,
+    this.excludeFromSemantics = false,
+    this.imageSemanticLabel,
+    this.fadeOutDuration = const Duration(milliseconds: 300),
+    this.fadeOutCurve = Curves.easeOut,
+    this.fadeInDuration = const Duration(milliseconds: 700),
+    this.fadeInCurve = Curves.easeIn,
+    this.width,
+    this.height,
+    this.fit,
+    this.placeholderFit,
+    this.filterQuality = FilterQuality.medium,
+    this.placeholderFilterQuality,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.matchTextDirection = false,
+    this.placeholderColor,
+    this.placeholderColorBlendMode,
+    int? placeholderCacheWidth,
+    int? placeholderCacheHeight,
+    int? imageCacheWidth,
+    int? imageCacheHeight,
+  }) : placeholder = MemoryImage(placeholder, scale: placeholderScale),
+       image = NetworkImage(image, scale: imageScale);
+  FadeInImage.assetNetwork({
+    super.key,
+    required String placeholder,
+    this.placeholderErrorBuilder,
+    required String image,
+    this.imageErrorBuilder,
+    AssetBundle? bundle,
+    double? placeholderScale,
+    double imageScale = 1.0,
+    this.excludeFromSemantics = false,
+    this.imageSemanticLabel,
+    this.fadeOutDuration = const Duration(milliseconds: 300),
+    this.fadeOutCurve = Curves.easeOut,
+    this.fadeInDuration = const Duration(milliseconds: 700),
+    this.fadeInCurve = Curves.easeIn,
+    this.width,
+    this.height,
+    this.fit,
+    this.placeholderFit,
+    this.filterQuality = FilterQuality.medium,
+    this.placeholderFilterQuality,
+    this.alignment = Alignment.center,
+    this.repeat = ImageRepeat.noRepeat,
+    this.matchTextDirection = false,
+    this.placeholderColor,
+    this.placeholderColorBlendMode,
+    int? placeholderCacheWidth,
+    int? placeholderCacheHeight,
+    int? imageCacheWidth,
+    int? imageCacheHeight,
+  }) : placeholder = AssetImage(placeholder),
+       image = NetworkImage(image, scale: imageScale);
+  final ImageProvider placeholder, image;
+  final ImageErrorWidgetBuilder? placeholderErrorBuilder, imageErrorBuilder;
+  final bool excludeFromSemantics, matchTextDirection;
+  final String? imageSemanticLabel;
+  final Duration fadeOutDuration, fadeInDuration;
+  final Curve fadeOutCurve, fadeInCurve;
+  final double? width, height;
+  final BoxFit? fit, placeholderFit;
+  final FilterQuality filterQuality;
+  final FilterQuality? placeholderFilterQuality;
+  final AlignmentGeometry alignment;
+  final ImageRepeat repeat;
+  final Color? placeholderColor;
+  final BlendMode? placeholderColorBlendMode;
+  @override
+  State<FadeInImage> createState() => _FadeInImageState();
+}
+
+class _FadeInImageState extends State<FadeInImage> {
+  bool _loaded = false;
+  @override
+  Widget build(BuildContext context) => Stack(
+    alignment: Alignment.center,
+    children: [
+      if (!_loaded)
+        Image(
+          image: widget.placeholder,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.placeholderFit ?? widget.fit,
+          alignment: widget.alignment,
+          excludeFromSemantics: true,
+          errorBuilder: widget.placeholderErrorBuilder,
+        ),
+      _Box(
+        css:
+            'transition:opacity ${widget.fadeInDuration.inMilliseconds}ms ease-in;opacity:${_loaded ? 1 : 0};${_loaded ? '' : 'position:absolute;inset:0;'}',
+        fill: _Fill.none,
+        children: [
+          Image(
+            image: widget.image,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            alignment: widget.alignment,
+            semanticLabel: widget.imageSemanticLabel,
+            excludeFromSemantics: widget.excludeFromSemantics,
+            errorBuilder: widget.imageErrorBuilder,
+            frameBuilder: (context, child, frame, sync) {
+              if (frame != null && !_loaded) {
+                scheduleMicrotask(() {
+                  if (mounted) setState(() => _loaded = true);
+                });
+              }
+              return child;
+            },
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// Starts loading [provider] in the browser; completes when it has loaded or
+/// failed (failures go to [onError] when given).
+Future<void> precacheImage(
+  ImageProvider provider,
+  BuildContext context, {
+  Size? size,
+  void Function(Object exception, StackTrace? stackTrace)? onError,
+}) {
+  final completer = Completer<void>();
+  final window = _window as JSObject;
+  if (!window.has('Image')) return Future.value();
+  final image = window
+      .getProperty<JSFunction>('Image'.toJS)
+      .callAsConstructor<JSObject>();
+  image.setProperty('onload'.toJS, ((JSAny? _) => completer.complete()).toJS);
+  image.setProperty(
+    'onerror'.toJS,
+    ((JSAny? _) {
+      onError?.call(StateError('Image failed to load.'), null);
+      completer.complete();
+    }).toJS,
+  );
+  image.setProperty('src'.toJS, provider.url.toJS);
+  return completer.future;
 }
 
 // ---------------------------------------------------------------------------

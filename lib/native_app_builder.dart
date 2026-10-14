@@ -298,7 +298,7 @@ Future<NativeAppBuild> buildNativeApp(
   }) {
     final file = File(p.join(temporary.path, '$name.dart'));
     file.writeAsStringSync(
-      "export '$runtime'${hide.isEmpty ? '' : ' hide ${hide.join(', ')}'};\nexport '$metaUri' show immutable, visibleForTesting;\n",
+      "export '$runtime'${hide.isEmpty ? '' : ' hide ${hide.join(', ')}'};\nexport '$metaUri' show factory, immutable, mustCallSuper, nonVirtual, optionalTypeArgs, protected, visibleForOverriding, visibleForTesting;\n",
     );
     return file.uri;
   }

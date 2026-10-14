@@ -9,13 +9,26 @@ class FocusNode extends ChangeNotifier {
     this.debugLabel,
     this.skipTraversal = false,
     this.canRequestFocus = true,
+    this.onKeyEvent,
+    this.descendantsAreFocusable = true,
+    this.descendantsAreTraversable = true,
   });
   final String? debugLabel;
+
+  /// Called for key events while this node or a descendant has focus.
+  FocusOnKeyEventCallback? onKeyEvent;
+  bool descendantsAreFocusable, descendantsAreTraversable;
+
+  /// Moves focus to the next or previous focusable element in document
+  /// order, like Tab and Shift+Tab.
+  bool nextFocus() => _moveDomFocus(1);
+  bool previousFocus() => _moveDomFocus(-1);
   bool skipTraversal;
   bool canRequestFocus;
   _Node? _node;
   bool _hasFocus = false;
   bool _pending = false;
+  bool _autofocused = false;
 
   bool get hasFocus => _hasFocus;
   bool get hasPrimaryFocus => _hasFocus;

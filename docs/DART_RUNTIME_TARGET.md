@@ -246,6 +246,42 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   reorders by pointer drag with Flutter's `onReorder` index semantics.
   Slivers build eagerly (at most 10,000 children); `floating`/`snap` headers
   behave like unpinned ones.
+- **Keyboard and focus:** `Focus` (`onKeyEvent`, `onFocusChange`,
+  autofocus), `KeyboardListener`, `Shortcuts`/`Actions`/`Intent`/
+  `CallbackAction` with `SingleActivator`, `CharacterActivator` and
+  `LogicalKeySet`, `CallbackShortcuts`, `FocusNode.onKeyEvent`/`nextFocus`,
+  traversal groups (document order), `ExcludeFocus`; `LogicalKeyboardKey`,
+  `KeyDownEvent`/`KeyUpEvent`/`KeyRepeatEvent` and `HardwareKeyboard`
+  modifier state from DOM keyboard events.
+- **Services:** `Clipboard` (async Clipboard API), `HapticFeedback`
+  (`navigator.vibrate`), `SystemChrome`/`SystemNavigator`/
+  `SystemUiOverlayStyle` (no-ops on the web except the switcher title and
+  history back), `rootBundle`/`AssetBundle`/`DefaultAssetBundle` loading
+  bundled assets with `fetch`.
+- **More widgets:** `PageView` (+`builder`) and `PageController` on native
+  scroll snapping; `NestedScrollView` (headers and body in one scroll view);
+  `AnimatedList`/`AnimatedListState`; `ListWheelScrollView` (snapping list,
+  no 3D wheel); `NotificationListener` with scroll start/update/end/user
+  notifications; `ScrollConfiguration`/`ScrollBehavior`; `Dismissible`;
+  `Draggable`/`LongPressDraggable`/`DragTarget`; `InteractiveViewer` (drag
+  pan, wheel zoom, `TransformationController`); `SearchDelegate`/
+  `showSearch`; `showGeneralDialog`, `showAdaptiveDialog`,
+  `showAboutDialog`, `AlertDialog.adaptive`, `WillPopScope`,
+  `CupertinoPageRoute`, `ModalRoute.withName`, `PageRouteBuilder`
+  transitions (built in their final state); `FittedBox`, `IntrinsicHeight`/
+  `IntrinsicWidth`, `OverflowBox`, `RotatedBox`, `Baseline`, `ClipPath`
+  (`CustomClipper` paths as CSS `clip-path`), `ColorFiltered` (greyscale and
+  opacity filters), `ImageFiltered`/`BackdropFilter` (CSS blur),
+  `ShaderMask` (gradient masks and gradient text), `Ink`, `Hero` (no
+  flight), `FlutterLogo`, `ErrorWidget`, `TickerMode`, `OverflowBar`/
+  `ButtonBar`, `CompositedTransformTarget`/`Follower`, `AnnotatedRegion`,
+  `View`; `Image.memory`, `MemoryImage`, `loadingBuilder`/`frameBuilder`,
+  `FadeInImage`, `precacheImage`; `TextStyle` decoration style/thickness,
+  shadows and font variations, `StrutStyle`, `WidgetSpan` alignment,
+  `HSLColor`/`HSVColor`, `Color.from`; `MediaQuery` pixel ratio,
+  accessibility flags from media queries and `removePadding`;
+  `WidgetsBindingObserver` lifecycle from page visibility and
+  `AppLifecycleListener`; `Diagnosticable` for models.
 - **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
   `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
   button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and
@@ -294,8 +330,7 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
 
 Not yet implemented: `Hero`, page transition animations, lazy/infinite lists (`itemCount` is required; at most
 10,000 eagerly built items), fling/overscroll physics, keyboard reordering,
-scale/pinch gestures, `Draggable`/`DragTarget`,
-`Overlay`/`OverlayEntry`, calendar-grid date pickers (pickers use the
+scale/pinch gestures, `Overlay`/`OverlayEntry`, matrix color filters, calendar-grid date pickers (pickers use the
 browser's native inputs), `DataTable`, `Stepper`, Cupertino widgets, and
 `dart:ui` window, image and paragraph APIs. CSS approximates Flutter layout;
 widths that Flutter boxes expand to are propagated through wrappers so

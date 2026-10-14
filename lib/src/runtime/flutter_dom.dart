@@ -12,7 +12,14 @@ export 'services_dom.dart';
 export 'visual_metadata.dart';
 export 'material_icons_metadata.dart';
 export 'material_colors.dart';
-export 'painting_ui.dart' hide UiGradient, shaderSpec, replayPath, PathSink;
+export 'painting_ui.dart'
+    hide
+        UiGradient,
+        shaderSpec,
+        replayPath,
+        PathSink,
+        imageFilterCss,
+        colorFilterCss;
 export 'material_style.dart'
     hide
         borderRadiusCss,
@@ -54,7 +61,7 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:math' as math;
 
-import 'package:vector_math/vector_math_64.dart' show Matrix4;
+import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 
 part 'dom_framework.dart';
 part 'dom_widgets.dart';
@@ -71,3 +78,6 @@ part 'dom_flutter_localizations.dart';
 part 'dom_material_more.dart';
 part 'dom_gestures.dart';
 part 'dom_slivers.dart';
+part 'dom_keyboard.dart';
+part 'dom_extras.dart';
+part 'dom_interactive.dart';

@@ -42,6 +42,19 @@ abstract class ModalRoute<T> extends Route<T> {
   static ModalRoute<dynamic>? of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_ModalScope>()?.entry.route
           as ModalRoute<dynamic>?;
+
+  /// Matches the modal route named [name], for `popUntil`.
+  static RoutePredicate withName(String name) =>
+      (route) => route is ModalRoute && route.settings.name == name;
+
+  /// Route transitions are not animated; animations rest at their ends.
+  Animation<double>? get animation => kAlwaysCompleteAnimation;
+  Animation<double>? get secondaryAnimation => kAlwaysDismissedAnimation;
+  bool get canPop => !isFirst;
+  bool get impliesAppBarDismissal => canPop;
+  bool get maintainState => true;
+  bool get willHandlePopInternally => false;
+  Duration get transitionDuration => Duration.zero;
 }
 
 abstract class PageRoute<T> extends ModalRoute<T> {
@@ -65,24 +78,101 @@ class MaterialPageRoute<T> extends PageRoute<T> {
 typedef PageBuilder =
     Widget Function(
       BuildContext context,
-      Object? animation,
-      Object? secondaryAnimation,
+      Animation<double> animation,
+      Animation<double> secondaryAnimation,
+    );
+typedef RouteTransitionsBuilder =
+    Widget Function(
+      BuildContext context,
+      Animation<double> animation,
+      Animation<double> secondaryAnimation,
+      Widget child,
     );
 
 /// Transitions are not animated; the page builder receives null animations.
+/// Pages build once with settled animations ([kAlwaysCompleteAnimation]);
+/// [transitionsBuilder] wraps them in their final state.
 class PageRouteBuilder<T> extends PageRoute<T> {
   PageRouteBuilder({
+    required this.pageBuilder,
+    this.transitionsBuilder,
+    this.transitionDuration = const Duration(milliseconds: 300),
+    this.reverseTransitionDuration = const Duration(milliseconds: 300),
+    super.settings,
+    bool opaque = true,
+    this.barrierDismissibleRoute = false,
+    this.barrierColorRoute,
+    this.barrierLabel,
+    this.maintainStateRoute = true,
+    super.fullscreenDialog,
+    this.allowSnapshotting = true,
+    Object? requestFocus,
+  }) : opaqueRoute = opaque;
+  PageRouteBuilder.legacy({
     required this.pageBuilder,
     super.settings,
     this.opaqueRoute = true,
     super.fullscreenDialog,
-  });
+  }) : transitionsBuilder = null,
+       transitionDuration = Duration.zero,
+       reverseTransitionDuration = Duration.zero,
+       barrierDismissibleRoute = false,
+       barrierColorRoute = null,
+       barrierLabel = null,
+       maintainStateRoute = true,
+       allowSnapshotting = true;
   final PageBuilder pageBuilder;
-  final bool opaqueRoute;
+  final RouteTransitionsBuilder? transitionsBuilder;
+  @override
+  final Duration transitionDuration;
+  final Duration reverseTransitionDuration;
+  final bool opaqueRoute, barrierDismissibleRoute, maintainStateRoute;
+  final bool allowSnapshotting;
+  final Color? barrierColorRoute;
+  final String? barrierLabel;
   @override
   bool get opaque => opaqueRoute;
   @override
-  Widget _buildPage(BuildContext context) => pageBuilder(context, null, null);
+  bool get barrierDismissible => barrierDismissibleRoute;
+  @override
+  Color? get barrierColor => barrierColorRoute;
+  @override
+  Widget _buildPage(BuildContext context) {
+    final page = pageBuilder(
+      context,
+      kAlwaysCompleteAnimation,
+      kAlwaysDismissedAnimation,
+    );
+    return transitionsBuilder?.call(
+          context,
+          kAlwaysCompleteAnimation,
+          kAlwaysDismissedAnimation,
+          page,
+        ) ??
+        page;
+  }
+}
+
+/// iOS-style page routes navigate like [MaterialPageRoute] (no slide).
+class CupertinoPageRoute<T> extends PageRoute<T> {
+  CupertinoPageRoute({
+    required this.builder,
+    this.title,
+    super.settings,
+    this.maintainState = true,
+    super.fullscreenDialog,
+    this.allowSnapshotting = true,
+    this.barrierDismissible = false,
+  });
+  final WidgetBuilder builder;
+  final String? title;
+  @override
+  final bool maintainState;
+  final bool allowSnapshotting;
+  @override
+  final bool barrierDismissible;
+  @override
+  Widget _buildPage(BuildContext context) => builder(context);
 }
 
 class _OverlayRoute<T> extends ModalRoute<T> {
@@ -813,6 +903,188 @@ Future<T?> showDialog<T>({
   ),
 );
 
+/// Like [showDialog], but the page fills the overlay and may wrap itself
+/// in [transitionBuilder] (shown in its final state).
+Future<T?> showGeneralDialog<T extends Object?>({
+  required BuildContext context,
+  required PageBuilder pageBuilder,
+  bool barrierDismissible = false,
+  String? barrierLabel,
+  Color barrierColor = const Color(0x80000000),
+  Duration transitionDuration = const Duration(milliseconds: 200),
+  RouteTransitionsBuilder? transitionBuilder,
+  bool useRootNavigator = true,
+  RouteSettings? routeSettings,
+  Offset? anchorPoint,
+  bool? requestFocus,
+  bool fullscreenDialog = false,
+}) => Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
+  _OverlayRoute<T>(
+    builder: (context) {
+      final page = pageBuilder(
+        context,
+        kAlwaysCompleteAnimation,
+        kAlwaysDismissedAnimation,
+      );
+      return transitionBuilder?.call(
+            context,
+            kAlwaysCompleteAnimation,
+            kAlwaysDismissedAnimation,
+            page,
+          ) ??
+          page;
+    },
+    dismissible: barrierDismissible,
+    color: barrierColor,
+    sheet: false,
+    settings: routeSettings,
+  ),
+);
+
+Future<T?> showAdaptiveDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool? barrierDismissible,
+  Color? barrierColor,
+  String? barrierLabel,
+  bool useSafeArea = true,
+  bool useRootNavigator = true,
+  RouteSettings? routeSettings,
+  Offset? anchorPoint,
+  Object? traversalEdgeBehavior,
+  bool? requestFocus,
+}) => showDialog<T>(
+  context: context,
+  builder: builder,
+  barrierDismissible: barrierDismissible ?? true,
+  barrierColor: barrierColor,
+  barrierLabel: barrierLabel,
+  useRootNavigator: useRootNavigator,
+  routeSettings: routeSettings,
+);
+
+/// The about dialog; there is no license registry, so it lists the app's
+/// name, version, icon, legalese and [children].
+void showAboutDialog({
+  required BuildContext context,
+  String? applicationName,
+  String? applicationVersion,
+  Widget? applicationIcon,
+  String? applicationLegalese,
+  List<Widget>? children,
+  bool barrierDismissible = true,
+  Color? barrierColor,
+  String? barrierLabel,
+  bool useRootNavigator = true,
+  RouteSettings? routeSettings,
+  Offset? anchorPoint,
+}) {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierColor: barrierColor,
+    useRootNavigator: useRootNavigator,
+    routeSettings: routeSettings,
+    builder: (context) => AboutDialog(
+      applicationName: applicationName,
+      applicationVersion: applicationVersion,
+      applicationIcon: applicationIcon,
+      applicationLegalese: applicationLegalese,
+      children: children,
+    ),
+  );
+}
+
+class AboutDialog extends StatelessWidget {
+  const AboutDialog({
+    super.key,
+    this.applicationName,
+    this.applicationVersion,
+    this.applicationIcon,
+    this.applicationLegalese,
+    this.children,
+  });
+  final String? applicationName, applicationVersion, applicationLegalese;
+  final Widget? applicationIcon;
+  final List<Widget>? children;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final name =
+        applicationName ??
+        context.findAncestorWidgetOfExactType<Title>()?.title ??
+        '';
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (applicationIcon != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 24),
+                  child: applicationIcon!,
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: theme.textTheme.headlineSmall),
+                    if (applicationVersion != null)
+                      Text(
+                        applicationVersion!,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    if (applicationLegalese != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: Text(
+                          applicationLegalese!,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          ...?children,
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).closeButtonLabel),
+        ),
+      ],
+    );
+  }
+}
+
+/// Deprecated in Flutter for [PopScope]; [onWillPop] decides whether a pop
+/// proceeds.
+class WillPopScope extends StatelessWidget {
+  const WillPopScope({super.key, required this.child, required this.onWillPop});
+  final Widget child;
+  final Future<bool> Function()? onWillPop;
+  @override
+  Widget build(BuildContext context) {
+    final onWillPop = this.onWillPop;
+    if (onWillPop == null) return child;
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (await onWillPop() && context.mounted) {
+          Navigator.of(context).pop(result);
+        }
+      },
+      child: child,
+    );
+  }
+}
+
 Future<T?> showModalBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -928,10 +1200,65 @@ class AlertDialog extends StatelessWidget {
     this.actionsPadding,
     this.actionsAlignment,
     this.insetPadding,
+    this.iconPadding,
+    this.iconColor,
+    this.titleTextStyle,
+    this.contentTextStyle,
+    this.actionsOverflowAlignment,
+    this.actionsOverflowDirection,
+    this.actionsOverflowButtonSpacing,
+    this.buttonPadding,
+    this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.semanticLabel,
+    this.alignment,
+    this.constraints,
+    this.scrollable = false,
+  });
+  const AlertDialog.adaptive({
+    this.clipBehavior,
+    super.key,
+    this.icon,
+    this.title,
+    this.content,
+    this.actions,
+    this.backgroundColor,
+    this.shape,
+    this.titlePadding,
+    this.contentPadding,
+    this.actionsPadding,
+    this.actionsAlignment,
+    this.insetPadding,
+    this.iconPadding,
+    this.iconColor,
+    this.titleTextStyle,
+    this.contentTextStyle,
+    this.actionsOverflowAlignment,
+    this.actionsOverflowDirection,
+    this.actionsOverflowButtonSpacing,
+    this.buttonPadding,
+    this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.semanticLabel,
+    this.alignment,
+    this.constraints,
+    this.scrollable = false,
   });
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
   final Clip? clipBehavior;
+  final EdgeInsetsGeometry? iconPadding, buttonPadding;
+  final Color? iconColor, shadowColor, surfaceTintColor;
+  final TextStyle? titleTextStyle, contentTextStyle;
+  final OverflowBarAlignment? actionsOverflowAlignment;
+  final VerticalDirection? actionsOverflowDirection;
+  final double? actionsOverflowButtonSpacing, elevation;
+  final String? semanticLabel;
+  final AlignmentGeometry? alignment;
+  final BoxConstraints? constraints;
+  final bool scrollable;
   final Widget? icon, title, content;
   final List<Widget>? actions;
   final Color? backgroundColor;

@@ -270,3 +270,203 @@ class FlutterErrorDetails {
   final String? library;
   final Object? context;
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostics. Properties are collected for `toString` output only; there is
+// no inspector.
+
+enum DiagnosticLevel {
+  hidden,
+  fine,
+  debug,
+  info,
+  warning,
+  hint,
+  summary,
+  error,
+  off,
+}
+
+enum DiagnosticsTreeStyle {
+  none,
+  sparse,
+  offstage,
+  dense,
+  transition,
+  error,
+  whitespace,
+  flat,
+  singleLine,
+  errorProperty,
+  shallow,
+  truncateChildren,
+}
+
+class DiagnosticsNode {
+  DiagnosticsNode({required this.name, this.value});
+  final String? name;
+  final Object? value;
+  @override
+  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) =>
+      name == null ? '$value' : '$name: $value';
+}
+
+class DiagnosticsProperty<T> extends DiagnosticsNode {
+  DiagnosticsProperty(
+    String? name,
+    T? value, {
+    String? description,
+    String? ifNull,
+    bool showName = true,
+    Object? defaultValue,
+    DiagnosticLevel level = DiagnosticLevel.info,
+    DiagnosticsTreeStyle style = DiagnosticsTreeStyle.singleLine,
+  }) : super(name: name, value: value);
+}
+
+class StringProperty extends DiagnosticsProperty<String> {
+  StringProperty(
+    super.name,
+    super.value, {
+    super.description,
+    super.ifNull,
+    bool quoted = true,
+    super.showName,
+    super.defaultValue,
+    super.level,
+  });
+}
+
+class IntProperty extends DiagnosticsProperty<int> {
+  IntProperty(
+    super.name,
+    super.value, {
+    super.ifNull,
+    super.showName,
+    String? unit,
+    super.defaultValue,
+    super.level,
+  });
+}
+
+class DoubleProperty extends DiagnosticsProperty<double> {
+  DoubleProperty(
+    super.name,
+    super.value, {
+    super.ifNull,
+    String? unit,
+    String? tooltip,
+    super.defaultValue,
+    super.showName,
+    super.level,
+  });
+}
+
+class FlagProperty extends DiagnosticsProperty<bool> {
+  FlagProperty(
+    String name, {
+    required bool? value,
+    String? ifTrue,
+    String? ifFalse,
+    bool showName = false,
+    Object? defaultValue,
+    DiagnosticLevel level = DiagnosticLevel.info,
+  }) : super(name, value, showName: showName, defaultValue: defaultValue);
+}
+
+class EnumProperty<T> extends DiagnosticsProperty<T> {
+  EnumProperty(super.name, super.value, {super.defaultValue, super.level});
+}
+
+class IterableProperty<T> extends DiagnosticsProperty<Iterable<T>> {
+  IterableProperty(
+    super.name,
+    super.value, {
+    super.defaultValue,
+    super.ifNull,
+    String? ifEmpty = '[]',
+    super.style,
+    super.showName,
+    super.level,
+  });
+}
+
+class ObjectFlagProperty<T> extends DiagnosticsProperty<T> {
+  ObjectFlagProperty(
+    String super.name,
+    super.value, {
+    String? ifPresent,
+    super.ifNull,
+    super.showName = false,
+    super.level,
+  });
+  ObjectFlagProperty.has(
+    String name,
+    T? value, {
+    DiagnosticLevel level = DiagnosticLevel.info,
+  }) : super(name, value, level: level);
+}
+
+class DiagnosticPropertiesBuilder {
+  DiagnosticPropertiesBuilder();
+  final List<DiagnosticsNode> properties = [];
+  DiagnosticsTreeStyle defaultDiagnosticsTreeStyle =
+      DiagnosticsTreeStyle.sparse;
+  String? emptyBodyDescription;
+  void add(DiagnosticsNode property) => properties.add(property);
+}
+
+mixin Diagnosticable {
+  String toStringShort() => '$runtimeType';
+
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {}
+
+  DiagnosticsNode toDiagnosticsNode({
+    String? name,
+    DiagnosticsTreeStyle? style,
+  }) => DiagnosticsNode(name: name, value: toStringShort());
+
+  @override
+  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+    final builder = DiagnosticPropertiesBuilder();
+    debugFillProperties(builder);
+    if (builder.properties.isEmpty) return toStringShort();
+    return '${toStringShort()}(${builder.properties.join(', ')})';
+  }
+}
+
+mixin DiagnosticableTreeMixin implements Diagnosticable {
+  @override
+  String toStringShort() => '$runtimeType';
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {}
+  @override
+  DiagnosticsNode toDiagnosticsNode({
+    String? name,
+    DiagnosticsTreeStyle? style,
+  }) => DiagnosticsNode(name: name, value: toStringShort());
+  List<DiagnosticsNode> debugDescribeChildren() => const [];
+  String toStringDeep({
+    String prefixLineOne = '',
+    String? prefixOtherLines,
+    DiagnosticLevel minLevel = DiagnosticLevel.debug,
+  }) => toString();
+  @override
+  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+    final builder = DiagnosticPropertiesBuilder();
+    debugFillProperties(builder);
+    if (builder.properties.isEmpty) return toStringShort();
+    return '${toStringShort()}(${builder.properties.join(', ')})';
+  }
+}
+
+abstract class DiagnosticableTree with Diagnosticable {
+  const DiagnosticableTree();
+  List<DiagnosticsNode> debugDescribeChildren() => const [];
+}
+
+String describeIdentity(Object? object) =>
+    '${object.runtimeType}#${shortHash(object)}';
+
+String shortHash(Object? object) =>
+    object.hashCode.toUnsigned(20).toRadixString(16).padLeft(5, '0');

@@ -42,6 +42,13 @@ extension type _Event(JSObject _) implements JSObject {
   external double? get deltaX;
   external double? get deltaY;
   external int? get deltaMode;
+  external bool? get repeat;
+  external bool? get ctrlKey;
+  external bool? get shiftKey;
+  external bool? get altKey;
+  external bool? get metaKey;
+  external JSObject? get target;
+  external void stopPropagation();
 }
 
 @JS('window')
@@ -941,25 +948,79 @@ class MediaQueryData {
     this.padding = EdgeInsets.zero,
     this.viewPadding = EdgeInsets.zero,
     this.viewInsets = EdgeInsets.zero,
+    this.systemGestureInsets = EdgeInsets.zero,
+    this.alwaysUse24HourFormat = false,
+    this.accessibleNavigation = false,
+    this.invertColors = false,
+    this.highContrast = false,
+    this.onOffSwitchLabels = false,
+    this.disableAnimations = false,
+    this.boldText = false,
+    this.navigationMode = NavigationMode.traditional,
   });
   final Size size;
   final double devicePixelRatio;
   final TextScaler textScaler;
   final Brightness platformBrightness;
-  final EdgeInsets padding, viewPadding, viewInsets;
+  final EdgeInsets padding, viewPadding, viewInsets, systemGestureInsets;
+  final bool alwaysUse24HourFormat, accessibleNavigation, invertColors;
+  final bool highContrast, onOffSwitchLabels, disableAnimations, boldText;
+  final NavigationMode navigationMode;
+  double get textScaleFactor => textScaler.textScaleFactor;
   Orientation get orientation =>
       size.width > size.height ? Orientation.landscape : Orientation.portrait;
-  MediaQueryData copyWith({Size? size, Brightness? platformBrightness}) =>
-      MediaQueryData(
-        size: size ?? this.size,
-        devicePixelRatio: devicePixelRatio,
-        textScaler: textScaler,
-        platformBrightness: platformBrightness ?? this.platformBrightness,
-        padding: padding,
-        viewPadding: viewPadding,
-        viewInsets: viewInsets,
-      );
+  MediaQueryData copyWith({
+    Size? size,
+    double? devicePixelRatio,
+    TextScaler? textScaler,
+    Brightness? platformBrightness,
+    EdgeInsets? padding,
+    EdgeInsets? viewPadding,
+    EdgeInsets? viewInsets,
+    EdgeInsets? systemGestureInsets,
+    bool? alwaysUse24HourFormat,
+    bool? highContrast,
+    bool? onOffSwitchLabels,
+    bool? disableAnimations,
+    bool? invertColors,
+    bool? accessibleNavigation,
+    bool? boldText,
+    NavigationMode? navigationMode,
+  }) => MediaQueryData(
+    size: size ?? this.size,
+    devicePixelRatio: devicePixelRatio ?? this.devicePixelRatio,
+    textScaler: textScaler ?? this.textScaler,
+    platformBrightness: platformBrightness ?? this.platformBrightness,
+    padding: padding ?? this.padding,
+    viewPadding: viewPadding ?? this.viewPadding,
+    viewInsets: viewInsets ?? this.viewInsets,
+    systemGestureInsets: systemGestureInsets ?? this.systemGestureInsets,
+    alwaysUse24HourFormat: alwaysUse24HourFormat ?? this.alwaysUse24HourFormat,
+    highContrast: highContrast ?? this.highContrast,
+    onOffSwitchLabels: onOffSwitchLabels ?? this.onOffSwitchLabels,
+    disableAnimations: disableAnimations ?? this.disableAnimations,
+    invertColors: invertColors ?? this.invertColors,
+    accessibleNavigation: accessibleNavigation ?? this.accessibleNavigation,
+    boldText: boldText ?? this.boldText,
+    navigationMode: navigationMode ?? this.navigationMode,
+  );
+
+  MediaQueryData removePadding({
+    bool removeLeft = false,
+    bool removeTop = false,
+    bool removeRight = false,
+    bool removeBottom = false,
+  }) => copyWith(
+    padding: padding.copyWith(
+      left: removeLeft ? 0 : null,
+      top: removeTop ? 0 : null,
+      right: removeRight ? 0 : null,
+      bottom: removeBottom ? 0 : null,
+    ),
+  );
 }
+
+enum NavigationMode { traditional, directional }
 
 class MediaQuery extends InheritedWidget {
   const MediaQuery({super.key, required this.data, required super.child});
@@ -980,10 +1041,112 @@ class MediaQuery extends InheritedWidget {
       of(context).textScaler;
   static Brightness platformBrightnessOf(BuildContext context) =>
       of(context).platformBrightness;
+  static Brightness? maybePlatformBrightnessOf(BuildContext context) =>
+      maybeOf(context)?.platformBrightness;
+  static double devicePixelRatioOf(BuildContext context) =>
+      of(context).devicePixelRatio;
+  static double? maybeDevicePixelRatioOf(BuildContext context) =>
+      maybeOf(context)?.devicePixelRatio;
+  static EdgeInsets viewPaddingOf(BuildContext context) =>
+      of(context).viewPadding;
+  static EdgeInsets? maybePaddingOf(BuildContext context) =>
+      maybeOf(context)?.padding;
+  static EdgeInsets? maybeViewInsetsOf(BuildContext context) =>
+      maybeOf(context)?.viewInsets;
+  static Orientation? maybeOrientationOf(BuildContext context) =>
+      maybeOf(context)?.orientation;
+  static TextScaler? maybeTextScalerOf(BuildContext context) =>
+      maybeOf(context)?.textScaler;
+  static double textScaleFactorOf(BuildContext context) =>
+      of(context).textScaleFactor;
+  static bool alwaysUse24HourFormatOf(BuildContext context) =>
+      of(context).alwaysUse24HourFormat;
+  static bool disableAnimationsOf(BuildContext context) =>
+      of(context).disableAnimations;
+  static bool boldTextOf(BuildContext context) => of(context).boldText;
+  static bool highContrastOf(BuildContext context) => of(context).highContrast;
+  static bool accessibleNavigationOf(BuildContext context) =>
+      of(context).accessibleNavigation;
+  static bool invertColorsOf(BuildContext context) => of(context).invertColors;
+  static NavigationMode navigationModeOf(BuildContext context) =>
+      of(context).navigationMode;
+
+  static Widget removePadding({
+    Key? key,
+    required BuildContext context,
+    bool removeLeft = false,
+    bool removeTop = false,
+    bool removeRight = false,
+    bool removeBottom = false,
+    required Widget child,
+  }) => MediaQuery(
+    key: key,
+    data: of(context).removePadding(
+      removeLeft: removeLeft,
+      removeTop: removeTop,
+      removeRight: removeRight,
+      removeBottom: removeBottom,
+    ),
+    child: child,
+  );
+
+  static Widget removeViewInsets({
+    Key? key,
+    required BuildContext context,
+    bool removeLeft = false,
+    bool removeTop = false,
+    bool removeRight = false,
+    bool removeBottom = false,
+    required Widget child,
+  }) => MediaQuery(key: key, data: of(context), child: child);
+
+  static Widget removeViewPadding({
+    Key? key,
+    required BuildContext context,
+    bool removeLeft = false,
+    bool removeTop = false,
+    bool removeRight = false,
+    bool removeBottom = false,
+    required Widget child,
+  }) => MediaQuery(key: key, data: of(context), child: child);
+
+  static Widget withNoTextScaling({Key? key, required Widget child}) => Builder(
+    key: key,
+    builder: (context) => MediaQuery(
+      data: of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: child,
+    ),
+  );
+
+  static Widget withClampedTextScaling({
+    Key? key,
+    double minScaleFactor = 0,
+    double maxScaleFactor = double.infinity,
+    required Widget child,
+  }) => Builder(
+    key: key,
+    builder: (context) {
+      final data = of(context);
+      return MediaQuery(
+        data: data.copyWith(
+          textScaler: TextScaler.linear(
+            data.textScaleFactor
+                .clamp(minScaleFactor, maxScaleFactor)
+                .toDouble(),
+          ),
+        ),
+        child: child,
+      );
+    },
+  );
   @override
   bool updateShouldNotify(MediaQuery oldWidget) =>
       oldWidget.data.size != data.size ||
-      oldWidget.data.platformBrightness != data.platformBrightness;
+      oldWidget.data.platformBrightness != data.platformBrightness ||
+      oldWidget.data.textScaler.textScaleFactor !=
+          data.textScaler.textScaleFactor ||
+      oldWidget.data.padding != data.padding ||
+      oldWidget.data.devicePixelRatio != data.devicePixelRatio;
 }
 
 Brightness _platformBrightness() {
@@ -997,9 +1160,26 @@ Brightness _platformBrightness() {
   return matches?.toDart == true ? Brightness.dark : Brightness.light;
 }
 
+bool _mediaMatches(String query) {
+  final window = _window as JSObject;
+  if (!window.has('matchMedia')) return false;
+  return window
+          .callMethod<JSObject?>('matchMedia'.toJS, query.toJS)
+          ?.getProperty<JSBoolean?>('matches'.toJS)
+          ?.toDart ==
+      true;
+}
+
 MediaQueryData _viewportData() => MediaQueryData(
   size: Size(_window.innerWidth, _window.innerHeight),
+  devicePixelRatio:
+      (_window as JSObject)
+          .getProperty<JSNumber?>('devicePixelRatio'.toJS)
+          ?.toDartDouble ??
+      1,
   platformBrightness: _platformBrightness(),
+  disableAnimations: _mediaMatches('(prefers-reduced-motion: reduce)'),
+  highContrast: _mediaMatches('(prefers-contrast: more)'),
 );
 
 class _RootWidget extends Widget {

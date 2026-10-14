@@ -47,7 +47,25 @@ double _cssPixels(JSObject node, String property) {
   return double.tryParse((value ?? '').replaceAll('px', '')) ?? 0;
 }
 
-class ScrollPosition extends ChangeNotifier {
+abstract interface class ScrollMetrics {
+  double get minScrollExtent;
+  double get maxScrollExtent;
+  double get pixels;
+  double get viewportDimension;
+  AxisDirection get axisDirection;
+  Axis get axis;
+  bool get outOfRange;
+  bool get atEdge;
+  double get extentBefore;
+  double get extentInside;
+  double get extentAfter;
+  double get extentTotal;
+  bool get hasPixels;
+  bool get hasContentDimensions;
+  bool get hasViewportDimension;
+}
+
+class ScrollPosition extends ChangeNotifier implements ScrollMetrics {
   ScrollPosition._(this._view);
   final _ScrollableState _view;
 
@@ -162,18 +180,23 @@ class _Scrollable extends StatefulWidget {
     required this.children,
     this.controller,
     this.reverse = false,
+    this.pageFraction,
   });
   final Axis axis;
   final EdgeInsetsGeometry? padding;
   final bool scrolls, reverse;
   final List<Widget> children;
   final ScrollController? controller;
+
+  /// Pages snap at this fraction of the viewport (page views).
+  final double? pageFraction;
   @override
   State<_Scrollable> createState() => _ScrollableState();
 }
 
 class _ScrollableState extends State<_Scrollable> {
   late final position = ScrollPosition._(this);
+  bool _scrolling = false;
 
   /// Whether this element scrolls itself (an ancestor bounds it); null until
   /// measured.
@@ -216,13 +239,17 @@ class _ScrollableState extends State<_Scrollable> {
   JSObject? get _node => _liveNode(context);
 
   /// Whether the scrolling element is this view rather than the page.
-  bool get _scrollsItself => !_vertical || _ownScroll != false;
+  bool get _scrollsItself =>
+      !_vertical || widget.pageFraction != null || _ownScroll != false;
 
   void _measure() {
     if (!mounted) return;
     final node = _node;
     if (node == null) return;
-    if (_vertical && widget.scrolls && node.has('scrollHeight')) {
+    if (_vertical &&
+        widget.scrolls &&
+        widget.pageFraction == null &&
+        node.has('scrollHeight')) {
       final client = _jsNumber(node, 'clientHeight');
       final content = _jsNumber(node, 'scrollHeight');
       // An unbounded view is exactly as tall as its content. A bounded one
@@ -321,10 +348,37 @@ class _ScrollableState extends State<_Scrollable> {
       _lastOffset = offset;
     }
     position.isScrollingNotifier.value = true;
+    if (!_scrolling) {
+      _scrolling = true;
+      ScrollStartNotification(
+        metrics: position,
+        context: context,
+      ).dispatch(context);
+      UserScrollNotification(
+        metrics: position,
+        context: context,
+        direction: _direction,
+      ).dispatch(context);
+    }
+    ScrollUpdateNotification(
+      metrics: position,
+      context: context,
+    ).dispatch(context);
     _idle?.cancel();
     _idle = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      _scrolling = false;
       position.isScrollingNotifier.value = false;
       _direction = ScrollDirection.idle;
+      ScrollEndNotification(
+        metrics: position,
+        context: context,
+      ).dispatch(context);
+      UserScrollNotification(
+        metrics: position,
+        context: context,
+        direction: ScrollDirection.idle,
+      ).dispatch(context);
     });
     position._changed();
   }
@@ -430,7 +484,9 @@ class _ScrollableState extends State<_Scrollable> {
         axis: widget.axis,
         padding: widget.padding,
         scrolls: widget.scrolls,
-        overflowVisible: _vertical && _ownScroll == false,
+        pageFraction: widget.pageFraction,
+        overflowVisible:
+            _vertical && widget.pageFraction == null && _ownScroll == false,
         children: widget.reverse
             ? widget.children.reversed.toList()
             : widget.children,
@@ -1932,4 +1988,497 @@ class AbsorbPointer extends _DomWidget {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications.
+
+abstract class Notification {
+  const Notification();
+
+  /// Bubbles to [NotificationListener] ancestors of [target] until one
+  /// returns true.
+  void dispatch(BuildContext? target) {
+    if (target == null) return;
+    if (target is Element && !target.mounted) return;
+    target.visitAncestorElements((element) {
+      final widget = element.widget;
+      if (widget is NotificationListener && widget._handles(this)) {
+        return !widget._notify(this);
+      }
+      return true;
+    });
+  }
+}
+
+typedef NotificationListenerCallback<T extends Notification> =
+    bool Function(T notification);
+
+class NotificationListener<T extends Notification> extends StatelessWidget {
+  const NotificationListener({
+    super.key,
+    required this.child,
+    this.onNotification,
+  });
+  final Widget child;
+  final NotificationListenerCallback<T>? onNotification;
+  bool _handles(Notification notification) => notification is T;
+  bool _notify(Notification notification) =>
+      onNotification?.call(notification as T) ?? false;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+abstract class LayoutChangedNotification extends Notification {
+  const LayoutChangedNotification();
+}
+
+class SizeChangedLayoutNotification extends LayoutChangedNotification {
+  const SizeChangedLayoutNotification();
+}
+
+class ScrollNotification extends LayoutChangedNotification {
+  ScrollNotification({required this.metrics, required this.context});
+  final ScrollMetrics metrics;
+  final BuildContext? context;
+  int get depth => 0;
+}
+
+class ScrollStartNotification extends ScrollNotification {
+  ScrollStartNotification({
+    required super.metrics,
+    required super.context,
+    this.dragDetails,
+  });
+  final DragStartDetails? dragDetails;
+}
+
+class ScrollUpdateNotification extends ScrollNotification {
+  ScrollUpdateNotification({
+    required super.metrics,
+    required super.context,
+    this.dragDetails,
+    this.scrollDelta,
+  });
+  final DragUpdateDetails? dragDetails;
+  final double? scrollDelta;
+}
+
+class OverscrollNotification extends ScrollNotification {
+  OverscrollNotification({
+    required super.metrics,
+    required super.context,
+    this.dragDetails,
+    required this.overscroll,
+    this.velocity = 0,
+  });
+  final DragUpdateDetails? dragDetails;
+  final double overscroll, velocity;
+}
+
+class ScrollEndNotification extends ScrollNotification {
+  ScrollEndNotification({
+    required super.metrics,
+    required super.context,
+    this.dragDetails,
+  });
+  final DragEndDetails? dragDetails;
+}
+
+class UserScrollNotification extends ScrollNotification {
+  UserScrollNotification({
+    required super.metrics,
+    required super.context,
+    required this.direction,
+  });
+  final ScrollDirection direction;
+}
+
+class ScrollMetricsNotification extends Notification {
+  ScrollMetricsNotification({required this.metrics, required this.context});
+  final ScrollMetrics metrics;
+  final BuildContext context;
+}
+
+bool defaultScrollNotificationPredicate(ScrollNotification notification) =>
+    notification.depth == 0;
+
+/// Scroll behaviors configure native scrolling; scrollbars and overscroll
+/// effects follow the browser.
+class ScrollBehavior {
+  const ScrollBehavior();
+  Set<PointerDeviceKind> get dragDevices => const {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.unknown,
+  };
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const ClampingScrollPhysics();
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+  ScrollBehavior copyWith({
+    bool? scrollbars,
+    bool? overscroll,
+    Set<PointerDeviceKind>? dragDevices,
+    Object? multitouchDragStrategy,
+    Set<LogicalKeyboardKey>? pointerAxisModifiers,
+    ScrollPhysics? physics,
+    TargetPlatform? platform,
+  }) => this;
+}
+
+class MaterialScrollBehavior extends ScrollBehavior {
+  const MaterialScrollBehavior();
+}
+
+class ScrollableDetails {
+  const ScrollableDetails({
+    required this.direction,
+    this.controller,
+    this.physics,
+    this.clipBehavior,
+  });
+  final AxisDirection direction;
+  final ScrollController? controller;
+  final ScrollPhysics? physics;
+  final Clip? clipBehavior;
+}
+
+class ScrollConfiguration extends InheritedWidget {
+  const ScrollConfiguration({
+    super.key,
+    required this.behavior,
+    required super.child,
+  });
+  final ScrollBehavior behavior;
+  static ScrollBehavior of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<ScrollConfiguration>()
+          ?.behavior ??
+      const MaterialScrollBehavior();
+  @override
+  bool updateShouldNotify(ScrollConfiguration oldWidget) =>
+      oldWidget.behavior != behavior;
+}
+
+class GlowingOverscrollIndicator extends StatelessWidget {
+  const GlowingOverscrollIndicator({
+    super.key,
+    this.showLeading = true,
+    this.showTrailing = true,
+    required this.axisDirection,
+    this.color,
+    this.notificationPredicate = defaultScrollNotificationPredicate,
+    this.child,
+  });
+  final bool showLeading, showTrailing;
+  final AxisDirection axisDirection;
+  final Color? color;
+  final bool Function(ScrollNotification notification) notificationPredicate;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => child ?? const SizedBox.shrink();
+}
+
+class StretchingOverscrollIndicator extends StatelessWidget {
+  const StretchingOverscrollIndicator({
+    super.key,
+    required this.axisDirection,
+    this.notificationPredicate = defaultScrollNotificationPredicate,
+    this.clipBehavior = Clip.hardEdge,
+    this.child,
+  });
+  final AxisDirection axisDirection;
+  final bool Function(ScrollNotification notification) notificationPredicate;
+  final Clip clipBehavior;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => child ?? const SizedBox.shrink();
+}
+
+// ---------------------------------------------------------------------------
+// Page views: native scroll snapping.
+
+class PageController extends ScrollController {
+  PageController({
+    this.initialPage = 0,
+    this.keepPage = true,
+    this.viewportFraction = 1,
+    super.onAttach,
+    super.onDetach,
+  });
+  final int initialPage;
+  final bool keepPage;
+  final double viewportFraction;
+
+  double _pageExtent(ScrollPosition position) =>
+      position.viewportDimension * viewportFraction;
+
+  double? get page {
+    if (!hasClients) return null;
+    final extent = _pageExtent(position);
+    return extent <= 0 ? initialPage.toDouble() : position.pixels / extent;
+  }
+
+  Future<void> animateToPage(
+    int page, {
+    required Duration duration,
+    required Curve curve,
+  }) => animateTo(
+    hasClients ? page * _pageExtent(position) : 0,
+    duration: duration,
+    curve: curve,
+  );
+
+  void jumpToPage(int page) {
+    if (hasClients) jumpTo(page * _pageExtent(position));
+  }
+
+  Future<void> nextPage({required Duration duration, required Curve curve}) =>
+      animateToPage((page ?? 0).round() + 1, duration: duration, curve: curve);
+
+  Future<void> previousPage({
+    required Duration duration,
+    required Curve curve,
+  }) =>
+      animateToPage((page ?? 0).round() - 1, duration: duration, curve: curve);
+}
+
+class PageView extends StatefulWidget {
+  PageView({
+    super.key,
+    this.scrollDirection = Axis.horizontal,
+    this.reverse = false,
+    this.controller,
+    this.physics,
+    this.pageSnapping = true,
+    this.onPageChanged,
+    List<Widget> children = const [],
+    this.dragStartBehavior,
+    this.allowImplicitScrolling = false,
+    this.restorationId,
+    this.clipBehavior = Clip.hardEdge,
+    this.hitTestBehavior = HitTestBehavior.opaque,
+    this.scrollBehavior,
+    this.padEnds = true,
+  }) : _builder = ((context, index) => children[index]),
+       _count = children.length;
+  PageView.builder({
+    super.key,
+    this.scrollDirection = Axis.horizontal,
+    this.reverse = false,
+    this.controller,
+    this.physics,
+    this.pageSnapping = true,
+    this.onPageChanged,
+    required NullableIndexedWidgetBuilder itemBuilder,
+    int? Function(Key key)? findChildIndexCallback,
+    int? itemCount,
+    this.dragStartBehavior,
+    this.allowImplicitScrolling = false,
+    this.restorationId,
+    this.clipBehavior = Clip.hardEdge,
+    this.hitTestBehavior = HitTestBehavior.opaque,
+    this.scrollBehavior,
+    this.padEnds = true,
+  }) : _builder = itemBuilder,
+       _count = itemCount;
+  final Axis scrollDirection;
+  final bool reverse, pageSnapping, allowImplicitScrolling, padEnds;
+  final PageController? controller;
+  final ScrollPhysics? physics;
+  final ValueChanged<int>? onPageChanged;
+  final Object? dragStartBehavior;
+  final String? restorationId;
+  final Clip clipBehavior;
+  final HitTestBehavior hitTestBehavior;
+  final ScrollBehavior? scrollBehavior;
+  final NullableIndexedWidgetBuilder _builder;
+  final int? _count;
+  @override
+  State<PageView> createState() => _PageViewState();
+}
+
+class _PageViewState extends State<PageView> {
+  PageController? _own;
+  PageController get _controller =>
+      widget.controller ?? (_own ??= PageController());
+  int _page = 0;
+  bool _jumped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = _controller.initialPage;
+    _controller.addListener(_scrolled);
+  }
+
+  @override
+  void didUpdateWidget(PageView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      (oldWidget.controller ?? _own)?.removeListener(_scrolled);
+      _controller.addListener(_scrolled);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_scrolled);
+    _own?.dispose();
+    super.dispose();
+  }
+
+  void _scrolled() {
+    final page = _controller.page?.round();
+    if (page != null && page != _page) {
+      _page = page;
+      widget.onPageChanged?.call(page);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; widget._count == null || i < widget._count!; i++) {
+      if (i >= _eagerItemLimit) {
+        throw ArgumentError('Page count exceeds the native limit.');
+      }
+      final child = widget._builder(context, i);
+      if (child == null) break;
+      children.add(child);
+    }
+    if (!_jumped && _controller.initialPage > 0) {
+      _jumped = true;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _controller.jumpToPage(_controller.initialPage),
+      );
+    }
+    return _Scrollable(
+      axis: widget.scrollDirection,
+      padding: null,
+      scrolls: widget.physics is! NeverScrollableScrollPhysics,
+      controller: _controller,
+      reverse: widget.reverse,
+      pageFraction: _controller.viewportFraction,
+      children: children,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Nested scroll views: headers and body share the page's scroll.
+
+class SliverOverlapAbsorberHandle extends ChangeNotifier {
+  double? get layoutExtent => 0;
+  double? get scrollExtent => 0;
+}
+
+class SliverOverlapAbsorber extends StatelessWidget {
+  const SliverOverlapAbsorber({super.key, required this.handle, this.sliver});
+  final SliverOverlapAbsorberHandle handle;
+  final Widget? sliver;
+  @override
+  Widget build(BuildContext context) => sliver ?? const SizedBox.shrink();
+}
+
+class SliverOverlapInjector extends StatelessWidget {
+  const SliverOverlapInjector({super.key, required this.handle, this.sliver});
+  final SliverOverlapAbsorberHandle handle;
+  final Widget? sliver;
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+typedef NestedScrollViewHeaderSliversBuilder =
+    List<Widget> Function(BuildContext context, bool innerBoxIsScrolled);
+
+/// Builds the header slivers above [body] in one scroll view, so headers
+/// scroll away (or stay pinned) as the body scrolls.
+class NestedScrollView extends StatefulWidget {
+  const NestedScrollView({
+    super.key,
+    this.controller,
+    this.scrollDirection = Axis.vertical,
+    this.reverse = false,
+    this.physics,
+    required this.headerSliverBuilder,
+    required this.body,
+    this.dragStartBehavior,
+    this.floatHeaderSlivers = false,
+    this.clipBehavior = Clip.hardEdge,
+    this.hitTestBehavior = HitTestBehavior.opaque,
+    this.restorationId,
+    this.scrollBehavior,
+  });
+  final ScrollController? controller;
+  final Axis scrollDirection;
+  final bool reverse, floatHeaderSlivers;
+  final ScrollPhysics? physics;
+  final NestedScrollViewHeaderSliversBuilder headerSliverBuilder;
+  final Widget body;
+  final Object? dragStartBehavior;
+  final Clip clipBehavior;
+  final HitTestBehavior hitTestBehavior;
+  final String? restorationId;
+  final ScrollBehavior? scrollBehavior;
+
+  static final _handles = Expando<SliverOverlapAbsorberHandle>();
+  static SliverOverlapAbsorberHandle sliverOverlapAbsorberHandleFor(
+    BuildContext context,
+  ) {
+    final state = context.findAncestorStateOfType<NestedScrollViewState>();
+    final key = state ?? context;
+    return _handles[key] ??= SliverOverlapAbsorberHandle();
+  }
+
+  @override
+  State<NestedScrollView> createState() => NestedScrollViewState();
+}
+
+class NestedScrollViewState extends State<NestedScrollView> {
+  late final _outer = widget.controller ?? ScrollController();
+  bool _scrolled = false;
+  ScrollController get innerController => _outer;
+  ScrollController get outerController => _outer;
+
+  @override
+  void initState() {
+    super.initState();
+    _outer.addListener(_changed);
+  }
+
+  void _changed() {
+    final scrolled = _outer.hasClients && _outer.offset > 0;
+    if (scrolled != _scrolled) setState(() => _scrolled = scrolled);
+  }
+
+  @override
+  void dispose() {
+    _outer.removeListener(_changed);
+    if (widget.controller == null) _outer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomScrollView(
+    controller: _outer,
+    scrollDirection: widget.scrollDirection,
+    reverse: widget.reverse,
+    physics: widget.physics,
+    slivers: [
+      ...widget.headerSliverBuilder(context, _scrolled),
+      SliverFillRemaining(child: widget.body),
+    ],
+  );
 }

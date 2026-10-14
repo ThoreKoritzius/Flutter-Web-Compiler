@@ -606,3 +606,100 @@ double? lerpDouble(num? a, num? b, double t) {
   b ??= 0.0;
   return a * (1.0 - t) + b * t;
 }
+
+/// Image filters map to CSS filters where the runtime applies them
+/// (`BackdropFilter`, `ImageFiltered`).
+class ImageFilter {
+  ImageFilter.blur({
+    this.sigmaX = 0,
+    this.sigmaY = 0,
+    this.tileMode = TileMode.clamp,
+  }) : _matrix = null,
+       _inner = null,
+       _outer = null;
+  ImageFilter.matrix(
+    Float64List matrix4, {
+    FilterQuality filterQuality = FilterQuality.low,
+  }) : sigmaX = 0,
+       sigmaY = 0,
+       tileMode = TileMode.clamp,
+       _matrix = matrix4,
+       _inner = null,
+       _outer = null;
+  ImageFilter.compose({required ImageFilter outer, required ImageFilter inner})
+    : sigmaX = 0,
+      sigmaY = 0,
+      tileMode = TileMode.clamp,
+      _matrix = null,
+      _inner = inner,
+      _outer = outer;
+  final double sigmaX, sigmaY;
+  final TileMode tileMode;
+  final Float64List? _matrix;
+  final ImageFilter? _inner, _outer;
+}
+
+/// The CSS `filter` value for [filter]; matrix filters are not mapped.
+String imageFilterCss(ImageFilter filter) {
+  if (filter._inner != null) {
+    return '${imageFilterCss(filter._inner)} ${imageFilterCss(filter._outer!)}'
+        .trim();
+  }
+  if (filter._matrix != null) return '';
+  final sigma = (filter.sigmaX + filter.sigmaY) / 2;
+  return sigma <= 0 ? '' : 'blur(${sigma.toStringAsFixed(2)}px)';
+}
+
+class ColorFilter {
+  const ColorFilter.mode(Color this.color, BlendMode this.blendMode)
+    : matrix = null,
+      _kind = 0;
+  const ColorFilter.matrix(List<double> this.matrix)
+    : color = null,
+      blendMode = null,
+      _kind = 1;
+  const ColorFilter.linearToSrgbGamma()
+    : color = null,
+      blendMode = null,
+      matrix = null,
+      _kind = 2;
+  const ColorFilter.srgbToLinearGamma()
+    : color = null,
+      blendMode = null,
+      matrix = null,
+      _kind = 3;
+  final Color? color;
+  final BlendMode? blendMode;
+  final List<double>? matrix;
+  final int _kind;
+}
+
+/// The CSS `filter` approximating [filter]: saturation and color modes
+/// with a transparent or grey source become `grayscale`/`opacity`; a
+/// greyscale matrix becomes `grayscale(1)`. Other filters are not mapped.
+String colorFilterCss(ColorFilter filter) {
+  if (filter._kind == 0) {
+    final color = filter.color!;
+    switch (filter.blendMode) {
+      case BlendMode.saturation:
+        return 'grayscale(1)';
+      case BlendMode.dstIn:
+        return 'opacity(${(color.a).toStringAsFixed(3)})';
+      default:
+        return '';
+    }
+  }
+  final m = filter.matrix;
+  if (filter._kind == 1 && m != null && m.length == 20) {
+    bool near(double a, double b) => (a - b).abs() < 0.02;
+    final grey =
+        near(m[0], m[5]) &&
+        near(m[5], m[10]) &&
+        near(m[1], m[6]) &&
+        near(m[6], m[11]) &&
+        near(m[2], m[7]) &&
+        near(m[7], m[12]);
+    if (grey) return 'grayscale(1)';
+  }
+  return '';
+}

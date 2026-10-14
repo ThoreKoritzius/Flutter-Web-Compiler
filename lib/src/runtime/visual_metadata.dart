@@ -3,6 +3,8 @@ library;
 
 import 'dart:math' as math;
 
+enum ColorSpace { sRGB, extendedSRGB, displayP3 }
+
 /// 32-bit sRGB colors. Components are stored as 8-bit channels.
 class Color {
   const Color(int value) : _value = value;
@@ -14,6 +16,19 @@ class Color {
           (b & 0xff);
   Color.fromRGBO(int r, int g, int b, double opacity)
     : this.fromARGB((opacity.clamp(0.0, 1.0) * 255).round(), r, g, b);
+  Color.from({
+    required double alpha,
+    required double red,
+    required double green,
+    required double blue,
+    ColorSpace colorSpace = ColorSpace.sRGB,
+  }) : this.fromARGB(
+         (alpha.clamp(0.0, 1.0) * 255).round(),
+         (red.clamp(0.0, 1.0) * 255).round(),
+         (green.clamp(0.0, 1.0) * 255).round(),
+         (blue.clamp(0.0, 1.0) * 255).round(),
+       );
+  ColorSpace get colorSpace => ColorSpace.sRGB;
   final int _value;
   int get value => _value & 0xffffffff;
   int get alpha => (value >> 24) & 0xff;

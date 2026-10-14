@@ -23,8 +23,15 @@ export 'material_style.dart'
         Brightness,
         Clip,
         Locale;
-export 'painting_ui.dart' hide UiGradient, shaderSpec, replayPath, PathSink;
-export 'visual_metadata.dart' show Color;
+export 'painting_ui.dart'
+    hide
+        UiGradient,
+        shaderSpec,
+        replayPath,
+        PathSink,
+        imageFilterCss,
+        colorFilterCss;
+export 'visual_metadata.dart' show Color, ColorSpace;
 
 /// `ui.Gradient.linear` / `ui.Gradient.radial`.
 typedef Gradient = UiGradient;

@@ -58,10 +58,60 @@ class SchedulerBinding {
 
 enum AppLifecycleState { detached, resumed, inactive, hidden, paused }
 
-class WidgetsBindingObserver {
+abstract mixin class WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {}
   void didChangeMetrics() {}
   void didChangePlatformBrightness() {}
+  void didChangeTextScaleFactor() {}
+  void didChangeLocales(List<Locale>? locales) {}
+  void didChangeAccessibilityFeatures() {}
+  void didHaveMemoryPressure() {}
+  Future<bool> didPopRoute() => Future<bool>.value(false);
+  Future<bool> didPushRoute(String route) => Future<bool>.value(false);
+}
+
+/// Lifecycle callbacks from page visibility, as Flutter web reports them.
+class AppLifecycleListener with WidgetsBindingObserver {
+  AppLifecycleListener({
+    this.binding,
+    this.onResume,
+    this.onInactive,
+    this.onHide,
+    this.onShow,
+    this.onPause,
+    this.onRestart,
+    this.onDetach,
+    this.onExitRequested,
+    this.onStateChange,
+  }) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+  final WidgetsBinding? binding;
+  final VoidCallback? onResume, onInactive, onHide, onShow, onPause;
+  final VoidCallback? onRestart, onDetach;
+  final Future<Object?> Function()? onExitRequested;
+  final ValueChanged<AppLifecycleState>? onStateChange;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    onStateChange?.call(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        onShow?.call();
+        onResume?.call();
+      case AppLifecycleState.hidden:
+        onInactive?.call();
+        onHide?.call();
+      case AppLifecycleState.paused:
+        onPause?.call();
+      case AppLifecycleState.inactive:
+        onInactive?.call();
+      case AppLifecycleState.detached:
+        onDetach?.call();
+    }
+  }
+
+  void dispose() => WidgetsBinding.instance.removeObserver(this);
 }
 
 /// The subset of Flutter's bindings that applications touch at startup and
@@ -96,7 +146,45 @@ class WidgetsBinding {
       _frames.schedule(callback);
   void cancelFrameCallbackWithId(int id) => _frames.cancel(id);
   void scheduleFrame() => _activeOwner?._scheduleFrame();
-  void addObserver(WidgetsBindingObserver observer) => _observers.add(observer);
+  void addObserver(WidgetsBindingObserver observer) {
+    _listenForLifecycle();
+    _observers.add(observer);
+  }
+
+  AppLifecycleState? lifecycleState = AppLifecycleState.resumed;
+  bool _lifecycleListening = false;
+
+  /// Page visibility drives lifecycle changes; resizes report metrics.
+  void _listenForLifecycle() {
+    if (_lifecycleListening) return;
+    _lifecycleListening = true;
+    final document = globalContext.getProperty<JSObject?>('document'.toJS);
+    document?.callMethod<JSAny?>(
+      'addEventListener'.toJS,
+      'visibilitychange'.toJS,
+      ((JSAny? _) {
+        final hidden =
+            document.getProperty<JSString?>('visibilityState'.toJS)?.toDart ==
+            'hidden';
+        final state = hidden
+            ? AppLifecycleState.hidden
+            : AppLifecycleState.resumed;
+        lifecycleState = state;
+        for (final observer in List.of(_observers)) {
+          observer.didChangeAppLifecycleState(state);
+        }
+      }).toJS,
+    );
+    _window.addEventListener(
+      'resize',
+      ((JSAny? _) {
+        for (final observer in List.of(_observers)) {
+          observer.didChangeMetrics();
+        }
+      }).toJS,
+    );
+  }
+
   bool removeObserver(WidgetsBindingObserver observer) =>
       _observers.remove(observer);
 }
