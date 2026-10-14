@@ -3,6 +3,7 @@ library;
 export 'src/runtime/source_selection.dart' show NativeSourceSelection;
 import 'src/runtime/source_selection.dart';
 import 'src/font_subset.dart';
+import 'src/runtime/bridge_names.dart';
 
 import 'dart:convert';
 import 'dart:io';
@@ -28,7 +29,12 @@ class NativeAppBuild {
     this.materialIconsFont,
     this.generatedAssets = const {},
     this.iconCodePoints,
+    this.builtInBridges = const [],
   });
+
+  /// Built-in package API implementations that replaced package imports
+  /// (for example `fl_chart`); reported separately from translated code.
+  final List<String> builtInBridges;
 
   /// Output-relative paths of files generated during the build, such as a
   /// subset icon font.
@@ -230,16 +236,35 @@ Future<NativeAppBuild> buildNativeApp(
   );
   if (metaUri == null)
     throw StateError('Annotation metadata could not be resolved.');
-  Uri annotatedFacade(String name, Uri runtime) {
+  Uri annotatedFacade(
+    String name,
+    Uri runtime, {
+    List<String> hide = const [],
+  }) {
     final file = File(p.join(temporary.path, '$name.dart'));
     file.writeAsStringSync(
-      "export '$runtime';\nexport '$metaUri' show immutable, visibleForTesting;\n",
+      "export '$runtime'${hide.isEmpty ? '' : ' hide ${hide.join(', ')}'};\nexport '$metaUri' show immutable, visibleForTesting;\n",
     );
     return file.uri;
   }
 
-  final materialFacade = annotatedFacade('material', runtimeUri);
-  final widgetsFacade = annotatedFacade('widgets', widgetsUri);
+  // Built-in package bridges live in the runtime library; Flutter facades
+  // hide their names and each bridge facade shows exactly its own.
+  final materialFacade = annotatedFacade(
+    'material',
+    runtimeUri,
+    hide: flChartBridgeNames,
+  );
+  final widgetsFacade = annotatedFacade(
+    'widgets',
+    widgetsUri,
+    hide: flChartBridgeNames,
+  );
+  final flChartFacade = File(p.join(temporary.path, 'fl_chart.dart'))
+    ..writeAsStringSync(
+      "export '$runtimeUri' show ${flChartBridgeNames.join(', ')};\n",
+    );
+  final builtInBridges = <String>{};
   final foundationFacade = annotatedFacade('foundation', foundationUri);
   const webEnvironment = {
     'dart.library.js_interop': true,
@@ -312,6 +337,9 @@ Future<NativeAppBuild> buildNativeApp(
         if (packageAdapters.containsKey(uri)) {
           usedPackages.add(uri);
           replacement = Uri.file(packageAdapters[uri]!).toString();
+        } else if (uri == 'package:fl_chart/fl_chart.dart') {
+          builtInBridges.add('fl_chart');
+          replacement = flChartFacade.uri.toString();
         } else if (uri == 'package:flutter_riverpod/flutter_riverpod.dart') {
           checkRiverpod();
           if (riverpodUri == null)
@@ -434,6 +462,7 @@ Future<NativeAppBuild> buildNativeApp(
         if (subsetFont != null) _materialIconsPath: subsetFont,
       }),
       iconCodePoints: subsetFont == null ? null : Set.unmodifiable(iconCodes!),
+      builtInBridges: List.unmodifiable(builtInBridges.toList()..sort()),
       fontFaces: List.unmodifiable([
         if (iconFont != null)
           const NativeFontFace('MaterialIcons', _materialIconsPath),

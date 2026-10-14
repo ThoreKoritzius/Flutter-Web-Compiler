@@ -384,6 +384,44 @@ provide `riverpod` 2.6.1. Reports state
 `providerIntegration: riverpod-2.6.1-element-scopes` when the import is mapped.
 None of this adapts an application's authentication or networking.
 
+## Built-in package bridges
+
+Some widely used packages depend on Flutter's engine and cannot compile on
+this runtime. For these, the builder maps the package's public library to an
+**independent implementation of its public API**, written for the DOM
+runtime; package code is never executed. Reports list them under
+`builtInPackageBridges`, separately from translated application code. An
+explicit `--package-bridges` mapping takes precedence.
+
+### fl_chart
+
+`package:fl_chart/fl_chart.dart` maps to an implementation of the fl_chart
+1.x API for **line, bar and pie charts**: `LineChart`, `BarChart`,
+`PieChart` and their data classes (`FlSpot`, `LineChartBarData`,
+`BarChartGroupData`, `BarChartRodData`, `PieChartSectionData`, titles, grid,
+border, extra lines, range annotations, dot painters, touch and tooltip
+data) with fl_chart's defaults, interval selection and number formatting.
+
+- Plots paint on canvas through `CustomPaint`; axis titles
+  (`getTitlesWidget`, `SideTitleWidget`), axis names, tooltips and pie
+  titles/badges are DOM widgets positioned over the chart, so text is real,
+  selectable and themed.
+- Curved, stepped and dashed lines, gradient areas, between-bar fills,
+  rounded and stacked rods, background rods, sections with spacing and
+  centre space.
+- Pointer hover and taps drive built-in tooltips and `touchCallback` with
+  `FlPointerHoverEvent`, `FlTapDownEvent`, `FlTapUpEvent` and
+  `FlPointerExitEvent`, plus `LineTouchResponse`, `BarTouchResponse` and
+  `PieTouchResponse` hit results. Events carry `localPosition` rather than
+  Flutter gesture details.
+- Data changes animate with `duration`/`curve` when the structure matches.
+
+Not provided: scatter, radar and candlestick charts, error indicators,
+rotation, zoom/pan transformations, long-press timing and `SizedPicture`
+or image line decorations. Charts need bounded height from their parent, as
+in Flutter. Visuals approximate fl_chart's rendering; they are not pixel
+identical.
+
 ## Explicit package boundaries and compile-time configuration
 
 `--package-bridges adapters.json` maps exact package library URIs to explicit

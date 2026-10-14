@@ -25,7 +25,7 @@ class Demo extends StatefulWidget {
 }
 
 class DemoState extends State<Demo> with SingleTickerProviderStateMixin {
-  late final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
+  late final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
   bool wide = false, alternate = false, shown = true;
   @override
   void initState() {
@@ -49,7 +49,7 @@ class DemoState extends State<Demo> with SingleTickerProviderStateMixin {
     ElevatedButton(onPressed: () => runApp(const Text('Replaced')), child: const Text('Replace')),
     FadeTransition(opacity: controller, child: const Text('Fading')),
     AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
+      duration: const Duration(milliseconds: 400),
       width: wide ? 200 : 100,
       height: 20,
       color: wide ? const Color(0xffff0000) : const Color(0xff0000ff),
@@ -57,7 +57,7 @@ class DemoState extends State<Demo> with SingleTickerProviderStateMixin {
       child: const Text('Box'),
     ),
     AnimatedSwitcher(
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 400),
       child: Text(alternate ? 'Second' : 'First', key: ValueKey(alternate)),
     ),
     TweenAnimationBuilder<double>(

@@ -5,6 +5,7 @@ part of 'flutter_dom.dart';
 
 class _Box extends _DomWidget {
   const _Box({
+    super.key,
     this.tag = 'div',
     this.css = '',
     this.attributes = const {},

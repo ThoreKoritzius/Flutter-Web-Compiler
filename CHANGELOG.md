@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Map `package:fl_chart` imports to a built-in implementation of its line, bar and pie chart API on the native canvas, with DOM titles, tooltips, touch callbacks and animated data changes.
+- Keep keyed children of `Stack` and `GridView` across rebuilds.
+
 - Add animation controllers on `requestAnimationFrame`, curves, tweens, explicit transitions, implicit animations, `AnimatedSwitcher`, `Transform` with `Matrix4`, post-frame callbacks, and color/painting interpolation.
 
 - Add `CustomPaint`, `Canvas`, `Paint`, `Path`, `TextPainter` and a `dart:ui` facade backed by HTML canvas, repainting only on resize, `shouldRepaint` or repaint listenables.

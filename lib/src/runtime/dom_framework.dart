@@ -29,6 +29,8 @@ extension type _Node(JSObject _) implements JSObject {
 extension type _Event(JSObject _) implements JSObject {
   external String? get key;
   external void preventDefault();
+  external double? get offsetX;
+  external double? get offsetY;
 }
 
 @JS('window')
@@ -1606,17 +1608,56 @@ class _LayoutBuilderElement extends _DomElement {
     if (!_needsLayout && width == _width) return;
     _needsLayout = false;
     _width = width;
-    final built = (widget as LayoutBuilder).builder(
-      this,
-      BoxConstraints(maxWidth: width),
+    _applyBuilt(
+      (widget as LayoutBuilder).builder(this, BoxConstraints(maxWidth: width)),
     );
-    super._updateChildWidgets([built]);
   }
+
+  void _applyBuilt(Widget built) => super._updateChildWidgets([built]);
 
   @override
   void unmount() {
     _owner?._layoutBuilders.remove(this);
     _owner?._layoutQueue.remove(this);
     super.unmount();
+  }
+}
+
+/// Measures both dimensions of its box; children must be absolutely
+/// positioned so the box height comes from the parent, not its content.
+class _SizedBuilder extends LayoutBuilder {
+  const _SizedBuilder({required this.sizeBuilder})
+    : super(builder: _unusedLayoutBuilder);
+  final Widget Function(BuildContext context, Size size) sizeBuilder;
+  @override
+  void _render(_DomBuilder out) => out.css(
+    'position:relative;box-sizing:border-box;width:100%;height:100%;min-width:0;min-height:0;',
+  );
+  @override
+  Element createElement() => _SizedElement(this);
+}
+
+Widget _unusedLayoutBuilder(BuildContext context, BoxConstraints c) =>
+    throw StateError('Unused');
+
+class _SizedElement extends _LayoutBuilderElement {
+  _SizedElement(_SizedBuilder super.widget);
+  double? _height;
+
+  @override
+  void _performLayout() {
+    final width = checkedDimension(node.clientWidth);
+    final height = checkedDimension(
+      (node as JSObject)
+          .getProperty<JSNumber>('clientHeight'.toJS)
+          .toDartDouble,
+    );
+    if (!_needsLayout && width == _width && height == _height) return;
+    _needsLayout = false;
+    _width = width;
+    _height = height;
+    _applyBuilt(
+      (widget as _SizedBuilder).sizeBuilder(this, Size(width, height)),
+    );
   }
 }

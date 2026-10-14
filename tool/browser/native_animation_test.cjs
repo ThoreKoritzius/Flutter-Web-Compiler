@@ -34,9 +34,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await until(() => widthOf('Box') === 200, 'final width');
     await until(() => logs.includes('container end'));
     button('Resize').events.click();
-    await sleep(40);
-    const mid = widthOf('Box');
-    assert(mid < 200 && mid > 100, `retargeted from ${mid}`);
+    await until(() => widthOf('Box') < 200 && widthOf('Box') > 100, 'retargeted mid-flight');
     await until(() => widthOf('Box') === 100);
 
     // AnimatedSwitcher keeps the outgoing child until it has faded out.
@@ -48,7 +46,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     // Repeat runs until stopped; disposal stops tickers.
     button('Repeat').events.click();
-    await sleep(60);
+    await until(() => opacity(text('Fading')) < 1, 'repeat started');
     button('Stop').events.click();
     const stopped = opacity(text('Fading'));
     await sleep(60);

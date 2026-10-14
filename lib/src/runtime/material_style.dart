@@ -1371,6 +1371,17 @@ class CircleBorder extends OutlinedBorder {
   const CircleBorder({super.side});
 }
 
+class Shadow {
+  const Shadow({
+    this.color = const Color(0xff000000),
+    this.offset = Offset.zero,
+    this.blurRadius = 0,
+  });
+  final Color color;
+  final Offset offset;
+  final double blurRadius;
+}
+
 class BoxShadow {
   static List<BoxShadow>? lerpList(
     List<BoxShadow>? a,

@@ -63,3 +63,4 @@ part 'dom_input.dart';
 part 'dom_material_navigation.dart';
 part 'dom_paint.dart';
 part 'dom_animation.dart';
+part 'dom_fl_chart.dart';
