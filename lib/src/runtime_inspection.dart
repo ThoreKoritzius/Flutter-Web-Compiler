@@ -28,6 +28,7 @@ const runtimeFrameworkFacades = {
   'package:flutter/scheduler.dart',
   'package:flutter/gestures.dart',
   'package:flutter/rendering.dart',
+  'package:flutter/cupertino.dart',
 };
 
 /// Package library URIs replaced by built-in runtime implementations,

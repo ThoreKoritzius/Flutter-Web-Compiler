@@ -173,6 +173,7 @@ Future<NativeAppBuild> buildNativeApp(
   // Package name → library directory, for rewriting Flutter-dependent
   // package libraries alongside project sources.
   final packageLibs = <String, String>{};
+  final packageRoots = <String, String>{};
   if (packagesUri != null) {
     final config =
         jsonDecode(File.fromUri(packagesUri).readAsStringSync()) as Map;
@@ -185,6 +186,9 @@ Future<NativeAppBuild> buildNativeApp(
       final lib = rootDir.resolve((entry['packageUri'] as String?) ?? 'lib/');
       packageLibs[entry['name'] as String] = p.normalize(
         Directory.fromUri(lib).path,
+      );
+      packageRoots[entry['name'] as String] = p.normalize(
+        Directory.fromUri(rootDir).path,
       );
     }
   }
@@ -541,6 +545,7 @@ Future<NativeAppBuild> buildNativeApp(
           'package:flutter/scheduler.dart',
           'package:flutter/gestures.dart',
           'package:flutter/rendering.dart',
+          'package:flutter/cupertino.dart',
         }.contains(uri)) {
           replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/')) {
@@ -665,6 +670,11 @@ Future<NativeAppBuild> buildNativeApp(
         }
       }
     }
+    final packageResources = readPackageResources(
+      packageRoots,
+      javascript,
+      exclude: {p.normalize(root)},
+    );
     return NativeAppBuild(
       javascript,
       seen.length,
@@ -673,6 +683,7 @@ Future<NativeAppBuild> buildNativeApp(
       riverpodConsumers: checkedRiverpod,
       packageAdapters: List.unmodifiable(usedPackages),
       assets: Map.unmodifiable({
+        ...packageResources.assets,
         ...resources.assets,
         if (iconFont != null && subsetFont == null)
           _materialIconsPath: iconFont,
@@ -687,6 +698,7 @@ Future<NativeAppBuild> buildNativeApp(
         if (iconFont != null)
           const NativeFontFace('MaterialIcons', _materialIconsPath),
         ...resources.fontFaces,
+        ...packageResources.fontFaces,
       ]),
       usesMaterialIcons: usesIcons,
       materialIconsFont: iconFont,
@@ -700,13 +712,23 @@ const _materialIconsPath = 'assets/fonts/MaterialIcons-Regular.otf';
 
 /// Icons the runtime itself may render (back, close, menu, chip delete,
 /// expansion chevrons).
-const _runtimeIcons = [
+/// Icons the runtime's own widgets draw; kept in the subset font even when
+/// the app never names them. `test/runtime_icons_test.dart` keeps this
+/// list in sync with the runtime sources.
+const nativeRuntimeIcons = [
+  'adaptive.more',
   'arrow_back',
-  'close',
-  'menu',
+  'arrow_upward',
   'cancel_rounded',
-  'expand_more',
+  'check',
+  'check_box',
+  'check_box_outline_blank',
+  'close',
+  'drag_handle',
+  'edit',
   'expand_less',
+  'expand_more',
+  'menu',
 ];
 
 Map<String, int>? _iconNameCache;
@@ -747,7 +769,7 @@ Set<int>? materialIconCodePoints(
   Iterable<String> sources,
   Map<String, int> names,
 ) {
-  final referenced = <int>{for (final name in _runtimeIcons) ?names[name]};
+  final referenced = <int>{for (final name in nativeRuntimeIcons) ?names[name]};
   final usage = RegExp(r'\bIcons\.((?:adaptive\.)?\w+)');
   final literal = RegExp(
     r'IconData\(\s*(0x[0-9a-fA-F]+|\d+)\s*,\s*fontFamily:\s*[\x27"]MaterialIcons[\x27"]',
@@ -798,6 +820,88 @@ class NativeResources {
 }
 
 final _safeFamily = RegExp(r'^[A-Za-z0-9 _./-]+$');
+
+/// Fonts and assets that dependency packages declare in their pubspecs, as
+/// Flutter bundles them: font families become `packages/<name>/<family>`
+/// and assets live under `assets/packages/<name>/`. Only fonts and assets
+/// whose family or key appears in [javascript] are included.
+NativeResources readPackageResources(
+  Map<String, String> packageRoots,
+  String javascript, {
+  Set<String> exclude = const {},
+}) {
+  final assets = <String, String>{};
+  final faces = <NativeFontFace>[];
+  for (final MapEntry(key: name, value: packageRoot) in packageRoots.entries) {
+    if (exclude.contains(p.normalize(packageRoot))) continue;
+    final pubspec = File(p.join(packageRoot, 'pubspec.yaml'));
+    if (!pubspec.existsSync()) continue;
+    final Object? yaml;
+    try {
+      yaml = loadYaml(pubspec.readAsStringSync());
+    } on YamlException {
+      continue;
+    }
+    final flutter = yaml is YamlMap ? yaml['flutter'] : null;
+    if (flutter is! YamlMap) continue;
+    String? file(String key) {
+      final normalized = p.posix.normalize(key);
+      if (p.posix.isAbsolute(normalized) ||
+          normalized.split('/').contains('..')) {
+        return null;
+      }
+      final file = File(p.join(packageRoot, normalized));
+      return file.existsSync() ? file.resolveSymbolicLinksSync() : null;
+    }
+
+    final fonts = flutter['fonts'];
+    if (fonts is YamlList && javascript.contains(name)) {
+      for (final family in fonts) {
+        final familyName = family is YamlMap ? family['family'] : null;
+        final files = family is YamlMap ? family['fonts'] : null;
+        if (familyName is! String ||
+            !_safeFamily.hasMatch(familyName) ||
+            files is! YamlList ||
+            !javascript.contains(familyName)) {
+          continue;
+        }
+        for (final font in files) {
+          final asset = font is YamlMap ? font['asset'] : null;
+          if (asset is! String) continue;
+          final path = file(asset);
+          if (path == null) continue;
+          final url = 'assets/packages/$name/${p.posix.normalize(asset)}';
+          assets[url] = path;
+          final weight = font['weight'];
+          final style = font['style'];
+          faces.add(
+            NativeFontFace(
+              'packages/$name/$familyName',
+              url,
+              weight: weight is int && weight >= 100 && weight <= 900
+                  ? weight
+                  : null,
+              style: style == 'italic' ? 'italic' : null,
+            ),
+          );
+        }
+      }
+    }
+    final declared = flutter['assets'];
+    if (declared is YamlList) {
+      for (final item in declared) {
+        final key = item is YamlMap ? item['path'] : item;
+        if (key is! String || key.endsWith('/')) continue;
+        if (!javascript.contains(key)) continue;
+        final path = file(key);
+        if (path != null) {
+          assets['assets/packages/$name/${p.posix.normalize(key)}'] = path;
+        }
+      }
+    }
+  }
+  return NativeResources(assets, faces, false);
+}
 
 /// Reads `flutter: assets/fonts/uses-material-design` from the project
 /// pubspec. Assets keep Flutter web's `assets/<key>` URL layout; directory
@@ -929,6 +1033,8 @@ button{font:inherit;color:inherit}
 .fd-switch:focus-visible{outline:2px solid var(--fd-on-track);outline-offset:2px}
 .fd-spin{animation:fd-spin 1s linear infinite}
 @keyframes fd-spin{to{transform:rotate(360deg)}}
+.fd-cupertino-button:not(:disabled):active{opacity:var(--fd-press-opacity,0.4)}
+.fd-cupertino-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.fd-spin,.fd-linear-indeterminate::after{animation-duration:4s}}
 ''';
 

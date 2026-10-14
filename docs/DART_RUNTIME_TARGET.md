@@ -296,6 +296,23 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   shapes accepted, no notch cut). `MaterialBanner` through
   `ScaffoldMessenger.showMaterialBanner` (sticky at the top of the
   messenger, above the app bar). `GridTile`/`GridTileBar`.
+- **Cupertino:** `package:flutter/cupertino.dart` maps to the widgets
+  facade plus Cupertino widgets: `CupertinoApp` (+`.router`, on the same app
+  shell), `CupertinoTheme`/`CupertinoThemeData`/`CupertinoTextThemeData`
+  (falling back to the Material theme), `CupertinoColors` and
+  `CupertinoDynamicColor` (light/dark), `CupertinoIcons` (all 1,322 constants
+  from Flutter 3.41.6; glyphs come from the app's `cupertino_icons` package
+  font), `CupertinoPageScaffold`, `CupertinoNavigationBar`,
+  `CupertinoSliverNavigationBar`, `CupertinoButton` (+`filled`/`tinted`),
+  `CupertinoActivityIndicator`, `CupertinoSwitch`/`Slider`/`Checkbox`/
+  `Radio`, `CupertinoSlidingSegmentedControl`/`CupertinoSegmentedControl`,
+  `CupertinoAlertDialog`/`CupertinoDialogAction`/`showCupertinoDialog`,
+  `CupertinoActionSheet`/`showCupertinoModalPopup`, `CupertinoTextField`/
+  `CupertinoSearchTextField`, `CupertinoListSection`/`CupertinoListTile`,
+  `CupertinoFormSection`/`CupertinoFormRow`, `CupertinoTabScaffold`/
+  `CupertinoTabBar`/`CupertinoTabView`, `CupertinoPicker` (snapping list),
+  `CupertinoDatePicker` (native date/time inputs), `CupertinoContextMenu`
+  (actions on long press). No iOS page transitions or bounce physics.
 - **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
   `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
   button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and
@@ -671,6 +688,14 @@ ignored; tiles load as plain images).
 `package:flutter/rendering.dart` maps to the widgets facade, and `Listener`
 delivers pointer down/move/up/cancel/hover events and wheel
 `PointerScrollEvent`s.
+
+### Fonts and assets from packages
+
+As Flutter does, fonts declared in a dependency's pubspec are bundled under
+`assets/packages/<package>/…` with the family `packages/<package>/<family>`
+(how `IconData.fontPackage` and `TextStyle(package:)` refer to them), and a
+package's declared assets are served at the same prefix. Only families and
+asset keys that the compiled app references are included.
 
 ### Third-party packages that use Flutter
 

@@ -8,6 +8,12 @@ Flutter SDK into their output; that font is distributed under the Apache
 License 2.0 (see `MaterialIcons_LICENSE.txt` in the Flutter material fonts
 artifact) and is not included in this repository.
 
+Cupertino icon metadata in `lib/src/runtime/cupertino_icons_metadata.dart` is
+generated from Flutter `packages/flutter/lib/src/cupertino/icons.dart`. The
+glyphs come from the app's own `cupertino_icons` package font (MIT License),
+which native builds copy from the package; it is not included in this
+repository.
+
 Source: https://github.com/flutter/flutter
 
 ```text

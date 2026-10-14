@@ -11,6 +11,7 @@ export 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 export 'services_dom.dart';
 export 'visual_metadata.dart';
 export 'material_icons_metadata.dart';
+export 'cupertino_icons_metadata.dart';
 export 'material_colors.dart';
 export 'painting_ui.dart'
     hide
@@ -50,6 +51,7 @@ export 'material_style.dart'
 import 'foundation_dom.dart';
 import 'services_dom.dart';
 import 'material_icons_metadata.dart';
+import 'cupertino_icons_metadata.dart';
 import 'material_style.dart';
 import 'painting_ui.dart';
 import 'visual_metadata.dart';
@@ -82,3 +84,4 @@ part 'dom_keyboard.dart';
 part 'dom_extras.dart';
 part 'dom_interactive.dart';
 part 'dom_material_extra.dart';
+part 'dom_cupertino.dart';

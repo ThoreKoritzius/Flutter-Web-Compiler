@@ -2191,7 +2191,6 @@ class MaterialBanner extends StatelessWidget {
   }
 }
 
-
 /// Material banner queue of [ScaffoldMessengerState]. The current banner
 /// renders at the top of the messenger, above its scaffold.
 mixin _MaterialBannerHost on State<ScaffoldMessenger> {

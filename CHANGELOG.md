@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Map `package:flutter/cupertino.dart` and add Cupertino apps, themes, colors, all `CupertinoIcons`, navigation bars, buttons, switches, segmented controls, dialogs, action sheets, text fields, list sections, tab scaffolds and pickers; bundle fonts and assets declared by dependency packages (such as `cupertino_icons`) as Flutter does; keep every icon the runtime draws in subset fonts.
 - Add SwitchListTile/CheckboxListTile/RadioListTile, RangeSlider, ToggleButtons, Stepper, DataTable (real `<table>` with sorting and selection), ExpansionPanelList (+radio), NavigationRail, NavigationDrawer, BottomAppBar, MaterialBanner and GridTile.
 - Add keyboard focus, shortcuts and actions, clipboard/haptics/system chrome services, asset bundles, page views, nested scroll views, animated and wheel lists, scroll notifications, dismissibles, drag and drop, interactive viewers, search delegates, general/adaptive/about dialogs, CSS-mapped clipping, filters and shader masks, memory and fade-in images, richer text styles, HSL/HSV colors, media query flags and app lifecycle events (found by probing common Flutter APIs).
 - Add `CustomScrollView` and slivers (lists, grids, padding, fill, layout builder), sticky `SliverPersistentHeader`/`SliverAppBar` with `FlexibleSpaceBar`, a real `ScrollController`/`ScrollPosition` that follows the page or a bounded scroller, `RefreshIndicator`, `DraggableScrollableSheet` and `ReorderableListView`.

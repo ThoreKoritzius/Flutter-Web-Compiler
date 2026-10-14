@@ -1528,8 +1528,11 @@ class CircleAvatar extends StatelessWidget {
     this.onForegroundImageError,
   });
   final ImageProvider? foregroundImage;
-  final void Function(Object exception, StackTrace? stackTrace)?
-  onBackgroundImageError, onForegroundImageError;
+  final void Function(
+    Object exception,
+    StackTrace? stackTrace,
+  )? onBackgroundImageError,
+      onForegroundImageError;
   final Widget? child;
   final ImageProvider? backgroundImage;
   final Color? backgroundColor, foregroundColor;
