@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Map `flutter_markdown` and `flutter_markdown_plus` imports to a markdown renderer built on the official `markdown` parser; add `Table`, tappable `TextSpan` recognizers and `package:flutter/gestures.dart` mapping.
+
 - Map `package:go_router` imports to a built-in router with redirects, named and nested routes, stateful shell branches, typed push results, hash URLs and browser back; add declarative `Navigator(pages:)`, `MaterialApp.router` and `IndexedStack`.
 
 - Map `package:fl_chart` imports to a built-in implementation of its line, bar and pie chart API on the native canvas, with DOM titles, tooltips, touch callbacks and animated data changes.

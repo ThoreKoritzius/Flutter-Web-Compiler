@@ -169,6 +169,10 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
 - **Images:** `Image`, `Image.asset`, `Image.network` (http(s) or relative
   URLs only), `AssetImage`, `NetworkImage`, `DecorationImage`, `BoxFit`,
   `errorBuilder`.
+- **Tables and text gestures:** `Table` (CSS grid with fixed, flex,
+  fraction, intrinsic, min and max column widths, `TableBorder`, row
+  decorations, `TableCell` vertical alignment) and `TextSpan.recognizer`
+  with `TapGestureRecognizer` (keyboard-accessible link semantics).
 - **Icons:** `Icon`, `IconTheme`, `Icons` (all 8,825 Material constants
   generated from Flutter 3.41.6) and `Icons.adaptive`.
 - **Animation:** `AnimationController` (forward, reverse, `animateTo`,
@@ -452,6 +456,26 @@ Not provided: page transition animations (transition builders receive
 completed animations), `GoRouter.routingConfig`, `onEnter`, type-safe
 `GoRouteData` code generation, path URL strategy, `extraCodec`
 serialization and state restoration.
+
+### flutter_markdown and flutter_markdown_plus
+
+Both `package:flutter_markdown/flutter_markdown.dart` and
+`package:flutter_markdown_plus/flutter_markdown_plus.dart` map to an
+implementation of their widget API (`MarkdownBody`, `Markdown`,
+`MarkdownStyleSheet` with `fromTheme`, `largeFromTheme`, `copyWith` and
+`merge`, `onTapLink`, `onTapText`, `imageBuilder`, `checkboxBuilder`,
+`bulletBuilder`, `syntaxHighlighter`, `softLineBreak`). Parsing uses the
+official `markdown` package (GitHub-flavoured by default, custom
+`extensionSet`/syntaxes honoured), so the project's package configuration
+must provide it, as Flutter projects using these packages do.
+
+Headings carry heading semantics; links render as keyboard-accessible
+`role="link"` spans reporting text, href and title; lists (nested,
+ordered with start numbers), task checkboxes, block quotes, horizontally
+scrolling code blocks, tables (with column alignment) and images are
+supported. Custom element and padding builders (`builders`,
+`paddingBuilders`) fail explicitly; selection callbacks are ignored because
+document text is natively selectable.
 
 ## Explicit package boundaries and compile-time configuration
 

@@ -220,6 +220,11 @@ Future<NativeAppBuild> buildNativeApp(
   );
   if (servicesUri == null)
     throw StateError('Services runtime package could not be resolved.');
+  final markdownUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:flutter_dom_compiler/src/runtime/markdown_dom.dart'),
+  );
+  if (markdownUri == null)
+    throw StateError('Markdown bridge could not be resolved.');
   final uiUri = await Isolate.resolvePackageUri(
     Uri.parse('package:flutter_dom_compiler/src/runtime/ui_dom.dart'),
   );
@@ -341,6 +346,10 @@ Future<NativeAppBuild> buildNativeApp(
         if (packageAdapters.containsKey(uri)) {
           usedPackages.add(uri);
           replacement = Uri.file(packageAdapters[uri]!).toString();
+        } else if (uri == 'package:flutter_markdown/flutter_markdown.dart' ||
+            uri == 'package:flutter_markdown_plus/flutter_markdown_plus.dart') {
+          builtInBridges.add(uri.split('/').first.substring('package:'.length));
+          replacement = markdownUri.toString();
         } else if (uri == 'package:go_router/go_router.dart') {
           builtInBridges.add('go_router');
           replacement = goRouterFacade.uri.toString();
@@ -365,6 +374,7 @@ Future<NativeAppBuild> buildNativeApp(
           'package:flutter/painting.dart',
           'package:flutter/animation.dart',
           'package:flutter/scheduler.dart',
+          'package:flutter/gestures.dart',
         }.contains(uri)) {
           replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/')) {

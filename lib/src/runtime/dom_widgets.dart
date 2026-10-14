@@ -71,10 +71,37 @@ abstract class InlineSpan {
   String toPlainText();
 }
 
+// Gesture recognizers for text spans. Only taps are recognized.
+abstract class GestureRecognizer {
+  GestureRecognizer({this.debugOwner});
+  final Object? debugOwner;
+  void dispose() {}
+}
+
+abstract class OneSequenceGestureRecognizer extends GestureRecognizer {
+  OneSequenceGestureRecognizer({super.debugOwner});
+}
+
+class TapGestureRecognizer extends OneSequenceGestureRecognizer {
+  TapGestureRecognizer({super.debugOwner});
+  VoidCallback? onTap;
+  VoidCallback? onTapCancel;
+  Object? onTapDown, onTapUp, onSecondaryTap;
+}
+
 class TextSpan extends InlineSpan {
-  const TextSpan({this.text, this.children, super.style, this.semanticsLabel});
+  const TextSpan({
+    this.text,
+    this.children,
+    super.style,
+    this.recognizer,
+    this.mouseCursor,
+    this.semanticsLabel,
+  });
   final String? text;
   final List<InlineSpan>? children;
+  final GestureRecognizer? recognizer;
+  final MouseCursor? mouseCursor;
   final String? semanticsLabel;
   @override
   String toPlainText() =>
@@ -199,6 +226,23 @@ class _Span extends _DomWidget {
     if (span is! TextSpan) throw UnsupportedError('Unsupported inline span.');
     if (span.semanticsLabel != null)
       out.attributes['aria-label'] = span.semanticsLabel!;
+    final recognizer = span.recognizer;
+    if (recognizer is TapGestureRecognizer && recognizer.onTap != null) {
+      // Tappable text behaves as a keyboard-accessible link.
+      out.attributes['role'] = 'link';
+      out.attributes['tabindex'] = '0';
+      out.css('cursor:${span.mouseCursor?._css ?? 'pointer'};');
+      void activate() => recognizer.onTap?.call();
+      out.on('click', (_) => activate());
+      out.on('keydown', (event) {
+        if (event?.key == 'Enter') {
+          event?.preventDefault();
+          activate();
+        }
+      });
+    } else if (recognizer != null) {
+      throw UnsupportedError('Only tap recognizers are supported on spans.');
+    }
     final children = span.children;
     if (children == null || children.isEmpty) {
       out.text = span.text ?? '';
@@ -1881,5 +1925,232 @@ class _Img extends _DomWidget {
         'object-position:${cssNumber((a.x + 1) * 50)}% ${cssNumber((a.y + 1) * 50)}%;',
       );
     if (onError != null) out.on('error', (_) => onError!());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tables, laid out with CSS grid.
+
+abstract class TableColumnWidth {
+  const TableColumnWidth();
+  String get _css;
+}
+
+class FixedColumnWidth extends TableColumnWidth {
+  const FixedColumnWidth(this.value);
+  final double value;
+  @override
+  String get _css => px(value);
+}
+
+class FlexColumnWidth extends TableColumnWidth {
+  const FlexColumnWidth([this.value = 1]);
+  final double value;
+  @override
+  String get _css => 'minmax(0,${cssNumber(value)}fr)';
+}
+
+class FractionColumnWidth extends TableColumnWidth {
+  const FractionColumnWidth(this.value);
+  final double value;
+  @override
+  String get _css => '${cssNumber(value * 100)}%';
+}
+
+class IntrinsicColumnWidth extends TableColumnWidth {
+  const IntrinsicColumnWidth({this.flex});
+  final double? flex;
+  @override
+  String get _css => flex == null
+      ? 'max-content'
+      : 'minmax(max-content,${cssNumber(flex!)}fr)';
+}
+
+class MaxColumnWidth extends TableColumnWidth {
+  const MaxColumnWidth(this.a, this.b);
+  final TableColumnWidth a, b;
+  @override
+  String get _css => 'max(${a._css},${b._css})';
+}
+
+class MinColumnWidth extends TableColumnWidth {
+  const MinColumnWidth(this.a, this.b);
+  final TableColumnWidth a, b;
+  @override
+  String get _css => 'min(${a._css},${b._css})';
+}
+
+enum TableCellVerticalAlignment {
+  top,
+  middle,
+  bottom,
+  baseline,
+  fill,
+  intrinsicHeight,
+}
+
+class TableBorder {
+  const TableBorder({
+    this.top = BorderSide.none,
+    this.right = BorderSide.none,
+    this.bottom = BorderSide.none,
+    this.left = BorderSide.none,
+    this.horizontalInside = BorderSide.none,
+    this.verticalInside = BorderSide.none,
+    this.borderRadius = BorderRadius.zero,
+  });
+  factory TableBorder.all({
+    Color color = const Color(0xff000000),
+    double width = 1,
+    BorderStyle style = BorderStyle.solid,
+    BorderRadius borderRadius = BorderRadius.zero,
+  }) {
+    final side = BorderSide(color: color, width: width, style: style);
+    return TableBorder(
+      top: side,
+      right: side,
+      bottom: side,
+      left: side,
+      horizontalInside: side,
+      verticalInside: side,
+      borderRadius: borderRadius,
+    );
+  }
+  factory TableBorder.symmetric({
+    BorderSide inside = BorderSide.none,
+    BorderSide outside = BorderSide.none,
+  }) => TableBorder(
+    top: outside,
+    right: outside,
+    bottom: outside,
+    left: outside,
+    horizontalInside: inside,
+    verticalInside: inside,
+  );
+  final BorderSide top, right, bottom, left;
+  final BorderSide horizontalInside, verticalInside;
+  final BorderRadius borderRadius;
+}
+
+class TableRow {
+  const TableRow({this.key, this.decoration, this.children = const []});
+  final LocalKey? key;
+  final Decoration? decoration;
+  final List<Widget> children;
+}
+
+class TableCell extends StatelessWidget {
+  const TableCell({super.key, this.verticalAlignment, required this.child});
+  final TableCellVerticalAlignment? verticalAlignment;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+class Table extends _DomWidget {
+  const Table({
+    super.key,
+    this.children = const [],
+    this.columnWidths,
+    this.defaultColumnWidth = const FlexColumnWidth(),
+    this.textDirection,
+    this.border,
+    this.defaultVerticalAlignment = TableCellVerticalAlignment.top,
+    this.textBaseline,
+  });
+  final List<TableRow> children;
+  final Map<int, TableColumnWidth>? columnWidths;
+  final TableColumnWidth defaultColumnWidth;
+  final TextDirection? textDirection;
+  final TableBorder? border;
+  final TableCellVerticalAlignment defaultVerticalAlignment;
+  final TextBaseline? textBaseline;
+  @override
+  String get _tag => 'div';
+  @override
+  _DomLayout get _layout => _DomLayout.grid;
+  @override
+  _Fill get _fill => _Fill.expand;
+  @override
+  void _render(_DomBuilder out) {
+    final columns = children.isEmpty ? 0 : children.first.children.length;
+    for (final row in children) {
+      if (row.children.length != columns)
+        throw ArgumentError(
+          'Every TableRow must have the same number of cells.',
+        );
+    }
+    final template = [
+      for (var i = 0; i < columns; i++)
+        (columnWidths?[i] ?? defaultColumnWidth)._css,
+    ].join(' ');
+    final b = border;
+    out.attributes['role'] = 'table';
+    out.css(
+      'display:grid;grid-template-columns:$template;box-sizing:border-box;min-width:0;overflow:hidden;',
+    );
+    if (b != null) {
+      out.css(
+        borderSideCss('border-top', b.top) +
+            borderSideCss('border-right', b.right) +
+            borderSideCss('border-bottom', b.bottom) +
+            borderSideCss('border-left', b.left) +
+            borderRadiusCss(b.borderRadius),
+      );
+    }
+    final cells = <Widget>[];
+    for (var r = 0; r < children.length; r++) {
+      final row = children[r];
+      for (var c = 0; c < row.children.length; c++) {
+        final cell = row.children[c];
+        final alignment = cell is TableCell && cell.verticalAlignment != null
+            ? cell.verticalAlignment!
+            : defaultVerticalAlignment;
+        cells.add(
+          _TableCellBox(
+            key: ValueKey('${row.key ?? r}/$c'),
+            alignment: alignment,
+            decoration: row.decoration,
+            borderTop: r > 0 ? b?.horizontalInside : null,
+            borderLeft: c > 0 ? b?.verticalInside : null,
+            child: cell,
+          ),
+        );
+      }
+    }
+    out.children = cells;
+  }
+}
+
+class _TableCellBox extends _DomWidget {
+  const _TableCellBox({
+    super.key,
+    required this.alignment,
+    required this.decoration,
+    required this.borderTop,
+    required this.borderLeft,
+    required this.child,
+  });
+  final TableCellVerticalAlignment alignment;
+  final Decoration? decoration;
+  final BorderSide? borderTop, borderLeft;
+  final Widget child;
+  @override
+  _DomLayout get _layout => _DomLayout.grid;
+  @override
+  void _render(_DomBuilder out) {
+    out.attributes['role'] = 'cell';
+    out.css(
+      'display:grid;grid-template-columns:minmax(0,1fr);box-sizing:border-box;min-width:0;align-content:${switch (alignment) {
+        TableCellVerticalAlignment.middle => 'center',
+        TableCellVerticalAlignment.bottom => 'end',
+        TableCellVerticalAlignment.fill => 'stretch',
+        _ => 'start',
+      }};',
+    );
+    out.css(decorationCss(decoration));
+    if (borderTop != null) out.css(borderSideCss('border-top', borderTop!));
+    if (borderLeft != null) out.css(borderSideCss('border-left', borderLeft!));
+    out.child(child);
   }
 }
