@@ -85,3 +85,4 @@ part 'dom_extras.dart';
 part 'dom_interactive.dart';
 part 'dom_material_extra.dart';
 part 'dom_cupertino.dart';
+part 'dom_framework_more.dart';

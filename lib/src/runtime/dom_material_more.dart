@@ -12,7 +12,66 @@ class RelativeRect {
         container.right - rect.right,
         container.bottom - rect.bottom,
       );
+  factory RelativeRect.fromSize(Rect rect, Size container) =>
+      RelativeRect.fromLTRB(
+        rect.left,
+        rect.top,
+        container.width - rect.right,
+        container.height - rect.bottom,
+      );
+  factory RelativeRect.fromDirectional({
+    required TextDirection textDirection,
+    required double start,
+    required double top,
+    required double end,
+    required double bottom,
+  }) => textDirection == TextDirection.rtl
+      ? RelativeRect.fromLTRB(end, top, start, bottom)
+      : RelativeRect.fromLTRB(start, top, end, bottom);
+  static const fill = RelativeRect.fromLTRB(0, 0, 0, 0);
   final double left, top, right, bottom;
+  bool get hasInsets => left > 0 || top > 0 || right > 0 || bottom > 0;
+  RelativeRect shift(Offset offset) => RelativeRect.fromLTRB(
+    left + offset.dx,
+    top + offset.dy,
+    right - offset.dx,
+    bottom - offset.dy,
+  );
+  RelativeRect inflate(double delta) => RelativeRect.fromLTRB(
+    left - delta,
+    top - delta,
+    right - delta,
+    bottom - delta,
+  );
+  RelativeRect deflate(double delta) => inflate(-delta);
+  Rect toRect(Rect container) => Rect.fromLTRB(
+    left,
+    top,
+    container.width - right,
+    container.height - bottom,
+  );
+  Size toSize(Size container) =>
+      Size(container.width - left - right, container.height - top - bottom);
+  static RelativeRect? lerp(RelativeRect? a, RelativeRect? b, double t) {
+    if (a == null || b == null) return a ?? b;
+    double mix(double x, double y) => x + (y - x) * t;
+    return RelativeRect.fromLTRB(
+      mix(a.left, b.left),
+      mix(a.top, b.top),
+      mix(a.right, b.right),
+      mix(a.bottom, b.bottom),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is RelativeRect &&
+      other.left == left &&
+      other.top == top &&
+      other.right == right &&
+      other.bottom == bottom;
+  @override
+  int get hashCode => Object.hash(left, top, right, bottom);
 }
 
 abstract class PopupMenuEntry<T> extends StatelessWidget {

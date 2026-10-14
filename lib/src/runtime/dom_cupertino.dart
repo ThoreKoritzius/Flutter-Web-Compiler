@@ -2805,7 +2805,8 @@ class _FlexFill extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => _Box(
-    css: 'flex:1 1 0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);',
+    css:
+        'flex:1 1 0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);',
     layout: _DomLayout.grid,
     fill: _Fill.expand,
     children: [child],

@@ -677,6 +677,23 @@ class AnimationController extends Animation<double> with _Listeners<double> {
     }
   }
 
+  /// Settles towards the upper bound (positive [velocity]) or the lower
+  /// bound with an ease-out over a duration derived from the velocity; no
+  /// spring simulation is run.
+  TickerFuture fling({
+    double velocity = 1,
+    Object? springDescription,
+    Object? animationBehavior,
+  }) {
+    final target = velocity < 0 ? lowerBound : upperBound;
+    final speed = velocity.abs().clamp(0.1, 10.0);
+    return animateTo(
+      target,
+      duration: Duration(milliseconds: (300 / speed).round()),
+      curve: Curves.easeOut,
+    );
+  }
+
   TickerFuture forward({double? from}) {
     _forward = true;
     if (from != null) value = from;

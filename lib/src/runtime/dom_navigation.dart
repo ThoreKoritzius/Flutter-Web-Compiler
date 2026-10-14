@@ -14,6 +14,8 @@ class RouteSettings {
 }
 
 typedef RouteFactory = Route<dynamic>? Function(RouteSettings settings);
+typedef RestorableRouteBuilder<T> =
+    Route<T> Function(BuildContext context, Object? arguments);
 typedef RoutePredicate = bool Function(Route<dynamic> route);
 typedef RoutePageBuilder = Widget Function(BuildContext context);
 
@@ -398,6 +400,31 @@ class Navigator extends StatefulWidget {
   ]) => of(context).maybePop<T>(result);
   static bool canPop(BuildContext context) =>
       maybeOf(context)?.canPop() ?? false;
+  static Future<T?> popAndPushNamed<T extends Object?, R extends Object?>(
+    BuildContext context,
+    String routeName, {
+    R? result,
+    Object? arguments,
+  }) => of(
+    context,
+  ).popAndPushNamed<T, R>(routeName, result: result, arguments: arguments);
+  static void removeRoute(BuildContext context, Route<dynamic> route) =>
+      of(context).removeRoute(route);
+  static void replace<T extends Object?>(
+    BuildContext context, {
+    required Route<dynamic> oldRoute,
+    required Route<T> newRoute,
+  }) => of(context).replace<T>(oldRoute: oldRoute, newRoute: newRoute);
+  static String restorablePush<T extends Object?>(
+    BuildContext context,
+    RestorableRouteBuilder<T> routeBuilder, {
+    Object? arguments,
+  }) => of(context).restorablePush<T>(routeBuilder, arguments: arguments);
+  static String restorablePushNamed<T extends Object?>(
+    BuildContext context,
+    String routeName, {
+    Object? arguments,
+  }) => of(context).restorablePushNamed<T>(routeName, arguments: arguments);
   static void popUntil(BuildContext context, RoutePredicate predicate) =>
       of(context).popUntil(predicate);
 
@@ -675,6 +702,124 @@ class NavigatorState extends State<Navigator> {
     }
   }
 
+  Future<T?> popAndPushNamed<T extends Object?, R extends Object?>(
+    String routeName, {
+    R? result,
+    Object? arguments,
+  }) {
+    pop<R>(result);
+    return pushNamed<T>(routeName, arguments: arguments);
+  }
+
+  /// Removes [route] from anywhere in the stack without animation.
+  void removeRoute<T extends Object?>(Route<T> route, [T? result]) {
+    final index = _entries.indexWhere((entry) => identical(entry.route, route));
+    if (index < 0) return;
+    if (index == _entries.length - 1) {
+      _popEntry(result, fromBrowser: false);
+      return;
+    }
+    final removed = _entries.removeAt(index);
+    removed._detach(result);
+    for (final observer in widget.observers) {
+      observer.didRemove(route, index > 0 ? _entries[index - 1].route : null);
+    }
+    _notify();
+  }
+
+  void removeRouteBelow<T extends Object?>(Route<T> anchorRoute, [T? result]) {
+    final index = _entries.indexWhere(
+      (entry) => identical(entry.route, anchorRoute),
+    );
+    if (index > 0) removeRoute(_entries[index - 1].route, result);
+  }
+
+  void replace<T extends Object?>({
+    required Route<dynamic> oldRoute,
+    required Route<T> newRoute,
+  }) {
+    final index = _entries.indexWhere(
+      (entry) => identical(entry.route, oldRoute),
+    );
+    if (index < 0) return;
+    final old = _entries[index];
+    old._detach(null);
+    _entries[index] = _RouteEntry(newRoute).._attach(this);
+    for (final observer in widget.observers) {
+      observer.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    }
+    _notify();
+  }
+
+  void replaceRouteBelow<T extends Object?>({
+    required Route<dynamic> anchorRoute,
+    required Route<T> newRoute,
+  }) {
+    final index = _entries.indexWhere(
+      (entry) => identical(entry.route, anchorRoute),
+    );
+    if (index > 0)
+      replace(oldRoute: _entries[index - 1].route, newRoute: newRoute);
+  }
+
+  // Restoration is not persisted; restorable pushes behave as pushes and
+  // return a route identifier.
+  String restorablePush<T extends Object?>(
+    RestorableRouteBuilder<T> routeBuilder, {
+    Object? arguments,
+  }) {
+    push<T>(routeBuilder(context, arguments));
+    return '${_entries.length}';
+  }
+
+  String restorablePushNamed<T extends Object?>(
+    String routeName, {
+    Object? arguments,
+  }) {
+    pushNamed<T>(routeName, arguments: arguments);
+    return '${_entries.length}';
+  }
+
+  String restorablePushReplacementNamed<T extends Object?, R extends Object?>(
+    String routeName, {
+    R? result,
+    Object? arguments,
+  }) {
+    pushReplacementNamed<T, R>(routeName, result: result, arguments: arguments);
+    return '${_entries.length}';
+  }
+
+  String restorablePushReplacement<T extends Object?, R extends Object?>(
+    RestorableRouteBuilder<T> routeBuilder, {
+    R? result,
+    Object? arguments,
+  }) {
+    pushReplacement<T, R>(routeBuilder(context, arguments), result: result);
+    return '${_entries.length}';
+  }
+
+  String restorablePushNamedAndRemoveUntil<T extends Object?>(
+    String newRouteName,
+    RoutePredicate predicate, {
+    Object? arguments,
+  }) {
+    pushNamedAndRemoveUntil<T>(newRouteName, predicate, arguments: arguments);
+    return '${_entries.length}';
+  }
+
+  String restorablePushAndRemoveUntil<T extends Object?>(
+    RestorableRouteBuilder<T> newRouteBuilder,
+    RoutePredicate predicate, {
+    Object? arguments,
+  }) {
+    pushAndRemoveUntil<T>(newRouteBuilder(context, arguments), predicate);
+    return '${_entries.length}';
+  }
+
+  /// The overlay hosted by this navigator.
+  OverlayState? get overlay => _overlayKey.currentState;
+  final _overlayKey = GlobalKey<OverlayState>();
+
   void _onBrowserPop() {
     if (!mounted) return;
     if (_ignoredPops > 0) {
@@ -724,19 +869,22 @@ class NavigatorState extends State<Navigator> {
         break;
       }
     }
-    return _Box(
-      css: 'display:grid;grid-template-columns:minmax(0,1fr);min-width:0;',
-      layout: _DomLayout.grid,
-      fill: _Fill.expand,
-      children: [
-        for (var i = 0; i < _entries.length; i++)
-          _RouteHost(
-            key: _entries[i].key,
-            entry: _entries[i],
-            hidden: i < topOpaque,
-            current: i == _entries.length - 1,
-          ),
-      ],
+    return Overlay(
+      key: _overlayKey,
+      child: _Box(
+        css: 'display:grid;grid-template-columns:minmax(0,1fr);min-width:0;',
+        layout: _DomLayout.grid,
+        fill: _Fill.expand,
+        children: [
+          for (var i = 0; i < _entries.length; i++)
+            _RouteHost(
+              key: _entries[i].key,
+              entry: _entries[i],
+              hidden: i < topOpaque,
+              current: i == _entries.length - 1,
+            ),
+        ],
+      ),
     );
   }
 }

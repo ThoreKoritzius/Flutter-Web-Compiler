@@ -1543,6 +1543,74 @@ class RoundedRectangleBorder extends OutlinedBorder {
   final BorderRadiusGeometry borderRadius;
 }
 
+/// Corners cut diagonally; approximated with rounded corners of the same
+/// size (CSS borders cannot bevel).
+class BeveledRectangleBorder extends RoundedRectangleBorder {
+  const BeveledRectangleBorder({super.borderRadius, super.side});
+}
+
+/// An ellipse inscribed in the box.
+class OvalBorder extends OutlinedBorder {
+  const OvalBorder({super.side, this.eccentricity = 1});
+  final double eccentricity;
+}
+
+/// Drawn as its bounding circle; star points are not cut.
+class StarBorder extends OutlinedBorder {
+  const StarBorder({
+    super.side,
+    this.points = 5,
+    this.innerRadiusRatio = 0.4,
+    this.pointRounding = 0,
+    this.valleyRounding = 0,
+    this.rotation = 0,
+    this.squash = 0,
+  });
+  const StarBorder.polygon({
+    super.side,
+    double sides = 5,
+    this.pointRounding = 0,
+    this.rotation = 0,
+    this.squash = 0,
+  }) : points = sides,
+       innerRadiusRatio = null,
+       valleyRounding = 0;
+  final double points, pointRounding, valleyRounding, rotation, squash;
+  final double? innerRadiusRatio;
+}
+
+/// Borders on chosen edges of the box.
+class LinearBorder extends OutlinedBorder {
+  const LinearBorder({super.side, this.start, this.end, this.top, this.bottom});
+  final LinearBorderEdge? start, end, top, bottom;
+  static const none = LinearBorder();
+  LinearBorder.start({super.side, double alignment = 0, double size = 1})
+    : start = LinearBorderEdge(alignment: alignment, size: size),
+      end = null,
+      top = null,
+      bottom = null;
+  LinearBorder.end({super.side, double alignment = 0, double size = 1})
+    : end = LinearBorderEdge(alignment: alignment, size: size),
+      start = null,
+      top = null,
+      bottom = null;
+  LinearBorder.top({super.side, double alignment = 0, double size = 1})
+    : top = LinearBorderEdge(alignment: alignment, size: size),
+      start = null,
+      end = null,
+      bottom = null;
+  LinearBorder.bottom({super.side, double alignment = 0, double size = 1})
+    : bottom = LinearBorderEdge(alignment: alignment, size: size),
+      start = null,
+      end = null,
+      top = null;
+}
+
+class LinearBorderEdge {
+  const LinearBorderEdge({this.size = 1, this.alignment = 0});
+  final double size, alignment;
+}
+
 /// Approximated as a rounded rectangle; CSS has no superellipse corners.
 class ContinuousRectangleBorder extends RoundedRectangleBorder {
   const ContinuousRectangleBorder({super.borderRadius, super.side});
@@ -1578,10 +1646,33 @@ class BoxShadow {
     this.offset = Offset.zero,
     this.blurRadius = 0,
     this.spreadRadius = 0,
+    this.blurStyle = BlurStyle.normal,
   });
   final Color color;
   final Offset offset;
   final double blurRadius, spreadRadius;
+  final BlurStyle blurStyle;
+  BoxShadow scale(double factor) => BoxShadow(
+    color: color,
+    offset: offset * factor,
+    blurRadius: blurRadius * factor,
+    spreadRadius: spreadRadius * factor,
+    blurStyle: blurStyle,
+  );
+  BoxShadow copyWith({
+    Color? color,
+    Offset? offset,
+    double? blurRadius,
+    double? spreadRadius,
+    BlurStyle? blurStyle,
+  }) => BoxShadow(
+    color: color ?? this.color,
+    offset: offset ?? this.offset,
+    blurRadius: blurRadius ?? this.blurRadius,
+    spreadRadius: spreadRadius ?? this.spreadRadius,
+    blurStyle: blurStyle ?? this.blurStyle,
+  );
+  double get blurSigma => blurRadius * 0.57735 + 0.5;
 }
 
 abstract class AlignmentGeometry {
@@ -1636,10 +1727,50 @@ class AlignmentDirectional extends AlignmentGeometry {
 }
 
 abstract class Gradient {
-  const Gradient({required this.colors, this.stops});
+  const Gradient({required this.colors, this.stops, this.transform});
   final List<Color> colors;
   final List<double>? stops;
+  final GradientTransform? transform;
   Shader createShader(Rect rect, {TextDirection? textDirection});
+}
+
+abstract class GradientTransform {
+  const GradientTransform();
+}
+
+/// Rotates a gradient by [radians] about its box's center.
+class GradientRotation extends GradientTransform {
+  const GradientRotation(this.radians);
+  final double radians;
+}
+
+/// A conic gradient around [center], from [startAngle] to [endAngle].
+class SweepGradient extends Gradient {
+  const SweepGradient({
+    this.center = Alignment.center,
+    this.startAngle = 0,
+    this.endAngle = math.pi * 2,
+    required super.colors,
+    super.stops,
+    this.tileMode = TileMode.clamp,
+    super.transform,
+  });
+  final AlignmentGeometry center;
+  final double startAngle, endAngle;
+  final TileMode tileMode;
+  @override
+  Shader createShader(Rect rect, {TextDirection? textDirection}) {
+    final c = center.resolve(textDirection);
+    return Shader.radial(
+      Offset(
+        rect.center.dx + c.x * rect.width / 2,
+        rect.center.dy + c.y * rect.height / 2,
+      ),
+      rect.shortestSide / 2,
+      colors,
+      stops,
+    );
+  }
 }
 
 class LinearGradient extends Gradient {
@@ -1648,8 +1779,11 @@ class LinearGradient extends Gradient {
     this.end = Alignment.centerRight,
     required super.colors,
     super.stops,
+    this.tileMode = TileMode.clamp,
+    super.transform,
   });
   final AlignmentGeometry begin, end;
+  final TileMode tileMode;
   @override
   Shader createShader(Rect rect, {TextDirection? textDirection}) {
     Offset point(AlignmentGeometry a) {
@@ -1670,9 +1804,16 @@ class RadialGradient extends Gradient {
     this.radius = 0.5,
     required super.colors,
     super.stops,
+    this.tileMode = TileMode.clamp,
+    this.focal,
+    this.focalRadius = 0,
+    super.transform,
   });
   final AlignmentGeometry center;
   final double radius;
+  final TileMode tileMode;
+  final AlignmentGeometry? focal;
+  final double focalRadius;
   @override
   Shader createShader(Rect rect, {TextDirection? textDirection}) {
     final c = center.resolve(textDirection);
@@ -1822,7 +1963,21 @@ class DecorationImage {
     this.alignment = Alignment.center,
     this.repeat = ImageRepeat.noRepeat,
     this.opacity = 1,
+    this.onError,
+    this.colorFilter,
+    this.centerSlice,
+    this.matchTextDirection = false,
+    this.scale = 1,
+    this.filterQuality = FilterQuality.medium,
+    this.invertColors = false,
+    this.isAntiAlias = false,
   });
+  final void Function(Object exception, StackTrace? stackTrace)? onError;
+  final ColorFilter? colorFilter;
+  final Rect? centerSlice;
+  final bool matchTextDirection, invertColors, isAntiAlias;
+  final double scale;
+  final FilterQuality filterQuality;
   final ImageProvider image;
   final BoxFit? fit;
   final AlignmentGeometry alignment;
@@ -1832,8 +1987,6 @@ class DecorationImage {
 
 String decorationImageCss(DecorationImage? image) {
   if (image == null) return '';
-  if (image.opacity != 1)
-    throw UnsupportedError('Decoration image opacity is unsupported.');
   final a = image.alignment.resolve(TextDirection.ltr);
   final size = switch (image.fit) {
     BoxFit.cover => 'cover',
@@ -1849,7 +2002,12 @@ String decorationImageCss(DecorationImage? image) {
     ImageRepeat.repeatY => 'repeat-y',
     ImageRepeat.noRepeat => 'no-repeat',
   };
-  return 'background-image:${cssUrl(image.image.url)};background-size:$size;background-repeat:$repeat;background-position:${cssNumber((a.x + 1) * 50)}% ${cssNumber((a.y + 1) * 50)}%;';
+  // Opacity below one cross-fades the image with a transparent one.
+  final url = cssUrl(image.image.url);
+  final source = image.opacity >= 1
+      ? url
+      : 'cross-fade(${cssNumber(image.opacity * 100)}% $url,linear-gradient(transparent,transparent))';
+  return 'background-image:$source;background-size:$size;background-repeat:$repeat;background-position:${cssNumber((a.x + 1) * 50)}% ${cssNumber((a.y + 1) * 50)}%;';
 }
 
 abstract class Decoration {
@@ -1869,7 +2027,9 @@ class BoxDecoration extends Decoration {
     this.gradient,
     this.image,
     this.shape = BoxShape.rectangle,
+    this.backgroundBlendMode,
   });
+  final BlendMode? backgroundBlendMode;
   final DecorationImage? image;
   final Color? color;
   final BoxBorder? border;
@@ -2060,7 +2220,8 @@ String boxShadowCss(List<BoxShadow>? shadows) {
     if (!s.offset.dx.isFinite || !s.offset.dy.isFinite)
       throw ArgumentError('Invalid shadow offset.');
     if (!s.spreadRadius.isFinite) throw ArgumentError('Invalid shadow spread.');
-    return '${cssNumber(s.offset.dx)}px ${cssNumber(s.offset.dy)}px ${px(s.blurRadius)} ${cssNumber(s.spreadRadius)}px ${colorCss(s.color)}';
+    // Inner blur draws inside the box, as CSS inset shadows do.
+    return '${s.blurStyle == BlurStyle.inner ? 'inset ' : ''}${cssNumber(s.offset.dx)}px ${cssNumber(s.offset.dy)}px ${px(s.blurRadius)} ${cssNumber(s.spreadRadius)}px ${colorCss(s.color)}';
   }
 
   return 'box-shadow:${shadows.map(one).join(',')};';
@@ -2079,18 +2240,40 @@ String gradientCss(Gradient? gradient) {
           ? colorCss(gradient.colors[i])
           : '${colorCss(gradient.colors[i])} ${cssNumber(checkedDimension(stops[i]) * 100)}%',
   ].join(',');
+  final transform = gradient.transform;
+  final rotation = transform is GradientRotation
+      ? transform.radians * 180 / math.pi
+      : 0.0;
   if (gradient is LinearGradient) {
     final begin = gradient.begin.resolve(TextDirection.ltr);
     final end = gradient.end.resolve(TextDirection.ltr);
     final degrees =
-        math.atan2(end.x - begin.x, -(end.y - begin.y)) * 180 / math.pi;
-    return 'background-image:linear-gradient(${cssNumber(degrees)}deg,$colors);';
+        math.atan2(end.x - begin.x, -(end.y - begin.y)) * 180 / math.pi +
+        rotation;
+    final kind = gradient.tileMode == TileMode.repeated
+        ? 'repeating-linear-gradient'
+        : 'linear-gradient';
+    return 'background-image:$kind(${cssNumber(degrees)}deg,$colors);';
   }
   if (gradient is RadialGradient) {
     final center = gradient.center.resolve(TextDirection.ltr);
-    return 'background-image:radial-gradient(circle at ${cssNumber((center.x + 1) * 50)}% ${cssNumber((center.y + 1) * 50)}%,$colors);';
+    final kind = gradient.tileMode == TileMode.repeated
+        ? 'repeating-radial-gradient'
+        : 'radial-gradient';
+    return 'background-image:$kind(circle at ${cssNumber((center.x + 1) * 50)}% ${cssNumber((center.y + 1) * 50)}%,$colors);';
   }
-  throw UnsupportedError('Unsupported gradient type.');
+  if (gradient is SweepGradient) {
+    final center = gradient.center.resolve(TextDirection.ltr);
+    final from = gradient.startAngle * 180 / math.pi + 90 + rotation;
+    final span = (gradient.endAngle - gradient.startAngle) / (2 * math.pi);
+    // Stops map onto the swept span of the full turn.
+    final swept = [
+      for (var i = 0; i < gradient.colors.length; i++)
+        '${colorCss(gradient.colors[i])} ${cssNumber((gradient.stops?[i] ?? i / (gradient.colors.length - 1)) * span * 100)}%',
+    ].join(',');
+    return 'background-image:conic-gradient(from ${cssNumber(from)}deg at ${cssNumber((center.x + 1) * 50)}% ${cssNumber((center.y + 1) * 50)}%,$swept);';
+  }
+  return '';
 }
 
 String shapeCss(ShapeBorder? shape) {
@@ -2101,7 +2284,42 @@ String shapeCss(ShapeBorder? shape) {
   if (shape is CircleBorder) return '${border}border-radius:50%;';
   if (shape is RoundedRectangleBorder)
     return border + borderRadiusCss(shape.borderRadius);
-  throw UnsupportedError('Unsupported shape border.');
+  if (shape is OvalBorder || shape is StarBorder) {
+    return '${border}border-radius:50%;';
+  }
+  if (shape is LinearBorder) {
+    final side = shape.side;
+    return [
+      if (shape.start != null) borderSideCss('border-left', side),
+      if (shape.end != null) borderSideCss('border-right', side),
+      if (shape.top != null) borderSideCss('border-top', side),
+      if (shape.bottom != null) borderSideCss('border-bottom', side),
+    ].join();
+  }
+  // Other shapes draw as the plain box.
+  return border;
+}
+
+String _blendCss(BlendMode? mode) {
+  const css = {
+    BlendMode.multiply: 'multiply',
+    BlendMode.screen: 'screen',
+    BlendMode.overlay: 'overlay',
+    BlendMode.darken: 'darken',
+    BlendMode.lighten: 'lighten',
+    BlendMode.colorDodge: 'color-dodge',
+    BlendMode.colorBurn: 'color-burn',
+    BlendMode.hardLight: 'hard-light',
+    BlendMode.softLight: 'soft-light',
+    BlendMode.difference: 'difference',
+    BlendMode.exclusion: 'exclusion',
+    BlendMode.hue: 'hue',
+    BlendMode.saturation: 'saturation',
+    BlendMode.color: 'color',
+    BlendMode.luminosity: 'luminosity',
+  };
+  final value = css[mode];
+  return value == null ? '' : 'background-blend-mode:$value;';
 }
 
 String decorationCss(Decoration? decoration) {
@@ -2116,7 +2334,8 @@ String decorationCss(Decoration? decoration) {
         (decoration.shape == BoxShape.circle
             ? 'border-radius:50%;'
             : borderRadiusCss(decoration.borderRadius)) +
-        boxShadowCss(decoration.boxShadow);
+        boxShadowCss(decoration.boxShadow) +
+        _blendCss(decoration.backgroundBlendMode);
   }
   if (decoration is ShapeDecoration) {
     return (decoration.color == null
@@ -2126,7 +2345,8 @@ String decorationCss(Decoration? decoration) {
         shapeCss(decoration.shape) +
         boxShadowCss(decoration.shadows);
   }
-  throw UnsupportedError('Unsupported decoration type.');
+  // Custom decorations paint nothing in this runtime.
+  return '';
 }
 
 String edgeInsetsCss(String property, EdgeInsetsGeometry? insets) {

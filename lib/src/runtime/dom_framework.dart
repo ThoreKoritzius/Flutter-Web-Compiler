@@ -246,6 +246,10 @@ abstract class BuildContext {
   T? findRootAncestorStateOfType<T extends State<StatefulWidget>>();
   void visitAncestorElements(bool Function(Element element) visitor);
   void visitChildElements(void Function(Element element) visitor);
+  T? findAncestorRenderObjectOfType<T extends RenderObject>();
+  RenderObject? findRenderObject();
+  Size? get size;
+  void dispatchNotification(Notification notification);
 }
 
 abstract class Element implements BuildContext {
@@ -458,6 +462,23 @@ abstract class Element implements BuildContext {
       if (node is StatefulElement && node.state is T) return node.state as T;
     }
     return null;
+  }
+
+  @override
+  RenderObject? findRenderObject() => mounted ? RenderBox._(this) : null;
+  @override
+  void dispatchNotification(Notification notification) =>
+      notification.dispatch(this);
+  @override
+  T? findAncestorRenderObjectOfType<T extends RenderObject>() {
+    final render = _parent?.findRenderObject();
+    return render is T ? render : null;
+  }
+
+  @override
+  Size? get size {
+    final render = findRenderObject();
+    return render is RenderBox && render.hasSize ? render.size : null;
   }
 
   @override
@@ -1757,11 +1778,111 @@ class BoxConstraints {
       maxWidth = size.width,
       minHeight = 0,
       maxHeight = size.height;
+  BoxConstraints.tight(Size size)
+    : minWidth = size.width,
+      maxWidth = size.width,
+      minHeight = size.height,
+      maxHeight = size.height;
+  const BoxConstraints.tightForFinite({
+    double width = double.infinity,
+    double height = double.infinity,
+  }) : minWidth = width != double.infinity ? width : 0,
+       maxWidth = width != double.infinity ? width : double.infinity,
+       minHeight = height != double.infinity ? height : 0,
+       maxHeight = height != double.infinity ? height : double.infinity;
   final double minWidth, maxWidth, minHeight, maxHeight;
   bool get hasBoundedWidth => maxWidth < double.infinity;
   bool get hasBoundedHeight => maxHeight < double.infinity;
+  bool get hasTightWidth => minWidth >= maxWidth;
+  bool get hasTightHeight => minHeight >= maxHeight;
+  bool get isTight => hasTightWidth && hasTightHeight;
+  bool get hasInfiniteWidth => minWidth >= double.infinity;
+  bool get hasInfiniteHeight => minHeight >= double.infinity;
+  bool get isNormalized =>
+      minWidth >= 0 &&
+      minWidth <= maxWidth &&
+      minHeight >= 0 &&
+      minHeight <= maxHeight;
   Size get biggest => Size(maxWidth, maxHeight);
   Size get smallest => Size(minWidth, minHeight);
+
+  double constrainWidth([double width = double.infinity]) =>
+      width.clamp(minWidth, maxWidth).toDouble();
+  double constrainHeight([double height = double.infinity]) =>
+      height.clamp(minHeight, maxHeight).toDouble();
+  Size constrain(Size size) =>
+      Size(constrainWidth(size.width), constrainHeight(size.height));
+  bool isSatisfiedBy(Size size) =>
+      minWidth <= size.width &&
+      size.width <= maxWidth &&
+      minHeight <= size.height &&
+      size.height <= maxHeight;
+
+  BoxConstraints copyWith({
+    double? minWidth,
+    double? maxWidth,
+    double? minHeight,
+    double? maxHeight,
+  }) => BoxConstraints(
+    minWidth: minWidth ?? this.minWidth,
+    maxWidth: maxWidth ?? this.maxWidth,
+    minHeight: minHeight ?? this.minHeight,
+    maxHeight: maxHeight ?? this.maxHeight,
+  );
+  BoxConstraints loosen() =>
+      BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
+  BoxConstraints tighten({double? width, double? height}) => BoxConstraints(
+    minWidth: width == null ? minWidth : width.clamp(minWidth, maxWidth),
+    maxWidth: width == null ? maxWidth : width.clamp(minWidth, maxWidth),
+    minHeight: height == null ? minHeight : height.clamp(minHeight, maxHeight),
+    maxHeight: height == null ? maxHeight : height.clamp(minHeight, maxHeight),
+  );
+  BoxConstraints enforce(BoxConstraints constraints) => BoxConstraints(
+    minWidth: minWidth.clamp(constraints.minWidth, constraints.maxWidth),
+    maxWidth: maxWidth.clamp(constraints.minWidth, constraints.maxWidth),
+    minHeight: minHeight.clamp(constraints.minHeight, constraints.maxHeight),
+    maxHeight: maxHeight.clamp(constraints.minHeight, constraints.maxHeight),
+  );
+  BoxConstraints deflate(EdgeInsetsGeometry edges) {
+    final e = edges.resolve(TextDirection.ltr);
+    final horizontal = e.left + e.right, vertical = e.top + e.bottom;
+    return BoxConstraints(
+      minWidth: math.max(0, minWidth - horizontal),
+      maxWidth: math.max(0, maxWidth - horizontal),
+      minHeight: math.max(0, minHeight - vertical),
+      maxHeight: math.max(0, maxHeight - vertical),
+    );
+  }
+
+  BoxConstraints widthConstraints() =>
+      BoxConstraints(minWidth: minWidth, maxWidth: maxWidth);
+  BoxConstraints heightConstraints() =>
+      BoxConstraints(minHeight: minHeight, maxHeight: maxHeight);
+  BoxConstraints flipped() => BoxConstraints(
+    minWidth: minHeight,
+    maxWidth: maxHeight,
+    minHeight: minWidth,
+    maxHeight: maxWidth,
+  );
+  BoxConstraints operator *(double factor) => BoxConstraints(
+    minWidth: minWidth * factor,
+    maxWidth: maxWidth * factor,
+    minHeight: minHeight * factor,
+    maxHeight: maxHeight * factor,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is BoxConstraints &&
+      other.minWidth == minWidth &&
+      other.maxWidth == maxWidth &&
+      other.minHeight == minHeight &&
+      other.maxHeight == maxHeight;
+  @override
+  int get hashCode => Object.hash(minWidth, maxWidth, minHeight, maxHeight);
+  @override
+  String toString() =>
+      'BoxConstraints($minWidth<=w<=$maxWidth, $minHeight<=h<=$maxHeight)';
 }
 
 class LayoutBuilder extends _DomWidget {

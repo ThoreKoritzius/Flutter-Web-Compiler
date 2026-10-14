@@ -96,8 +96,18 @@ class TextSpan extends InlineSpan {
     super.style,
     this.recognizer,
     this.mouseCursor,
+    this.onEnter,
+    this.onExit,
     this.semanticsLabel,
+    this.semanticsIdentifier,
+    this.locale,
+    this.spellOut,
   });
+  final PointerEnterEventListener? onEnter;
+  final PointerExitEventListener? onExit;
+  final String? semanticsIdentifier;
+  final Locale? locale;
+  final bool? spellOut;
   final String? text;
   final List<InlineSpan>? children;
   final GestureRecognizer? recognizer;
@@ -459,10 +469,23 @@ class Icon extends _DomWidget {
     this.icon, {
     super.key,
     this.size,
+    this.fill,
+    this.weight,
+    this.grade,
+    this.opticalSize,
     this.color,
+    this.shadows,
     this.semanticLabel,
     this.textDirection,
+    this.applyTextScaling,
+    this.blendMode,
+    this.fontWeight,
   });
+  final double? fill, weight, grade, opticalSize;
+  final List<Shadow>? shadows;
+  final bool? applyTextScaling;
+  final BlendMode? blendMode;
+  final FontWeight? fontWeight;
   final IconData? icon;
   final double? size;
   final Color? color;
@@ -508,6 +531,24 @@ class Icon extends _DomWidget {
         ? family
         : 'packages/${data.fontPackage}/$family';
     out.css(fontFamilyCss(TextStyle(fontFamily: resolved)));
+    // Variable icon fonts (Material Symbols) read these axes.
+    final axes = {
+      'FILL': fill,
+      'wght': weight,
+      'GRAD': grade,
+      'opsz': opticalSize,
+    }..removeWhere((_, value) => value == null);
+    if (axes.isNotEmpty) {
+      out.css(
+        'font-variation-settings:${axes.entries.map((e) => '"${e.key}" ${cssNumber(e.value!)}').join(',')};',
+      );
+    }
+    final iconShadows = shadows;
+    if (iconShadows != null && iconShadows.isNotEmpty) {
+      out.css(
+        'text-shadow:${iconShadows.map((s) => '${cssNumber(s.offset.dx)}px ${cssNumber(s.offset.dy)}px ${cssNumber(s.blurRadius)}px ${colorCss(s.color)}').join(',')};',
+      );
+    }
     if (data.matchTextDirection && textDirection == TextDirection.rtl)
       out.css('transform:scaleX(-1);');
     out.text = String.fromCharCode(data.codePoint);
@@ -892,6 +933,8 @@ class Container extends _DomWidget {
     double? height,
     BoxConstraints? constraints,
     this.margin,
+    this.transform,
+    this.transformAlignment,
     this.clipBehavior = Clip.none,
     this.child,
   }) : constraints = (width != null || height != null)
@@ -922,6 +965,8 @@ class Container extends _DomWidget {
   final Decoration? decoration, foregroundDecoration;
   final BoxConstraints? constraints;
   final Clip clipBehavior;
+  final Matrix4? transform;
+  final AlignmentGeometry? transformAlignment;
   final Widget? child;
 
   bool get _tightWidth =>
@@ -952,21 +997,46 @@ class Container extends _DomWidget {
     out.css(decorationCss(decoration));
     out.css(edgeInsetsCss('padding', padding));
     if (clipBehavior != Clip.none) out.css('overflow:hidden;');
+    final matrix = transform;
+    if (matrix != null) {
+      final a = (transformAlignment ?? Alignment.topLeft).resolve(
+        TextDirection.ltr,
+      );
+      out.css(
+        'transform-origin:${cssNumber((a.x + 1) * 50)}% ${cssNumber((a.y + 1) * 50)}%;transform:matrix3d(${matrix.storage.map(cssNumber).join(',')});',
+      );
+    }
     if (alignment != null) {
       out.css(_alignCss(alignment!));
     } else if (child != null) {
       // A one-cell grid passes tight constraints to the child.
       out.css('display:grid;grid-template-columns:minmax(0,1fr);');
     }
-    if (foregroundDecoration != null)
-      throw UnsupportedError('Container foregroundDecoration is unsupported.');
     if (child != null) out.child(child!);
+    if (foregroundDecoration case final foreground?) {
+      // The foreground decoration paints over the content as an overlay.
+      out.css('position:relative;');
+      out.children = [
+        ...out.children,
+        _Box(
+          css:
+              'position:absolute;inset:0;pointer-events:none;${decorationCss(foreground)}',
+          fill: _Fill.none,
+        ),
+      ];
+    }
   }
 }
 
 class Opacity extends _DomWidget {
-  const Opacity({super.key, required this.opacity, this.child});
+  const Opacity({
+    super.key,
+    required this.opacity,
+    this.alwaysIncludeSemantics = false,
+    this.child,
+  });
   final double opacity;
+  final bool alwaysIncludeSemantics;
   final Widget? child;
   @override
   void _render(_DomBuilder out) {
@@ -1135,9 +1205,10 @@ class SafeArea extends StatelessWidget {
     this.right = true,
     this.bottom = true,
     this.minimum = EdgeInsets.zero,
+    this.maintainBottomViewPadding = false,
     required this.child,
   });
-  final bool left, top, right, bottom;
+  final bool left, top, right, bottom, maintainBottomViewPadding;
   final EdgeInsets minimum;
   final Widget child;
   @override
@@ -1204,11 +1275,15 @@ class Wrap extends _DomWidget {
     this.runAlignment = WrapAlignment.start,
     this.runSpacing = 0,
     this.crossAxisAlignment = WrapCrossAlignment.start,
+    this.textDirection,
+    this.verticalDirection = VerticalDirection.down,
     this.children = const [],
   });
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
   final Clip? clipBehavior;
+  final TextDirection? textDirection;
+  final VerticalDirection verticalDirection;
   final Axis direction;
   final WrapAlignment alignment, runAlignment;
   final double spacing, runSpacing;
@@ -1360,6 +1435,46 @@ class Positioned extends _DomWidget {
     required this.child,
   }) : width = null,
        height = null;
+  Positioned.fromRect({super.key, required Rect rect, required this.child})
+    : left = rect.left,
+      top = rect.top,
+      width = rect.width,
+      height = rect.height,
+      right = null,
+      bottom = null;
+  Positioned.fromRelativeRect({
+    super.key,
+    required RelativeRect rect,
+    required this.child,
+  }) : left = rect.left,
+       top = rect.top,
+       right = rect.right,
+       bottom = rect.bottom,
+       width = null,
+       height = null;
+  factory Positioned.directional({
+    Key? key,
+    required TextDirection textDirection,
+    double? start,
+    double? top,
+    double? end,
+    double? bottom,
+    double? width,
+    double? height,
+    required Widget child,
+  }) {
+    final rtl = textDirection == TextDirection.rtl;
+    return Positioned(
+      key: key,
+      left: rtl ? end : start,
+      top: top,
+      right: rtl ? start : end,
+      bottom: bottom,
+      width: width,
+      height: height,
+      child: child,
+    );
+  }
   final double? left, top, right, bottom, width, height;
   final Widget child;
   @override
@@ -1487,6 +1602,10 @@ class _NoShrink extends _DomWidget {
 
 class SingleChildScrollView extends StatelessWidget {
   const SingleChildScrollView({
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
     this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
@@ -1499,6 +1618,10 @@ class SingleChildScrollView extends StatelessWidget {
   });
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Object? dragStartBehavior;
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
+  final String? restorationId;
+  final HitTestBehavior? hitTestBehavior;
   final Clip? clipBehavior;
   final Axis scrollDirection;
   final bool reverse;
@@ -1519,6 +1642,17 @@ class SingleChildScrollView extends StatelessWidget {
 
 class ListView extends StatelessWidget {
   ListView({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.prototypeItem,
+    this.findChildIndexCallback,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
@@ -1535,6 +1669,17 @@ class ListView extends StatelessWidget {
        _itemBuilder = null,
        _separatorBuilder = null;
   ListView.builder({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.prototypeItem,
+    this.findChildIndexCallback,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
@@ -1552,6 +1697,17 @@ class ListView extends StatelessWidget {
        _itemBuilder = itemBuilder,
        _separatorBuilder = null;
   ListView.separated({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.prototypeItem,
+    this.findChildIndexCallback,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
@@ -1571,6 +1727,17 @@ class ListView extends StatelessWidget {
        _separatorBuilder = separatorBuilder;
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final double? cacheExtent;
+  final int? semanticChildCount;
+  final Object? dragStartBehavior;
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
+  final String? restorationId;
+  final HitTestBehavior? hitTestBehavior;
+  final Widget? prototypeItem;
+  final int? Function(Key key)? findChildIndexCallback;
+  final bool? addAutomaticKeepAlives;
+  final bool? addRepaintBoundaries;
+  final bool? addSemanticIndexes;
   final Clip? clipBehavior;
   final Axis scrollDirection;
   final bool reverse, shrinkWrap;
@@ -1658,6 +1825,15 @@ class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
 
 class GridView extends StatelessWidget {
   GridView({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     required this.gridDelegate,
@@ -1672,6 +1848,15 @@ class GridView extends StatelessWidget {
        _itemBuilder = null,
        _itemCount = null;
   GridView.builder({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     required this.gridDelegate,
@@ -1687,6 +1872,15 @@ class GridView extends StatelessWidget {
        _itemBuilder = itemBuilder,
        _itemCount = itemCount;
   GridView.count({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     required int crossAxisCount,
@@ -1710,6 +1904,15 @@ class GridView extends StatelessWidget {
        _itemBuilder = null,
        _itemCount = null;
   GridView.extent({
+    this.cacheExtent,
+    this.semanticChildCount,
+    this.dragStartBehavior,
+    this.keyboardDismissBehavior,
+    this.restorationId,
+    this.hitTestBehavior,
+    this.addAutomaticKeepAlives,
+    this.addRepaintBoundaries,
+    this.addSemanticIndexes,
     this.clipBehavior,
     super.key,
     required double maxCrossAxisExtent,
@@ -1734,6 +1937,15 @@ class GridView extends StatelessWidget {
        _itemCount = null;
 
   /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final double? cacheExtent;
+  final int? semanticChildCount;
+  final Object? dragStartBehavior;
+  final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
+  final String? restorationId;
+  final HitTestBehavior? hitTestBehavior;
+  final bool? addAutomaticKeepAlives;
+  final bool? addRepaintBoundaries;
+  final bool? addSemanticIndexes;
   final Clip? clipBehavior;
   final SliverGridDelegate gridDelegate;
   final EdgeInsetsGeometry? padding;
@@ -2002,22 +2214,68 @@ class GestureDetector extends _DomWidget {
   }
 }
 
+typedef PointerEnterEventListener = void Function(PointerEnterEvent event);
+typedef PointerExitEventListener = void Function(PointerExitEvent event);
+
+class PointerEnterEvent extends PointerEvent {
+  const PointerEnterEvent({
+    super.kind = PointerDeviceKind.mouse,
+    super.position,
+    super.localPosition,
+    super.timeStamp,
+  });
+}
+
+class PointerExitEvent extends PointerEvent {
+  const PointerExitEvent({
+    super.kind = PointerDeviceKind.mouse,
+    super.position,
+    super.localPosition,
+    super.timeStamp,
+  });
+}
+
 class MouseRegion extends _DomWidget {
   const MouseRegion({
     super.key,
-    this.cursor = SystemMouseCursors.basic,
     this.onEnter,
     this.onExit,
+    this.onHover,
+    this.cursor = SystemMouseCursors.basic,
+    this.opaque = true,
+    this.hitTestBehavior,
     this.child,
   });
   final MouseCursor cursor;
-  final void Function(Object event)? onEnter, onExit;
+  final PointerEnterEventListener? onEnter;
+  final PointerExitEventListener? onExit;
+  final PointerHoverEventListener? onHover;
+  final bool opaque;
+  final HitTestBehavior? hitTestBehavior;
   final Widget? child;
   @override
   void _render(_DomBuilder out) {
     if (cursor != SystemMouseCursors.basic) out.css('cursor:${cursor._css};');
-    if (onEnter != null) out.on('mouseenter', (e) => onEnter!(e ?? Object()));
-    if (onExit != null) out.on('mouseleave', (e) => onExit!(e ?? Object()));
+    (Offset, Offset) at(_Event? e) =>
+        e == null ? (Offset.zero, Offset.zero) : _pointerPositions(e);
+    if (onEnter != null) {
+      out.on('mouseenter', (e) {
+        final (global, local) = at(e);
+        onEnter!(PointerEnterEvent(position: global, localPosition: local));
+      });
+    }
+    if (onExit != null) {
+      out.on('mouseleave', (e) {
+        final (global, local) = at(e);
+        onExit!(PointerExitEvent(position: global, localPosition: local));
+      });
+    }
+    if (onHover != null) {
+      out.on('mousemove', (e) {
+        final (global, local) = at(e);
+        onHover!(PointerHoverEvent(position: global, localPosition: local));
+      });
+    }
     if (child != null) out.child(child!);
   }
 }
@@ -2025,29 +2283,173 @@ class MouseRegion extends _DomWidget {
 class Semantics extends _DomWidget {
   const Semantics({
     super.key,
-    this.label,
-    this.header,
-    this.button,
     this.container = false,
+    this.explicitChildNodes = false,
     this.excludeSemantics = false,
+    this.blockUserActions = false,
+    this.enabled,
+    this.checked,
+    this.mixed,
+    this.selected,
+    this.toggled,
+    this.button,
+    this.slider,
+    this.keyboardKey,
+    this.link,
+    this.linkUrl,
+    this.header,
+    this.headingLevel,
+    this.textField,
+    this.readOnly,
+    this.focusable,
+    this.focused,
+    this.inMutuallyExclusiveGroup,
+    this.obscured,
+    this.multiline,
+    this.scopesRoute,
+    this.namesRoute,
+    this.hidden,
+    this.image,
+    this.liveRegion,
+    this.expanded,
+    this.maxValueLength,
+    this.currentValueLength,
+    this.identifier,
+    this.label,
+    this.attributedLabel,
+    this.value,
+    this.increasedValue,
+    this.decreasedValue,
+    this.hint,
+    this.tooltip,
+    this.onTapHint,
+    this.onLongPressHint,
+    this.textDirection,
+    this.sortKey,
+    this.tagForChildren,
+    this.onTap,
+    this.onLongPress,
+    this.onScrollLeft,
+    this.onScrollRight,
+    this.onScrollUp,
+    this.onScrollDown,
+    this.onIncrease,
+    this.onDecrease,
+    this.onCopy,
+    this.onCut,
+    this.onPaste,
+    this.onDismiss,
+    this.onMoveCursorForwardByCharacter,
+    this.onMoveCursorBackwardByCharacter,
+    this.onSetSelection,
+    this.onSetText,
+    this.onDidGainAccessibilityFocus,
+    this.onDidLoseAccessibilityFocus,
+    this.onFocus,
+    this.customSemanticsActions,
+    this.role,
+    this.controlsNodes,
+    this.validationResult,
+    this.inputType,
     this.child,
   });
-  final String? label;
-  final bool? header, button;
-  final bool container, excludeSemantics;
+  final bool container, explicitChildNodes, excludeSemantics, blockUserActions;
+  final bool? enabled, checked, mixed, selected, toggled, button, slider;
+  final bool? keyboardKey, link, header, textField, readOnly, focusable;
+  final bool? focused, inMutuallyExclusiveGroup, obscured, multiline;
+  final bool? scopesRoute, namesRoute, hidden, image, liveRegion, expanded;
+  final int? maxValueLength, currentValueLength, headingLevel;
+  final Uri? linkUrl;
+  final String? identifier, label, value, increasedValue, decreasedValue;
+  final String? hint, tooltip, onTapHint, onLongPressHint;
+  final Object? attributedLabel, sortKey, tagForChildren;
+  final Object? customSemanticsActions, role, controlsNodes;
+  final Object? validationResult, inputType;
+  final TextDirection? textDirection;
+  final VoidCallback? onTap, onLongPress, onScrollLeft, onScrollRight;
+  final VoidCallback? onScrollUp, onScrollDown, onIncrease, onDecrease;
+  final VoidCallback? onCopy, onCut, onPaste, onDismiss;
+  final VoidCallback? onDidGainAccessibilityFocus, onDidLoseAccessibilityFocus;
+  final VoidCallback? onFocus;
+  final Object? onMoveCursorForwardByCharacter, onMoveCursorBackwardByCharacter;
+  final Object? onSetSelection, onSetText;
   final Widget? child;
+
+  @override
+  _Fill get _fill => _Fill.child;
+
   @override
   void _render(_DomBuilder out) {
+    final attributes = out.attributes;
     if (header == true) {
-      out.attributes['role'] = 'heading';
-      out.attributes['aria-level'] = '2';
+      attributes['role'] = 'heading';
+      attributes['aria-level'] = '${headingLevel ?? 2}';
     } else if (button == true) {
-      out.attributes['role'] = 'button';
+      attributes['role'] = 'button';
+    } else if (link == true) {
+      attributes['role'] = 'link';
+    } else if (image == true) {
+      attributes['role'] = 'img';
+    } else if (slider == true) {
+      attributes['role'] = 'slider';
+    } else if (textField == true) {
+      attributes['role'] = 'textbox';
+    } else if (toggled != null) {
+      attributes['role'] = 'switch';
+    } else if (checked != null) {
+      attributes['role'] = inMutuallyExclusiveGroup == true
+          ? 'radio'
+          : 'checkbox';
     }
-    if (label != null) out.attributes['aria-label'] = label!;
-    if (excludeSemantics) out.attributes['aria-hidden'] = 'true';
+    final description = [?label, if (value != null && label == null) value!];
+    if (description.isNotEmpty)
+      attributes['aria-label'] = description.join(' ');
+    if (value != null && slider == true) attributes['aria-valuetext'] = value!;
+    if (hint != null || tooltip != null) {
+      attributes['title'] = [?hint, ?tooltip].join(' ');
+    }
+    if (enabled == false) attributes['aria-disabled'] = 'true';
+    if (selected != null) attributes['aria-selected'] = '$selected';
+    if (checked != null) {
+      attributes['aria-checked'] = mixed == true ? 'mixed' : '$checked';
+    }
+    if (toggled != null) attributes['aria-checked'] = '$toggled';
+    if (expanded != null) attributes['aria-expanded'] = '$expanded';
+    if (readOnly == true) attributes['aria-readonly'] = 'true';
+    if (liveRegion == true) attributes['aria-live'] = 'polite';
+    if (identifier != null)
+      attributes['data-semantics-identifier'] = identifier!;
+    if (excludeSemantics || hidden == true) attributes['aria-hidden'] = 'true';
+    if (focusable == true || onTap != null) attributes['tabindex'] = '0';
+    final tap = onTap;
+    if (tap != null) {
+      out.on('click', (_) => tap());
+      out.on('keydown', (event) {
+        final key = event?.key;
+        if (key == 'Enter' || key == ' ') {
+          event?.preventDefault();
+          tap();
+        }
+      });
+    }
     if (child != null) out.child(child!);
   }
+}
+
+class BlockSemantics extends StatelessWidget {
+  const BlockSemantics({super.key, this.blocking = true, this.child});
+  final bool blocking;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => child ?? const SizedBox.shrink();
+}
+
+class IndexedSemantics extends StatelessWidget {
+  const IndexedSemantics({super.key, required this.index, this.child});
+  final int index;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => child ?? const SizedBox.shrink();
 }
 
 class ExcludeSemantics extends _DomWidget {
@@ -2739,4 +3141,94 @@ class _TableCellBox extends _DomWidget {
     if (borderLeft != null) out.css(borderSideCss('border-left', borderLeft!));
     out.child(child);
   }
+}
+
+enum ScrollViewKeyboardDismissBehavior { manual, onDrag }
+
+/// Lets the child size itself; the browser does so by default.
+class UnconstrainedBox extends _DomWidget {
+  const UnconstrainedBox({
+    super.key,
+    this.child,
+    this.textDirection,
+    this.alignment = Alignment.center,
+    this.constrainedAxis,
+    this.clipBehavior = Clip.none,
+  });
+  final Widget? child;
+  final TextDirection? textDirection;
+  final AlignmentGeometry alignment;
+  final Axis? constrainedAxis;
+  final Clip clipBehavior;
+  @override
+  _DomLayout get _layout => _DomLayout.align;
+  @override
+  _Fill get _fill => _Fill.expand;
+  @override
+  void _render(_DomBuilder out) {
+    out.css(_alignCss(alignment));
+    if (clipBehavior != Clip.none) out.css('overflow:hidden;');
+    if (child != null) {
+      out.child(
+        constrainedAxis == Axis.horizontal
+            ? child!
+            : _Box(
+                css: 'width:max-content;',
+                fill: _Fill.none,
+                children: [child!],
+              ),
+      );
+    }
+  }
+}
+
+/// A shape with elevation shadow and clipping.
+class PhysicalModel extends StatelessWidget {
+  const PhysicalModel({
+    super.key,
+    this.shape = BoxShape.rectangle,
+    this.clipBehavior = Clip.none,
+    this.borderRadius,
+    this.elevation = 0,
+    required this.color,
+    this.shadowColor = const Color(0xFF000000),
+    this.child,
+  });
+  final BoxShape shape;
+  final Clip clipBehavior;
+  final BorderRadius? borderRadius;
+  final double elevation;
+  final Color color, shadowColor;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => _Box(
+    css:
+        'box-sizing:border-box;background-color:${colorCss(color)};${shape == BoxShape.circle ? 'border-radius:50%;' : borderRadiusCss(borderRadius)}${elevationCss(elevation, shadowColor)}${clipBehavior == Clip.none ? '' : 'overflow:hidden;'}display:grid;grid-template-columns:minmax(0,1fr);',
+    layout: _DomLayout.grid,
+    fill: _Fill.child,
+    children: [?child],
+  );
+}
+
+class PhysicalShape extends StatelessWidget {
+  const PhysicalShape({
+    super.key,
+    required this.clipper,
+    this.clipBehavior = Clip.none,
+    this.elevation = 0,
+    required this.color,
+    this.shadowColor = const Color(0xFF000000),
+    this.child,
+  });
+  final CustomClipper<Path> clipper;
+  final Clip clipBehavior;
+  final double elevation;
+  final Color color, shadowColor;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) => ClipPath(
+    clipper: clipper,
+    clipBehavior: clipBehavior == Clip.none ? Clip.antiAlias : clipBehavior,
+    child: ColoredBox(color: color, child: child),
+  );
 }

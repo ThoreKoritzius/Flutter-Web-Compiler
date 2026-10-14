@@ -313,6 +313,26 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `CupertinoTabBar`/`CupertinoTabView`, `CupertinoPicker` (snapping list),
   `CupertinoDatePicker` (native date/time inputs), `CupertinoContextMenu`
   (actions on long press). No iOS page transitions or bounce physics.
+- **Framework services:** `Overlay`/`OverlayEntry`/`OverlayPortal` (every
+  `Navigator` hosts an overlay; entries render in a fixed layer above the
+  page, positioned like a `Stack`), `BuildContext.findRenderObject` and
+  `context.size` returning a `RenderBox` view of the element's DOM box
+  (`size`, `localToGlobal`/`globalToLocal`, `showOnScreen`), state
+  restoration types (`RestorationMixin`, `RestorableInt` and friends,
+  `RestorableTextEditingController`; values live for the page session),
+  `Navigator.popAndPushNamed`/`removeRoute`/`replace`/`restorablePush*`,
+  `Semantics` mapped to ARIA (roles, checked/selected/expanded, live
+  regions, `onTap` with keyboard activation), typed `MouseRegion` events
+  with `onHover`, `Container.transform`/`foregroundDecoration`,
+  `PhysicalModel`, `UnconstrainedBox`, `BoxConstraints` helpers,
+  `SweepGradient` (conic gradients), gradient rotation and repeat,
+  `BeveledRectangleBorder`/`OvalBorder`/`StarBorder`/`LinearBorder`
+  (approximated with CSS borders), inset shadows for `BlurStyle.inner`,
+  `backgroundBlendMode`, decoration image opacity via `cross-fade()`,
+  `AlignTransition`, `PositionedTransition`, `DecoratedBoxTransition`,
+  `DefaultTextStyleTransition`, `AnimatedFractionallySizedBox`,
+  `AnimatedPhysicalModel`, `AnimatedTheme`, `AnimationController.fling`,
+  and variable icon font axes (`fill`, `weight`, `grade`, `opticalSize`).
 - **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
   `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
   button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add overlays, render-box geometry queries, state restoration types, more Navigator methods, ARIA-mapped Semantics, typed MouseRegion events, Container transforms and foreground decorations, sweep gradients and more shape borders, more transitions and implicit animations, and scroll-view parameters; decorations no longer throw for unsupported shapes, gradients or image opacity.
 - Map `package:flutter/cupertino.dart` and add Cupertino apps, themes, colors, all `CupertinoIcons`, navigation bars, buttons, switches, segmented controls, dialogs, action sheets, text fields, list sections, tab scaffolds and pickers; bundle fonts and assets declared by dependency packages (such as `cupertino_icons`) as Flutter does; keep every icon the runtime draws in subset fonts.
 - Add SwitchListTile/CheckboxListTile/RadioListTile, RangeSlider, ToggleButtons, Stepper, DataTable (real `<table>` with sorting and selection), ExpansionPanelList (+radio), NavigationRail, NavigationDrawer, BottomAppBar, MaterialBanner and GridTile.
 - Add keyboard focus, shortcuts and actions, clipboard/haptics/system chrome services, asset bundles, page views, nested scroll views, animated and wheel lists, scroll notifications, dismissibles, drag and drop, interactive viewers, search delegates, general/adaptive/about dialogs, CSS-mapped clipping, filters and shader masks, memory and fade-in images, richer text styles, HSL/HSV colors, media query flags and app lifecycle events (found by probing common Flutter APIs).

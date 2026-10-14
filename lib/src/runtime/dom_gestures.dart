@@ -699,3 +699,5 @@ class Listener extends _DomWidget {
     if (child != null) out.child(child!);
   }
 }
+
+enum DragStartBehavior { down, start }

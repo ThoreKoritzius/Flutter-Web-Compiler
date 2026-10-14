@@ -1034,6 +1034,7 @@ button{font:inherit;color:inherit}
 .fd-spin{animation:fd-spin 1s linear infinite}
 @keyframes fd-spin{to{transform:rotate(360deg)}}
 .fd-cupertino-button:not(:disabled):active{opacity:var(--fd-press-opacity,0.4)}
+.fd-overlay-entry>*>*{pointer-events:auto}
 .fd-cupertino-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.fd-spin,.fd-linear-indeterminate::after{animation-duration:4s}}
 ''';
