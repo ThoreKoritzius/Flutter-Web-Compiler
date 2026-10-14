@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Replace the native runtime's full-view rendering with a keyed element tree that patches retained DOM nodes: Flutter's list reconciliation, `GlobalKey`, `InheritedWidget`/`InheritedNotifier`, per-element dirty rebuilds, `didChangeDependencies`, and preserved focus, caret and selection.
+- Add Flutter-shaped layout, painting and Material widgets (Container, Align, Stack, scroll views, grids, buttons with `ButtonStyle`, InkWell/ListTile with keyboard activation, ExpansionTile, chips, badges, progress indicators, app bars, drawers, tabs and navigation bars), full Material 3 color roles, `ColorScheme.fromSeed` via `material_color_utilities` 0.13.0, and the Material 3 type scale.
+- Add native text fields, forms, input formatters and controlled selection controls; Navigator routes with browser history and hash URLs, dialogs, bottom sheets, `PopScope` and snack bars; foundation listenables and async builders.
+- Render Material icons with Flutter's icon font and generated code points (no substitutes), copy pubspec assets and fonts, link runtime CSS instead of inlining it, and fail builds that use icons without a resolvable font.
+- Support nested Riverpod scopes, `ConsumerWidget`, `Consumer` and build-scoped `ref.listen`.
+- Add a generic synthetic records panel fixture and DOM contract tests on a shared shim that enforces real tree operations.
+
 - Add scoped native runtime themes, typed text styles, padding, flexible rows and rounded cards; verify compiled state updates and reject unsupported icon painting explicitly.
 
 - Compile the native runtime in dart2js CSP mode and document same-origin hosting for authenticated request slices.

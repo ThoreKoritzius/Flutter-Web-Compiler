@@ -81,37 +81,115 @@ The adapter tests execute an explicit replacement through dart2js, verify report
 attribution and confirm original files remain unchanged. A library adapter does
 not supply missing provider wiring, platform plugins or authentication behavior.
 
-### Bounded built-in API
+### Widget runtime
 
-`package:flutter/widgets.dart` exposes the supported core widget types with the
-same identity as the material bridge. It does not export MaterialApp, Scaffold or
-ElevatedButton. This does not add IndexedStack or other undeclared Flutter APIs.
+Widgets inflate into a retained **element tree** that follows Flutter's
+documented framework contract rather than a static template:
 
-- `runApp`, `MaterialApp(home:)`, `Scaffold(body:)`, nested `StatelessWidget`s.
-- Root and unkeyed descendant `StatefulWidget`s, optionally inside application wrappers.
-- `State.widget`, `context`, `initState`, `mounted`, synchronous `setState`
-  callbacks, `didUpdateWidget` and `dispose` on removal or replacement.
-- `Text`, `Row`, `Column`, `SizedBox` and `ElevatedButton` with the arguments
-  declared in `lib/src/runtime/flutter_dom.dart`. Buttons preserve native HTML
-  semantics. Text uses `textContent` and never parses application text as HTML.
-- Original pure-Dart helpers, repositories, model factories and asynchronous
-  control flow through the official compiler.
+- Elements reconcile by runtime type and key (`ValueKey`, `ObjectKey`,
+  `UniqueKey`, `GlobalKey`), using Flutter's top/bottom/keyed-middle list
+  algorithm. Keyed children keep their state and DOM node when reordered.
+- `setState`, inherited dependencies and listenables mark single elements
+  dirty. Dirty elements rebuild in depth order in one microtask; ancestors
+  that did not change are not rebuilt, and identical widget instances are
+  skipped.
+- Each DOM-producing element owns one DOM node and patches only changed
+  attributes, text and child order. Focus, caret position, text selection and
+  scroll position therefore survive rebuilds.
+- `State` lifecycle: `initState`, `didChangeDependencies`, `didUpdateWidget`,
+  `deactivate`/`dispose` (descendants first), `mounted` and `context`.
+  Event handlers of removed elements are inert; a failed build disposes the
+  whole mount, including partially built subtrees.
+- `InheritedWidget`, `InheritedNotifier`, `dependOnInheritedWidgetOfExactType`,
+  `findAncestorStateOfType` and `GlobalKey.currentState/currentContext`.
+  Reparenting a `GlobalKey` subtree recreates it rather than moving state.
+- `Builder`, `StatefulBuilder`, `ListenableBuilder`, `AnimatedBuilder`,
+  `ValueListenableBuilder`, `FutureBuilder` and `StreamBuilder`.
 
-Updates coalesce in a microtask and replace the root's DOM view. Detached event
-handlers become inert after the next render or disposal. Root replacement
-invalidates the mounted state before disposal. This is not retained-element
-reconciliation: updates can lose focus and native selection. Widget keys,
-controllers, general inherited context, full Flutter theme generation,
-assets and general inherited/provider widget integration are unsupported. A
-bounded root Riverpod consumer is supported as described below. CSS approximates layout.
+Text is written with `textContent` and is never parsed as HTML. Native
+`<button>`, `<input>`, `<select>`, `<label>`, `<form>` and `<nav>` elements carry
+their browser semantics; clickable regions (`InkWell`, `ListTile`) get
+`role="button"`, `tabindex="0"` and Enter/Space activation only when a callback
+is present. Reports describe this model as `keyed-element-tree-retained-dom`.
+
+### Supported widget catalogue
+
+The bridge implements a bounded subset with Flutter's public constructors.
+Undeclared classes or parameters fail official compilation; unsupported
+behaviour inside a supported widget throws `UnsupportedError` at runtime.
+
+- **Text:** `Text`, `Text.rich`/`TextSpan`/`WidgetSpan`, `RichText`,
+  `DefaultTextStyle` (`merge`), `maxLines`, `overflow`, `softWrap`,
+  `textAlign`, `TextStyle` (color, size, weight, style, spacing, height,
+  decoration, families, `FontFeature`s).
+- **Layout:** `Row`, `Column`, `Flex` (main/cross alignment, `mainAxisSize`,
+  `spacing`), `Expanded`, `Flexible`, `Spacer`, `SizedBox` variants,
+  `Padding`, `Align`, `Center`, `Container`, `DecoratedBox`, `ColoredBox`,
+  `ConstrainedBox`, `AspectRatio`, `FractionallySizedBox`, `Wrap`, `Stack`,
+  `Positioned`, `Opacity`, `Visibility`, `Offstage`, `ClipRRect`, `ClipOval`,
+  `LayoutBuilder`, `MediaQuery`, `SafeArea`, `SingleChildScrollView`,
+  `ListView` (+`builder`/`separated`), `GridView` (`count`, `extent`,
+  `builder` with fixed-count or max-extent delegates).
+- **Painting:** `BoxDecoration` (color, gradient, image, border, radius,
+  shadows, circle), `ShapeDecoration`, rounded/stadium/circle borders,
+  `LinearGradient`, `RadialGradient`, `BoxShadow`, `Alignment(Directional)`,
+  `EdgeInsets(Directional)`, `BorderRadius(Directional)`.
+- **Material:** `MaterialApp` (theme, dark theme/mode, routes, `builder`,
+  title), `Theme`, `ThemeData` (`colorScheme`, `colorSchemeSeed`,
+  `textTheme`, `fontFamily`, extensions), full Material 3 `ColorScheme`
+  roles including `ColorScheme.fromSeed` (computed with the same
+  `material_color_utilities` 0.13.0 schemes Flutter 3.41 uses), the Material 3
+  type scale, `Colors`, `Scaffold` (app bar, body, FAB, bottom bar, drawers,
+  `Scaffold.of`), `AppBar` (implied back/menu buttons, actions, `bottom`),
+  `Material`, `Card` (+`filled`/`outlined`), `ElevatedButton`, `FilledButton`
+  (+`tonal`), `OutlinedButton`, `TextButton`, `IconButton`,
+  `FloatingActionButton`, `.icon` constructors and `styleFrom`/`ButtonStyle`
+  with `WidgetStateProperty`, `InkWell`, `ListTile`, `ExpansionTile`,
+  `Divider`, `CircleAvatar`, `Chip`, `Badge`, `Tooltip`, linear/circular
+  progress indicators, `NavigationBar`, `BottomNavigationBar`, `TabBar`,
+  `TabBarView`, `DefaultTabController`, `Drawer`, `SnackBar` via
+  `ScaffoldMessenger`, `AlertDialog`, `SimpleDialog`, `Dialog`.
+- **Input:** `TextField`, `TextFormField`, `Form`/`FormField`/`FormState`
+  (validate, save, reset, autovalidate modes), `InputDecoration` (label,
+  hint, helper, error, prefix/suffix, outline/underline/none borders,
+  counters), `TextEditingController`, `FocusNode`, `FocusScope`,
+  `TextInputType`, `TextInputAction`, `TextInputFormatter`
+  (`FilteringTextInputFormatter`, `LengthLimitingTextInputFormatter`),
+  `Checkbox` (tristate), `Switch`, `Radio`, `Slider`, `DropdownButton`,
+  `DropdownButtonFormField` and `DropdownMenu` (native `<select>`; item
+  children must be `Text`).
+- **Navigation:** `Navigator` (`push`, `pushNamed` with arguments, replacement,
+  remove-until, `pop` with typed results, `maybePop`, `popUntil`),
+  `MaterialPageRoute`, `PageRouteBuilder` (no transition animation),
+  `ModalRoute.of`, `PopScope`, `NavigatorObserver`, `showDialog` and
+  `showModalBottomSheet`. Covered routes stay mounted but hidden and inert.
+  The root navigator mirrors routes into browser history using Flutter web's
+  default hash URLs (`#/details`); browser back pops routes, `PopScope`
+  vetoes are honoured, and the initial hash restores the route stack.
+- **Images:** `Image`, `Image.asset`, `Image.network` (http(s) or relative
+  URLs only), `AssetImage`, `NetworkImage`, `DecorationImage`, `BoxFit`,
+  `errorBuilder`.
+- **Icons:** `Icon`, `IconTheme`, `Icons` (all 8,825 Material constants
+  generated from Flutter 3.41.6) and `Icons.adaptive`.
+
+Not yet implemented: animations and implicit animations, `Hero`, slivers and
+`CustomScrollView`, lazy/infinite lists (`itemCount` is required; at most
+10,000 eagerly built items), long-press gestures and drag/pan, `CustomPaint`,
+`Overlay`/`OverlayEntry`, menus/popups, date and time pickers,
+`SegmentedButton`, `DataTable`, `Stepper`, localizations, Cupertino widgets,
+platform plugins and `dart:ui` imports. CSS approximates Flutter layout;
+widths that Flutter boxes expand to are propagated through wrappers so
+expanding rows and tiles fill their column, but heights remain document flow.
 
 The foundation bridge provides `kIsWeb`, release/profile/debug constants and
 `compute`. Like Flutter's web implementation, `compute` yields then executes on
 the current event loop; it creates no worker and emits no Flutter profiling
 events. `debugPrint` is a replaceable callback using synchronous console output;
 Flutter's throttling is not implemented and non-null `wrapWidth` is rejected.
-ChangeNotifier, ValueNotifier, diagnostic classes and other foundation APIs are
-not implemented and fail official compilation.
+`Listenable` (`merge`), `ChangeNotifier`, `ValueNotifier`, `ValueListenable`,
+callback typedefs (`VoidCallback`, `ValueChanged`, …) and `listEquals`/
+`setEquals`/`mapEquals` follow Flutter's semantics. Diagnostic classes and
+other foundation APIs are not implemented and fail official compilation.
 The compute contract follows the documented
 [Flutter web behavior](https://api.flutter.dev/flutter/foundation/compute.html).
 
@@ -164,19 +242,48 @@ production authentication or any inferred request behavior.
 
 ## Evidence and remaining work
 
-An automated Node DOM contract test runs actual compiled output through initial
-loading, HTTP success, two overlapping requests, stale-response suppression,
-detached callback rejection, HTTP failure and retry. Separate tests check source
-immutability, unsupported imports, unsupported widget APIs and CLI failure before
-output creation. Node tests supplement manual Chromium checks; they are not a
-cross-browser certification.
+Node DOM contract tests (`tool/browser/*.cjs` over a shared shim that enforces
+real DOM tree rules) run compiled output for: request flows with stale-response
+suppression and retry; keyed reordering, `GlobalKey` access and targeted
+disposal; inherited/listenable rebuilds that skip unchanged ancestors;
+retained DOM nodes across rebuilds; text input, formatters, controllers,
+validation, `aria-invalid`/`aria-describedby` and controlled selection
+controls; navigation with typed results, browser history, dialogs, Escape,
+`PopScope` and snack bars; nested provider scopes; tabs with arrow keys,
+navigation bars, drawers and expansion tiles; and the generic
+[records panel fixture](../examples/records_panel/README.md) (state retention
+across parent rebuilds and resizes, input updates, disposal, stale callbacks,
+Enter/Space activation, breakpoints, icons). Separate tests check source
+immutability, unsupported imports and CLI failure before output creation.
 
-Before using a real provider-driven application, address retained-view
-reconciliation, lifecycle/subscription cleanup, supported package boundaries and
-authenticated browser transport. The source graph still needs package extraction
-support. Evaluate Jaspr as the component backend against
-these same fixtures before extending this minimal compatibility layer broadly.
+These tests are not a cross-browser certification: real-browser layout,
+painting and focus behaviour still need Chromium/Firefox/WebKit checks, and
+parity checks against the same source running under Flutter. Evaluate Jaspr as
+an alternative component backend against these fixtures before broad adoption.
 The [logic architecture](LOGIC_RUNTIME.md) describes production release gates.
+
+## Assets, fonts and icons
+
+`writeNativeApp` (used by the CLI) emits `index.html`, `app.js`, `app.css`
+and copied assets. Runtime interaction styles live in the linked `app.css`,
+so the host page has no inline `<style>`; element style attributes still need
+`style-src-attr 'unsafe-inline'` (see [hosting](NATIVE_HOSTING.md)).
+
+- `flutter: assets:` entries (files and directories, as in Flutter) are copied
+  to `assets/<key>`, the URL layout Flutter web uses for `Image.asset`.
+- `flutter: fonts:` families are copied and declared with `@font-face`
+  (weight and style are preserved).
+- Material icons render as glyphs of Flutter's own `MaterialIcons-Regular.otf`
+  using the code points from Flutter's `icons.dart`; there are no emoji or
+  substitute glyphs. The font is taken from `--material-icons-font`,
+  `FLUTTER_ROOT` or the Flutter SDK on `PATH`
+  (`bin/cache/artifacts/material_fonts`). When compiled code still references
+  icon metadata and no font is found, the CLI fails before writing output.
+  The full font (about 1.6 MB) is shipped because no subsetter is bundled;
+  browsers download it only when an icon is first rendered.
+
+Regenerate icon and color metadata with
+`dart run tool/generate_material_metadata.dart <flutter-checkout>`.
 
 ## Executable GraphQL boundary
 
@@ -205,61 +312,35 @@ are experimental primitives, not evidence of production authentication parity.
 
 ## Visual metadata dependencies
 
-The runtime accepts `@immutable`, legacy integer ARGB `Color` values, `IconData`
-metadata, a bounded set of rounded Material icon constants, and abstract
-`ThemeExtension` declarations. This lets repository/model dependency graphs
-include visual registries without replacing their business logic. Annotation
-exports resolve to the compiler's official `meta` package even when the input
-project has no package configuration.
+The runtime accepts `@immutable`, legacy integer ARGB `Color` values with
+`withValues(alpha:)`, `IconData`, `ThemeExtension` declarations and
+`ThemeData.extension<T>()` (null when not registered). `Color.lerp` and
+`ThemeExtension.lerp` interpolation still throw `UnsupportedError`; floating
+point color spaces are outside this subset. Annotation exports resolve to the
+compiler's official `meta` package even without an input package config.
 
-The bounded runtime now carries explicit `ThemeData` through `MaterialApp`,
-`Theme` and descendant stateless builds. Root `State.context` receives the same
-theme during initialization and subsequent builds. `ThemeData.extension<T>()`
-returns a registered extension or null; it does not synthesize one.
+## Riverpod
 
-Supported styling includes declared `TextStyle` fields, a small `TextTheme` and
-`ColorScheme`, `Padding`/`EdgeInsets`, `Expanded` inside a Row or Column, and
-`Card` with rounded borders and an explicit color. Text, spacing and borders
-become CSS; implicit runtime gaps no longer alter Flutter-authored layouts.
-Dimensions must be finite and nonnegative. This is a CSS layout approximation,
-not Flutter constraint/layout parity. Generated Material color schemes, full
-application themes, elevation, icon painting and general decorations remain
-unsupported. Icons fail explicitly if rendered. `Color.withValues(alpha:)`
-supports bounded sRGB alpha; `Color.lerp` still throws `UnsupportedError`.
-No icon font is loaded or rendered. Color
-values preserve the low 32 bits and expose integer ARGB channels; floating-point
-color spaces and general Flutter Color methods are outside this subset. The
-supported icon constants are listed in
-`lib/src/runtime/material_icons_metadata.dart`, with source attribution in
-`THIRD_PARTY_NOTICES.md`.
-
-## Root Riverpod consumers
-
-The target maps `package:flutter_riverpod/flutter_riverpod.dart` to a small
-widget bridge backed by the **official pure-Dart Riverpod 2.6.1 engine**, not a
-replacement provider evaluator. Existing `Provider`, `StateProvider`,
-`FutureProvider` and dependency callbacks execute in its `ProviderContainer`.
+`package:flutter_riverpod/flutter_riverpod.dart` maps to widget bindings backed
+by the **official pure-Dart Riverpod 2.6.1 engine**; providers always execute
+in Riverpod's own `ProviderContainer`.
 See [Riverpod's container architecture](https://riverpod.dev/docs/concepts2/containers).
 
-Supported widget boundary:
+- `ProviderScope` (`overrides`, `observers`, `parent`) anywhere in the tree;
+  nested scopes create child containers, so overrides apply to their subtree.
+  `UncontrolledProviderScope` and `ProviderScope.containerOf`.
+- `ConsumerWidget`, `Consumer`, `ConsumerStatefulWidget`/`ConsumerState` at
+  any depth.
+- `WidgetRef.watch` and `listen` during build (subscriptions not renewed in a
+  build are closed), `read`, `listenManual`, `invalidate`, `refresh`, `exists`.
+  Disposal closes all subscriptions before the owning container is disposed.
 
-- One root `ProviderScope(child:, overrides:)` around the stateful entry, with
-  optional `MaterialApp`/`Scaffold` wrappers.
-- `ConsumerStatefulWidget` and `ConsumerState`, attached before `initState`.
-- `ref.read` in lifecycle/request callbacks and `ref.watch` during `build`.
-- Watched subscriptions trigger coalesced native renders, persist across builds,
-  and close when no longer watched. Root disposal closes subscriptions and the
-  owned container, independently of an application's call to `super.dispose`.
-
-Nested scopes/consumers, `ConsumerWidget`, widget-ref listen/refresh/invalidate,
-Flutter inherited context, generated Flutter-dependent provider packages and
-Riverpod 3.x compatibility are not implemented. Missing/incompatible engine
-versions fail before compilation. Projects with a package configuration must
-provide `riverpod` 2.6.1; fixtures without one use the compiler's configuration.
-The report attributes this as `providerIntegration: bounded-root-riverpod-2.6.1`
-only when the Flutter Riverpod import is mapped. Root view updates still replace
-DOM and can lose focus. None of this automatically adapts an application's
-authentication or networking dependencies.
+`ChangeNotifierProvider` (it needs Flutter's `ChangeNotifier` inside Riverpod),
+hooks and Riverpod 3.x are not supported. Missing or incompatible engine
+versions fail before compilation; projects with a package configuration must
+provide `riverpod` 2.6.1. Reports state
+`providerIntegration: riverpod-2.6.1-element-scopes` when the import is mapped.
+None of this adapts an application's authentication or networking.
 
 ## Explicit package boundaries and compile-time configuration
 
@@ -317,28 +398,11 @@ Selections cannot overlap adapters or point outside the project; unreachable ent
 fail. Parts, extensions, unnamed declarations and conditional imports are rejected
 because their dependencies need resolved library analysis.
 
-`LayoutBuilder` measures its attached DOM container's `clientWidth`; `Wrap` uses
-CSS flex wrapping and source-defined gaps. `SizedBox` retains explicit widths.
-Viewport resize rebuilds the root; disposal removes its listener. `MediaQuery.sizeOf`
-reads the browser viewport. Only horizontal constraints are supported; vertical
-constraints remain unbounded. Element-only resizing, intrinsic Flutter layout,
-slivers and nested consumer scopes are still unsupported. The native host has no demo frame,
-heading or card; application source supplies its own layout and theme.
-
-
-### Unkeyed descendant state
-
-Nested plain `StatefulWidget`s now retain state at their structural position when
-all ancestor widget types remain the same. They receive `initState` once,
-`didUpdateWidget` when a new widget instance occupies that position, refreshed
-context, and `dispose` on removal or replacement. Children created inside an
-attached `LayoutBuilder` participate in the same lifecycle. Removed descendants
-are disposed before their parents; stale DOM event callbacks cannot update them.
-
-This is bounded state retention, not Flutter element-tree parity: keys and list
-reordering identities, nested consumer/provider scopes, inherited dependency
-notifications and `didChangeDependencies` remain unsupported. Every rebuild still
-replaces DOM nodes, so input focus and selection are not retained. Child `setState`
-currently schedules a full-root rebuild. Build failures dispose the mount and its
-provider scope rather than leaving partially active state behind. Reports describe
-this as `unkeyed-structural-state-replace-view`.
+`LayoutBuilder` measures its attached DOM container's `clientWidth` after the
+build pass and rebuilds only when the measured width changes or its builder's
+dependencies change; nested builders are measured in depth order. `MediaQuery`
+is an inherited viewport snapshot (size, platform brightness): resize and
+color-scheme changes rebuild only dependents. A resize listener exists only
+while layout builders or media dependents are mounted. Only horizontal
+constraints are measured; vertical constraints remain unbounded document
+flow. The host page supplies no frame; application source supplies its layout.
