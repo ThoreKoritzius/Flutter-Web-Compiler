@@ -70,3 +70,4 @@ part 'dom_localizations.dart';
 part 'dom_flutter_localizations.dart';
 part 'dom_material_more.dart';
 part 'dom_gestures.dart';
+part 'dom_slivers.dart';

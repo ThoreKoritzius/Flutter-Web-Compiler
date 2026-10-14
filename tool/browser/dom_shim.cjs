@@ -20,6 +20,12 @@ class Element {
     this.children = [];
     this._text = String(value);
   }
+  get parentElement() { return this.parent; }
+  get previousElementSibling() {
+    const siblings = this.parent?.children ?? [];
+    return siblings[siblings.indexOf(this) - 1] ?? null;
+  }
+  get lastElementChild() { return this.children[this.children.length - 1] ?? null; }
   _detach(node) {
     if (!node.parent) return;
     const siblings = node.parent.children;

@@ -459,6 +459,7 @@ class KeyedSubtree extends StatelessWidget {
 
 class ExpansionTile extends StatefulWidget {
   const ExpansionTile({
+    this.clipBehavior,
     super.key,
     required this.title,
     this.subtitle,
@@ -474,6 +475,9 @@ class ExpansionTile extends StatefulWidget {
     this.tilePadding,
     this.maintainState = false,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget title;
   final Widget? subtitle, leading, trailing;
   final List<Widget> children;

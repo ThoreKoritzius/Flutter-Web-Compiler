@@ -1092,7 +1092,26 @@ class IconButton extends StatelessWidget {
     this.isSelected,
     this.selectedIcon,
     this.constraints,
+    this.visualDensity,
+    this.alignment,
+    this.splashRadius,
+    this.focusColor,
+    this.hoverColor,
+    this.highlightColor,
+    this.splashColor,
+    this.mouseCursor,
+    this.focusNode,
+    this.autofocus = false,
+    this.enableFeedback,
   });
+  final VisualDensity? visualDensity;
+  final AlignmentGeometry? alignment;
+  final double? splashRadius;
+  final Color? focusColor, hoverColor, highlightColor, splashColor;
+  final MouseCursor? mouseCursor;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final bool? enableFeedback;
   final VoidCallback? onPressed;
   final Widget icon;
   final Widget? selectedIcon;
@@ -1118,7 +1137,13 @@ class IconButton extends StatelessWidget {
         iconColor: WidgetStatePropertyAll(foreground),
         iconSize: WidgetStatePropertyAll(iconSize ?? 24),
         padding: WidgetStatePropertyAll(padding ?? const EdgeInsets.all(8)),
-        minimumSize: const WidgetStatePropertyAll(Size(40, 40)),
+        // Density shrinks the 40px target by 4px per step, as in Flutter.
+        minimumSize: WidgetStatePropertyAll(
+          Size(
+            40 + 4 * (visualDensity?.horizontal ?? 0).clamp(-4, 0),
+            40 + 4 * (visualDensity?.vertical ?? 0).clamp(-4, 0),
+          ),
+        ),
         shape: const WidgetStatePropertyAll(CircleBorder()),
       ).merge(style),
       child: selected && selectedIcon != null ? selectedIcon! : icon,
@@ -1139,6 +1164,7 @@ class _IconButton extends ButtonStyleButton {
 
 class FloatingActionButton extends StatelessWidget {
   const FloatingActionButton({
+    this.clipBehavior,
     super.key,
     required this.onPressed,
     this.child,
@@ -1151,6 +1177,7 @@ class FloatingActionButton extends StatelessWidget {
     this.heroTag,
   }) : _label = null;
   const FloatingActionButton.extended({
+    this.clipBehavior,
     super.key,
     required this.onPressed,
     required Widget label,
@@ -1164,6 +1191,9 @@ class FloatingActionButton extends StatelessWidget {
   }) : _label = label,
        child = icon,
        mini = false;
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final VoidCallback? onPressed;
   final Widget? child;
   final Widget? _label;
@@ -1525,6 +1555,7 @@ class CircleAvatar extends StatelessWidget {
 
 class Chip extends StatelessWidget {
   const Chip({
+    this.clipBehavior,
     super.key,
     required this.label,
     this.avatar,
@@ -1537,6 +1568,9 @@ class Chip extends StatelessWidget {
     this.deleteIcon,
     this.deleteButtonTooltipMessage,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget label;
   final Widget? avatar, deleteIcon;
   final TextStyle? labelStyle;
@@ -1658,11 +1692,18 @@ class LinearProgressIndicator extends StatelessWidget {
     this.value,
     this.backgroundColor,
     this.color,
+    this.valueColor,
     this.minHeight,
     this.borderRadius,
     this.semanticsLabel,
     this.semanticsValue,
+    this.stopIndicatorColor,
+    this.stopIndicatorRadius,
+    this.trackGap,
   });
+  final Animation<Color?>? valueColor;
+  final Color? stopIndicatorColor;
+  final double? stopIndicatorRadius, trackGap;
   final double? value;
   final Color? backgroundColor, color;
   final double? minHeight;
@@ -1675,7 +1716,7 @@ class LinearProgressIndicator extends StatelessWidget {
     if (v != null && !v.isFinite)
       throw ArgumentError('Progress values must be finite.');
     final clamped = v?.clamp(0.0, 1.0);
-    final indicator = colorCss(color ?? scheme.primary);
+    final indicator = colorCss(color ?? valueColor?.value ?? scheme.primary);
     return _Box(
       css:
           'position:relative;overflow:hidden;box-sizing:border-box;height:${px(minHeight ?? 4)};background-color:${colorCss(backgroundColor ?? scheme.secondaryContainer)};${borderRadiusCss(borderRadius)}--fd-indicator:$indicator;',
@@ -1707,21 +1748,40 @@ class CircularProgressIndicator extends StatelessWidget {
     this.value,
     this.backgroundColor,
     this.color,
+    this.valueColor,
     this.strokeWidth = 4,
+    this.strokeAlign = 0,
+    this.strokeCap,
     this.semanticsLabel,
+    this.semanticsValue,
+    this.constraints,
+    this.trackGap,
+    this.padding,
   });
   const CircularProgressIndicator.adaptive({
     super.key,
     this.value,
     this.backgroundColor,
     this.color,
+    this.valueColor,
     this.strokeWidth = 4,
+    this.strokeAlign = 0,
+    this.strokeCap,
     this.semanticsLabel,
+    this.semanticsValue,
+    this.constraints,
+    this.trackGap,
+    this.padding,
   });
   final double? value;
   final Color? backgroundColor, color;
-  final double strokeWidth;
-  final String? semanticsLabel;
+  final double strokeWidth, strokeAlign;
+  final Animation<Color?>? valueColor;
+  final StrokeCap? strokeCap;
+  final String? semanticsLabel, semanticsValue;
+  final BoxConstraints? constraints;
+  final double? trackGap;
+  final EdgeInsetsGeometry? padding;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1729,7 +1789,7 @@ class CircularProgressIndicator extends StatelessWidget {
     if (v != null && !v.isFinite)
       throw ArgumentError('Progress values must be finite.');
     final clamped = v?.clamp(0.0, 1.0);
-    final indicator = colorCss(color ?? scheme.primary);
+    final indicator = colorCss(color ?? valueColor?.value ?? scheme.primary);
     final track = backgroundColor == null
         ? 'transparent'
         : colorCss(backgroundColor!);
@@ -1788,7 +1848,37 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
     this.toolbarHeight,
     this.titleTextStyle,
     this.bottom,
+    this.flexibleSpace,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.scrolledUnderElevation,
+    this.notificationPredicate,
+    this.shape,
+    this.iconTheme,
+    this.actionsIconTheme,
+    this.primary = true,
+    this.excludeHeaderSemantics = false,
+    this.toolbarOpacity = 1,
+    this.bottomOpacity = 1,
+    this.leadingWidth,
+    this.toolbarTextStyle,
+    this.systemOverlayStyle,
+    this.forceMaterialTransparency = false,
+    this.clipBehavior,
+    this.actionsPadding,
   });
+  final Widget? flexibleSpace;
+  final Color? shadowColor, surfaceTintColor;
+  final double? scrolledUnderElevation, leadingWidth;
+  final bool Function(Object notification)? notificationPredicate;
+  final ShapeBorder? shape;
+  final IconThemeData? iconTheme, actionsIconTheme;
+  final bool primary, excludeHeaderSemantics, forceMaterialTransparency;
+  final double toolbarOpacity, bottomOpacity;
+  final TextStyle? toolbarTextStyle;
+  final Object? systemOverlayStyle;
+  final Clip? clipBehavior;
+  final EdgeInsetsGeometry? actionsPadding;
   final Widget? leading, title;
   final bool automaticallyImplyLeading;
   final List<Widget>? actions;
@@ -1798,7 +1888,10 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
   final TextStyle? titleTextStyle;
   final PreferredSizeWidget? bottom;
   @override
-  Size get preferredSize => Size(double.infinity, toolbarHeight ?? 64);
+  Size get preferredSize => Size(
+    double.infinity,
+    (toolbarHeight ?? 64) + (bottom?.preferredSize.height ?? 0),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1820,14 +1913,31 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
       }
     }
     final toolbar = _toolbar(context, theme, scheme, foreground, leadingWidget);
-    if (bottom == null) return toolbar;
+    if (bottom == null && flexibleSpace == null) return toolbar;
+    final bars = _Box(
+      css:
+          'grid-area:1/1;position:relative;display:flex;flex-direction:column;min-width:0;',
+      layout: _DomLayout.column,
+      fill: _Fill.expand,
+      children: [toolbar, ?bottom],
+    );
+    // The flexible space paints behind the toolbar and bottom, as in Flutter.
     return _Box(
       tag: 'header',
       css:
-          'position:sticky;top:0;z-index:2;display:flex;flex-direction:column;background-color:${colorCss(backgroundColor ?? scheme.surface)};',
-      layout: _DomLayout.column,
+          'position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(0,1fr);background-color:${colorCss(backgroundColor ?? scheme.surface)};${elevationCss(elevation ?? 0, scheme.shadow)}',
+      layout: _DomLayout.grid,
       fill: _Fill.expand,
-      children: [toolbar, bottom!],
+      children: [
+        if (flexibleSpace != null)
+          _Box(
+            css: 'grid-area:1/1;display:grid;min-height:0;overflow:hidden;',
+            layout: _DomLayout.grid,
+            fill: _Fill.expand,
+            children: [flexibleSpace!],
+          ),
+        bars,
+      ],
     );
   }
 
@@ -1839,9 +1949,10 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
     Widget? leadingWidget,
   ) {
     return _Box(
-      tag: bottom == null ? 'header' : 'div',
-      css:
-          '${bottom == null ? 'position:sticky;top:0;z-index:2;' : ''}display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(toolbarHeight ?? 64)};padding:0 4px;gap:${px(titleSpacing ?? 16)};background-color:${colorCss(backgroundColor ?? scheme.surface)};color:${colorCss(foreground)};${elevationCss(elevation ?? 0, scheme.shadow)}',
+      tag: bottom == null && flexibleSpace == null ? 'header' : 'div',
+      css: bottom == null && flexibleSpace == null
+          ? 'position:sticky;top:0;z-index:2;display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(toolbarHeight ?? 64)};padding:0 4px;gap:${px(titleSpacing ?? 16)};background-color:${colorCss(backgroundColor ?? scheme.surface)};color:${colorCss(foreground)};${elevationCss(elevation ?? 0, scheme.shadow)}'
+          : 'display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(toolbarHeight ?? 64)};padding:0 4px;gap:${px(titleSpacing ?? 16)};color:${colorCss(foreground)};',
       layout: _DomLayout.row,
       fill: _Fill.expand,
       children: [
@@ -1953,6 +2064,8 @@ class _ScaffoldBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Pinned slivers in the body stick below the (sticky) app bar.
+    final appBarHeight = scaffold.appBar?.preferredSize.height ?? 0.0;
     return _Box(
       css:
           'display:flex;flex-direction:column;box-sizing:border-box;min-height:100vh;min-width:0;background-color:${colorCss(scaffold.backgroundColor ?? theme.scaffoldBackgroundColor)};',
@@ -1963,7 +2076,7 @@ class _ScaffoldBody extends StatelessWidget {
         _Box(
           tag: 'main',
           css:
-              'flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;',
+              'flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;${appBarHeight > 0 ? '--fd-sticky-top:${px(appBarHeight)};' : ''}',
           layout: _DomLayout.grid,
           fill: _Fill.expand,
           children: [?scaffold.body],
@@ -2031,6 +2144,7 @@ class SnackBarAction extends StatelessWidget {
 
 class SnackBar extends StatelessWidget {
   const SnackBar({
+    this.clipBehavior,
     super.key,
     required this.content,
     this.action,
@@ -2042,6 +2156,9 @@ class SnackBar extends StatelessWidget {
     this.margin,
     this.padding,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Widget content;
   final SnackBarAction? action;
   final Color? backgroundColor;

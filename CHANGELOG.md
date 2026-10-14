@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `CustomScrollView` and slivers (lists, grids, padding, fill, layout builder), sticky `SliverPersistentHeader`/`SliverAppBar` with `FlexibleSpaceBar`, a real `ScrollController`/`ScrollPosition` that follows the page or a bounded scroller, `RefreshIndicator`, `DraggableScrollableSheet` and `ReorderableListView`.
+- Add Riverpod `ChangeNotifierProvider` (+`autoDispose`/`family`), `TargetPlatform`/`defaultTargetPlatform` from the user agent, `debugPrintStack`, `PaintingBinding.imageCache`, `IgnorePointer`/`AbsorbPointer`, `DropdownButtonHideUnderline` (the default dropdown underline now shows as in Flutter), and missing parameters on progress indicators, `IconButton`, `AppBar`, sheets, dialogs, popup menus (`position`), fl_chart tooltips (`tooltipRoundedRadius`) and `clipBehavior` on common widgets.
 - Map `package:flutter_map` to a built-in slippy map (tiles, polylines, polygons, circles, markers, attribution, controller and events; drag, wheel and double-tap zoom) using the app's `latlong2`; map `package:flutter/rendering.dart` and add `Listener` with pointer and scroll events.
 - Compile third-party packages that reach Flutter against the runtime by rewriting their imports in the build graph (pure-Dart packages keep their identity); report them as `rewrittenPackages`. Map `package:url_launcher/link.dart`.
 - Add `GestureDetector` tap details with local positions, long presses (also on `InkWell`, `ListTile` and buttons), and pan/horizontal/vertical drags from pointer events.

@@ -438,6 +438,7 @@ String _crossCss(CrossAxisAlignment alignment) => switch (alignment) {
 
 class Flex extends _DomWidget {
   const Flex({
+    this.clipBehavior,
     super.key,
     required this.direction,
     this.mainAxisAlignment = MainAxisAlignment.start,
@@ -449,6 +450,9 @@ class Flex extends _DomWidget {
     this.spacing = 0,
     this.children = const [],
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Axis direction;
   final MainAxisAlignment mainAxisAlignment;
   final MainAxisSize mainAxisSize;
@@ -1065,6 +1069,7 @@ enum WrapCrossAlignment { start, end, center }
 
 class Wrap extends _DomWidget {
   const Wrap({
+    this.clipBehavior,
     super.key,
     this.direction = Axis.horizontal,
     this.alignment = WrapAlignment.start,
@@ -1074,6 +1079,9 @@ class Wrap extends _DomWidget {
     this.crossAxisAlignment = WrapCrossAlignment.start,
     this.children = const [],
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Axis direction;
   final WrapAlignment alignment, runAlignment;
   final double spacing, runSpacing;
@@ -1253,11 +1261,6 @@ class Positioned extends _DomWidget {
 // slivers are not modeled. Vertical scroll views grow with the document
 // unless an ancestor bounds their height.
 
-class ScrollController extends ChangeNotifier {
-  ScrollController({this.initialScrollOffset = 0});
-  final double initialScrollOffset;
-}
-
 class ScrollPhysics {
   const ScrollPhysics();
 }
@@ -1286,10 +1289,15 @@ class _ScrollList extends _DomWidget {
     required this.padding,
     required this.scrolls,
     required this.children,
+    this.overflowVisible = false,
   });
   final Axis axis;
   final EdgeInsetsGeometry? padding;
   final bool scrolls;
+
+  /// The page scrolls instead (no ancestor bounds this view), so pinned
+  /// descendants stick to the viewport.
+  final bool overflowVisible;
   final List<Widget> children;
   @override
   _DomLayout get _layout =>
@@ -1302,7 +1310,7 @@ class _ScrollList extends _DomWidget {
     out.css(
       'display:flex;flex-direction:${vertical ? 'column' : 'row'};align-items:stretch;box-sizing:border-box;min-width:0;min-height:0;',
     );
-    if (scrolls)
+    if (scrolls && !overflowVisible)
       out.css(
         vertical ? 'overflow-y:auto;' : 'overflow-x:auto;overflow-y:hidden;',
       );
@@ -1330,6 +1338,7 @@ class _NoShrink extends _DomWidget {
 
 class SingleChildScrollView extends StatelessWidget {
   const SingleChildScrollView({
+    this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
     this.reverse = false,
@@ -1339,6 +1348,9 @@ class SingleChildScrollView extends StatelessWidget {
     this.controller,
     this.child,
   });
+
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Axis scrollDirection;
   final bool reverse;
   final EdgeInsetsGeometry? padding;
@@ -1347,16 +1359,18 @@ class SingleChildScrollView extends StatelessWidget {
   final ScrollController? controller;
   final Widget? child;
   @override
-  Widget build(BuildContext context) => _ScrollList(
+  Widget build(BuildContext context) => _Scrollable(
     axis: scrollDirection,
     padding: padding,
     scrolls: physics is! NeverScrollableScrollPhysics,
+    controller: controller,
     children: [?child],
   );
 }
 
 class ListView extends StatelessWidget {
   ListView({
+    this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
     this.reverse = false,
@@ -1372,6 +1386,7 @@ class ListView extends StatelessWidget {
        _itemBuilder = null,
        _separatorBuilder = null;
   ListView.builder({
+    this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
     this.reverse = false,
@@ -1388,6 +1403,7 @@ class ListView extends StatelessWidget {
        _itemBuilder = itemBuilder,
        _separatorBuilder = null;
   ListView.separated({
+    this.clipBehavior,
     super.key,
     this.scrollDirection = Axis.vertical,
     this.reverse = false,
@@ -1405,6 +1421,8 @@ class ListView extends StatelessWidget {
        _itemBuilder = itemBuilder,
        _separatorBuilder = separatorBuilder;
 
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final Axis scrollDirection;
   final bool reverse, shrinkWrap;
   final ScrollController? controller;
@@ -1448,11 +1466,12 @@ class ListView extends StatelessWidget {
           ),
       ];
     }
-    if (reverse) items = items.reversed.toList();
-    return _ScrollList(
+    return _Scrollable(
       axis: scrollDirection,
       padding: padding,
       scrolls: physics is! NeverScrollableScrollPhysics,
+      controller: controller,
+      reverse: reverse,
       children: items,
     );
   }
@@ -1490,6 +1509,7 @@ class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
 
 class GridView extends StatelessWidget {
   GridView({
+    this.clipBehavior,
     super.key,
     required this.gridDelegate,
     this.padding,
@@ -1503,6 +1523,7 @@ class GridView extends StatelessWidget {
        _itemBuilder = null,
        _itemCount = null;
   GridView.builder({
+    this.clipBehavior,
     super.key,
     required this.gridDelegate,
     this.padding,
@@ -1517,6 +1538,7 @@ class GridView extends StatelessWidget {
        _itemBuilder = itemBuilder,
        _itemCount = itemCount;
   GridView.count({
+    this.clipBehavior,
     super.key,
     required int crossAxisCount,
     double mainAxisSpacing = 0,
@@ -1539,6 +1561,7 @@ class GridView extends StatelessWidget {
        _itemBuilder = null,
        _itemCount = null;
   GridView.extent({
+    this.clipBehavior,
     super.key,
     required double maxCrossAxisExtent,
     double mainAxisSpacing = 0,
@@ -1561,6 +1584,8 @@ class GridView extends StatelessWidget {
        _itemBuilder = null,
        _itemCount = null;
 
+  /// Accepted for API compatibility; shaped boxes clip through CSS.
+  final Clip? clipBehavior;
   final SliverGridDelegate gridDelegate;
   final EdgeInsetsGeometry? padding;
   final bool shrinkWrap;
@@ -1897,6 +1922,27 @@ class MergeSemantics extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Images. The browser fetches and decodes; asset keys map to `assets/<key>`,
 // which the native build copies from the pubspec asset list.
+
+/// Flutter's decoded-image cache. Browsers cache network and asset images
+/// themselves, so the counters stay at zero and clearing is a no-op.
+class ImageCache {
+  int maximumSize = 1000;
+  int maximumSizeBytes = 100 << 20;
+  int get currentSize => 0;
+  int get currentSizeBytes => 0;
+  int get liveImageCount => 0;
+  int get pendingImageCount => 0;
+  void clear() {}
+  void clearLiveImages() {}
+  bool evict(Object key, {bool includeLive = true}) => false;
+  bool containsKey(Object key) => false;
+}
+
+class PaintingBinding {
+  PaintingBinding._();
+  static final instance = PaintingBinding._();
+  final imageCache = ImageCache();
+}
 
 typedef ImageErrorWidgetBuilder =
     Widget Function(BuildContext context, Object error, StackTrace? stackTrace);

@@ -178,6 +178,31 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `onTap`, so keyboard activation is unchanged; a long press or drag
   swallows the following click. Drag detectors set `touch-action` so the
   browser scrolls along the free axis only.
+- **Scrolling and slivers:** `CustomScrollView` with `SliverToBoxAdapter`,
+  `SliverPadding`, `SliverList` (delegate, `builder`, `separated`, `list`),
+  `SliverFixedExtentList`, `SliverGrid` (`count`, `extent`, `builder`),
+  `SliverFillRemaining`, `SliverFillViewport`, `SliverLayoutBuilder`,
+  `SliverMainAxisGroup`, `SliverOpacity`/`SliverVisibility`/
+  `SliverIgnorePointer`/`SliverSafeArea`/`DecoratedSliver`;
+  `SliverPersistentHeader` (pinned headers stick via CSS `position:sticky`
+  below the Scaffold app bar; the delegate rebuilds with the real
+  `shrinkOffset`, and the header keeps its maximum extent in the flow so
+  content scrolls one-to-one); `SliverAppBar` (pinned, expanded height,
+  `flexibleSpace` with `FlexibleSpaceBar` title scaling and background fade)
+  and `AppBar.flexibleSpace`. A vertical scroll view scrolls itself only when
+  an ancestor bounds its height; otherwise it grows and the page scrolls, as
+  a document does. Each view measures which applies after layout.
+  `ScrollController` (`hasClients`, `offset`, `position` with pixels/extents/
+  `atEdge`/direction/`isScrollingNotifier`, `jumpTo`, `animateTo` with the
+  browser's smooth scrolling, listeners, `initialScrollOffset`) follows
+  whichever element scrolls. `RefreshIndicator` refreshes on touch pulls at
+  the top and through `RefreshIndicatorState.show`; `DraggableScrollableSheet`
+  sizes itself from the viewport and resizes through its controller (not by
+  dragging); `ReorderableListView` (+`builder`, default drag handles,
+  `ReorderableDragStartListener`, `ReorderableDelayedDragStartListener`)
+  reorders by pointer drag with Flutter's `onReorder` index semantics.
+  Slivers build eagerly (at most 10,000 children); `floating`/`snap` headers
+  behave like unpinned ones.
 - **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
   `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
   button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and
@@ -224,9 +249,9 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   path metrics, images, paragraphs, and saveLayer compositing (it applies
   alpha to subsequent drawing).
 
-Not yet implemented: `Hero`, page transition animations, slivers and
-`CustomScrollView`, lazy/infinite lists (`itemCount` is required; at most
-10,000 eagerly built items), scale/pinch gestures, `Draggable`/`DragTarget`,
+Not yet implemented: `Hero`, page transition animations, lazy/infinite lists (`itemCount` is required; at most
+10,000 eagerly built items), fling/overscroll physics, keyboard reordering,
+scale/pinch gestures, `Draggable`/`DragTarget`,
 `Overlay`/`OverlayEntry`, calendar-grid date pickers (pickers use the
 browser's native inputs), `DataTable`, `Stepper`, Cupertino widgets, and
 `dart:ui` window, image and paragraph APIs. CSS approximates Flutter layout;
