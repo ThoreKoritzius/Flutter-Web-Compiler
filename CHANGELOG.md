@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix `StackFit.expand` height propagation for positioned painters and chart hit areas. Segmented buttons share available width and honor compact density, themed text, colors and padding.
+
 - Complete `ThemeData` (Flutter's constructor, `copyWith`, `from`/`light`/`dark`, `lerp`, `estimateBrightnessForColor`, `platform`) with every Material component theme and inherited theme widget; Material widgets resolve widget value, then component theme, then Material 3 default (buttons per state like `ButtonStyleButton`, text fields through `InputDecoration.applyDefaults`); plus many missing Material constructors and parameters (IconButton variants, FAB sizes, `showBottomSheet`, `ExpansibleController`, TextField/DropdownMenu parameters).
 - Follow Flutter's element API closely enough for provider, flutter_bloc and google_fonts to compile from source (`mount(parent, slot)`, `ProxyElement`/`InheritedElement` dependency hooks, `dependOnInheritedElement`, `Diagnosticable` widgets, `BuildOwner`, error parts); add `FontLoader`, `AssetManifest` (builds emit `AssetManifest.json`) and more `dart:ui` exports; bridge `cached_network_image` and `flutter_svg`.
 - Add Autocomplete/RawAutocomplete, SearchBar and SearchAnchor with SearchController.

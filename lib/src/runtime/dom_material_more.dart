@@ -1035,11 +1035,17 @@ class SegmentedButton<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final segmentTheme = SegmentedButtonTheme.of(context);
+    final effectiveStyle =
+        style?.merge(segmentTheme.style) ??
+        segmentTheme.style ??
+        const ButtonStyle();
+    final density = effectiveStyle.visualDensity ?? theme.visualDensity;
     return _Box(
       css:
-          'display:inline-flex;flex-shrink:0;box-sizing:border-box;border:1px solid ${colorCss(scheme.outline)};border-radius:20px;overflow:hidden;',
+          'display:inline-grid;grid-template-columns:repeat(${segments.length},minmax(0,1fr));align-items:stretch;flex-shrink:0;box-sizing:border-box;border:1px solid ${colorCss(scheme.outline)};border-radius:20px;overflow:hidden;',
       attributes: const {'role': 'group'},
-      layout: _DomLayout.row,
+      layout: _DomLayout.grid,
       fill: _Fill.none,
       children: [
         for (var i = 0; i < segments.length; i++)
@@ -1047,16 +1053,35 @@ class SegmentedButton<T> extends StatelessWidget {
             final segment = segments[i];
             final isSelected = selected.contains(segment.value);
             final enabled = segment.enabled && onSelectionChanged != null;
-            final foreground = !enabled
-                ? scheme.onSurface.withValues(alpha: 0.38)
-                : isSelected
-                ? scheme.onSecondaryContainer
-                : scheme.onSurface;
+            final states = <WidgetState>{
+              if (isSelected) WidgetState.selected,
+              if (!enabled) WidgetState.disabled,
+            };
+            final foreground =
+                effectiveStyle.foregroundColor?.resolve(states) ??
+                (!enabled
+                    ? scheme.onSurface.withValues(alpha: 0.38)
+                    : isSelected
+                    ? scheme.onSecondaryContainer
+                    : scheme.onSurface);
+            final background =
+                effectiveStyle.backgroundColor?.resolve(states) ??
+                (isSelected ? scheme.secondaryContainer : Colors.transparent);
+            final minimum =
+                effectiveStyle.minimumSize?.resolve(states) ??
+                const Size(64, 40);
+            final fixed = effectiveStyle.fixedSize?.resolve(states);
+            final height = fixed?.height.isFinite == true
+                ? fixed!.height
+                : math.max(0.0, minimum.height + density.baseSizeAdjustment.dy);
+            final padding =
+                effectiveStyle.padding?.resolve(states) ??
+                const EdgeInsets.symmetric(horizontal: 12);
             return _Box(
               key: ValueKey(i),
               tag: 'button',
               css:
-                  'display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;margin:0;min-height:40px;padding:0 12px;border:0;${i > 0 ? 'border-left:1px solid ${colorCss(scheme.outline)};' : ''}font:inherit;background-color:${isSelected ? colorCss(scheme.secondaryContainer) : 'transparent'};${_stateLayerCss(foreground)}',
+                  'display:inline-flex;min-width:0;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;margin:0;min-height:${px(height)};${edgeInsetsCss('padding', padding)}border:0;${i > 0 ? 'border-left:1px solid ${colorCss(scheme.outline)};' : ''}font:inherit;background-color:${colorCss(background)};${_stateLayerCss(foreground)}',
               attributes: {
                 'type': 'button',
                 'class': 'fd-ink fd-button',
@@ -1069,17 +1094,23 @@ class SegmentedButton<T> extends StatelessWidget {
               fill: _Fill.none,
               children: [
                 IconTheme.merge(
-                  data: IconThemeData(color: foreground, size: 18),
+                  data: IconThemeData(
+                    color: foreground,
+                    size: effectiveStyle.iconSize?.resolve(states) ?? 18,
+                  ),
                   child: DefaultTextStyle(
-                    style: theme.textTheme.labelLarge!.copyWith(
-                      color: foreground,
-                    ),
+                    style:
+                        (effectiveStyle.textStyle?.resolve(states) ??
+                                theme.textTheme.labelLarge!)
+                            .copyWith(color: foreground),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8,
                       children: [
                         if (isSelected && showSelectedIcon)
-                          selectedIcon ?? const Icon(Icons.check)
+                          selectedIcon ??
+                              segmentTheme.selectedIcon ??
+                              const Icon(Icons.check)
                         else
                           ?segment.icon,
                         ?segment.label,

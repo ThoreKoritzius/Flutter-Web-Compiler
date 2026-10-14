@@ -78,6 +78,7 @@ class _PanelState extends State<Panel> {
         onSelected: (_) => setState(() => size = 'l'),
       ),
       SegmentedButton<String>(
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
         segments: const [
           ButtonSegment(value: 'list', label: Text('List')),
           ButtonSegment(value: 'grid', label: Text('Grid')),
@@ -135,6 +136,8 @@ const {host}=install();
  await until(()=>chip('blue').attributes['aria-pressed']==='true','filter chip');
  chip('red').events.click({});chip('large').events.click({});
  const segment=t=>find(host,n=>n.tag==='button'&&label(n).endsWith(t)&&n.parent.attributes.role==='group');
+ if(!segment('List').attributes.style.includes('min-height:32px;'))throw Error('compact segment minimum height');
+
  segment('Grid').events.click({});
  await until(()=>state()==='date 2026-04-15 18:5 blue,red l grid ','final: '+state());
  if(segment('Grid').attributes['aria-pressed']!=='true')throw Error('segment pressed');

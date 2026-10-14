@@ -1337,8 +1337,10 @@ class Stack extends _DomWidget {
   _Fill get _fill => fit == StackFit.expand ? _Fill.expand : _Fill.child;
   @override
   void _render(_DomBuilder out) {
+    // Positioned children have no intrinsic height. Expand both axes so a
+    // bounded parent also supplies the paint and hit-test area's height.
     out.css(
-      'position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;',
+      'position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;${fit == StackFit.expand ? 'height:100%;min-height:0;' : ''}',
     );
     if (clipBehavior != Clip.none) out.css('overflow:hidden;');
     out.children = [
