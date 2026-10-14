@@ -266,6 +266,10 @@ Future<NativeAppBuild> buildNativeApp(
       'url_launcher',
       await runtimeLibrary('url_launcher_dom'),
     ),
+    'package:flutter_map/flutter_map.dart': (
+      'flutter_map',
+      await runtimeLibrary('flutter_map_dom'),
+    ),
     'package:url_launcher/link.dart': (
       'url_launcher',
       await runtimeLibrary('url_launcher_link_dom'),
@@ -536,6 +540,7 @@ Future<NativeAppBuild> buildNativeApp(
           'package:flutter/animation.dart',
           'package:flutter/scheduler.dart',
           'package:flutter/gestures.dart',
+          'package:flutter/rendering.dart',
         }.contains(uri)) {
           replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/')) {

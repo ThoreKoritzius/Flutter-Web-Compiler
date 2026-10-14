@@ -150,7 +150,11 @@ const flutterLocalizationsBridgeNames = [
   'kMaterialSupportedLanguages',
 ];
 
+/// Runtime support for standalone bridge libraries, never app-visible.
+const runtimeSupportNames = ['NativeSizeBuilder'];
+
 const allBridgeNames = [
+  ...runtimeSupportNames,
   ...flChartBridgeNames,
   ...goRouterBridgeNames,
   ...flutterLocalizationsBridgeNames,

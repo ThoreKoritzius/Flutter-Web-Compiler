@@ -38,6 +38,10 @@ extension type _Event(JSObject _) implements JSObject {
   external String? get pointerType;
   external double? get timeStamp;
   external JSObject? get currentTarget;
+  external int? get buttons;
+  external double? get deltaX;
+  external double? get deltaY;
+  external int? get deltaMode;
 }
 
 @JS('window')
@@ -1642,6 +1646,16 @@ class _SizedBuilder extends LayoutBuilder {
   );
   @override
   Element createElement() => _SizedElement(this);
+}
+
+/// Runtime support for bridge libraries outside this library: builds from
+/// the measured width and height of a box filling its parent. Facades hide
+/// it from application code.
+class NativeSizeBuilder extends StatelessWidget {
+  const NativeSizeBuilder({super.key, required this.builder});
+  final Widget Function(BuildContext context, Size size) builder;
+  @override
+  Widget build(BuildContext context) => _SizedBuilder(sizeBuilder: builder);
 }
 
 Widget _unusedLayoutBuilder(BuildContext context, BoxConstraints c) =>

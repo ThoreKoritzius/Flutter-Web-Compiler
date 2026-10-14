@@ -527,6 +527,34 @@ other schemes such as `javascript:`. In-app web views are not available.
 `package:url_launcher/link.dart` provides `Link` and `LinkTarget`; the
 builder's `followLink` opens the URI the same way.
 
+### flutter_map
+
+`package:flutter_map/flutter_map.dart` maps to a built-in slippy map
+following flutter_map 7/8's API. `LatLng` comes from the app's own
+`latlong2`, so coordinates are shared with app code. `FlutterMap` measures
+its box (give it a bounded height, as in Flutter) and provides a
+`MapCamera` to its children through `MapCamera.of`, so custom layers keep
+working. Supported: `MapOptions` (initial center/zoom, `initialCameraFit` with
+`CameraFit.bounds`/`coordinates` and padding, min/max zoom,
+`CameraConstraint.containCenter`, background color, `onTap`, `onLongPress`,
+`onPositionChanged`, `onMapEvent`, `onMapReady`, `InteractionOptions.flags`
+and scroll-wheel velocity), `MapController` (`move`, `fitCamera`, `camera`,
+`mapEventStream`), `MapCamera` projection helpers, `LatLngBounds`;
+`TileLayer` (URL templates with `{s}`, `{r}`, `{z}`/`{x}`/`{y}`, TMS, zoom
+offset/reverse, native zoom limits, fallback URL) as positioned `<img>`
+tiles; `PolylineLayer` (borders, gradients, dotted/dashed patterns, widths in
+meters), `PolygonLayer` (fills, holes, borders, labels) and `CircleLayer` on
+canvas; `MarkerLayer` with flutter_map's alignment rules;
+`RichAttributionWidget` (always expanded), `SimpleAttributionWidget`.
+Dragging pans the map, the scroll wheel zooms around the pointer and a
+double tap zooms in. Not supported: rotation, pinch zoom, fling animation,
+hit testing on polylines/polygons, WMS and custom tile providers (headers are
+ignored; tiles load as plain images).
+
+`package:flutter/rendering.dart` maps to the widgets facade, and `Listener`
+delivers pointer down/move/up/cancel/hover events and wheel
+`PointerScrollEvent`s.
+
 ### Third-party packages that use Flutter
 
 Package libraries that (transitively) import `package:flutter/*` or

@@ -447,3 +447,255 @@ bool _clickSuppressed(_Event? event) {
   _suppressedClicks[target] = null;
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Raw pointer events.
+
+abstract class PointerEvent {
+  const PointerEvent({
+    this.pointer = 0,
+    this.kind = PointerDeviceKind.touch,
+    this.position = Offset.zero,
+    Offset? localPosition,
+    this.delta = Offset.zero,
+    this.buttons = 0,
+    this.timeStamp = Duration.zero,
+  }) : localPosition = localPosition ?? position;
+  final int pointer, buttons;
+  final PointerDeviceKind kind;
+  final Offset position, localPosition, delta;
+  final Duration timeStamp;
+  Offset get localDelta => delta;
+}
+
+class PointerDownEvent extends PointerEvent {
+  const PointerDownEvent({
+    super.pointer,
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.buttons,
+    super.timeStamp,
+  });
+}
+
+class PointerMoveEvent extends PointerEvent {
+  const PointerMoveEvent({
+    super.pointer,
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.delta,
+    super.buttons,
+    super.timeStamp,
+  });
+}
+
+class PointerUpEvent extends PointerEvent {
+  const PointerUpEvent({
+    super.pointer,
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.buttons,
+    super.timeStamp,
+  });
+}
+
+class PointerCancelEvent extends PointerEvent {
+  const PointerCancelEvent({
+    super.pointer,
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.timeStamp,
+  });
+}
+
+class PointerHoverEvent extends PointerEvent {
+  const PointerHoverEvent({
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.delta,
+    super.timeStamp,
+  });
+}
+
+abstract class PointerSignalEvent extends PointerEvent {
+  const PointerSignalEvent({
+    super.kind,
+    super.position,
+    super.localPosition,
+    super.timeStamp,
+  });
+}
+
+class PointerScrollEvent extends PointerSignalEvent {
+  const PointerScrollEvent({
+    super.kind = PointerDeviceKind.mouse,
+    super.position,
+    super.localPosition,
+    super.timeStamp,
+    this.scrollDelta = Offset.zero,
+  });
+  final Offset scrollDelta;
+}
+
+typedef PointerDownEventListener = void Function(PointerDownEvent event);
+typedef PointerMoveEventListener = void Function(PointerMoveEvent event);
+typedef PointerUpEventListener = void Function(PointerUpEvent event);
+typedef PointerCancelEventListener = void Function(PointerCancelEvent event);
+typedef PointerHoverEventListener = void Function(PointerHoverEvent event);
+typedef PointerSignalEventListener = void Function(PointerSignalEvent event);
+
+/// Last viewport position per node and pointer, for move deltas.
+final _lastPointerPositions = Expando<Map<int, Offset>>('pointer positions');
+
+/// Delivers DOM pointer and wheel events as Flutter pointer events. Wheel
+/// events with an `onPointerSignal` handler do not scroll the page.
+class Listener extends _DomWidget {
+  const Listener({
+    super.key,
+    this.onPointerDown,
+    this.onPointerMove,
+    this.onPointerUp,
+    this.onPointerHover,
+    this.onPointerCancel,
+    this.onPointerSignal,
+    this.behavior = HitTestBehavior.deferToChild,
+    this.child,
+  });
+  final PointerDownEventListener? onPointerDown;
+  final PointerMoveEventListener? onPointerMove;
+  final PointerUpEventListener? onPointerUp;
+  final PointerHoverEventListener? onPointerHover;
+  final PointerCancelEventListener? onPointerCancel;
+  final PointerSignalEventListener? onPointerSignal;
+  final HitTestBehavior behavior;
+  final Widget? child;
+
+  @override
+  void _render(_DomBuilder out) {
+    Duration stamp(_Event event) =>
+        Duration(microseconds: ((event.timeStamp ?? 0) * 1000).round());
+    Offset move(_Event event, Offset global, {bool end = false}) {
+      final target = event.currentTarget;
+      if (target == null) return Offset.zero;
+      final last = _lastPointerPositions[target] ??= {};
+      final id = event.pointerId ?? 0;
+      final previous = last[id];
+      if (end) {
+        last.remove(id);
+      } else {
+        last[id] = global;
+      }
+      return previous == null ? Offset.zero : global - previous;
+    }
+
+    if (onPointerDown != null || onPointerMove != null) {
+      out.on('pointerdown', (event) {
+        if (event == null) return;
+        final (global, local) = _pointerPositions(event);
+        move(event, global);
+        onPointerDown?.call(
+          PointerDownEvent(
+            pointer: event.pointerId ?? 0,
+            kind: _pointerKind(event.pointerType),
+            position: global,
+            localPosition: local,
+            buttons: event.buttons ?? 0,
+            timeStamp: stamp(event),
+          ),
+        );
+      });
+    }
+    if (onPointerMove != null || onPointerHover != null) {
+      out.on('pointermove', (event) {
+        if (event == null) return;
+        final (global, local) = _pointerPositions(event);
+        final delta = move(event, global);
+        if ((event.buttons ?? 0) == 0 && event.pointerType == 'mouse') {
+          onPointerHover?.call(
+            PointerHoverEvent(
+              kind: PointerDeviceKind.mouse,
+              position: global,
+              localPosition: local,
+              delta: delta,
+              timeStamp: stamp(event),
+            ),
+          );
+          return;
+        }
+        onPointerMove?.call(
+          PointerMoveEvent(
+            pointer: event.pointerId ?? 0,
+            kind: _pointerKind(event.pointerType),
+            position: global,
+            localPosition: local,
+            delta: delta,
+            buttons: event.buttons ?? 0,
+            timeStamp: stamp(event),
+          ),
+        );
+      });
+    }
+    if (onPointerUp != null || onPointerMove != null) {
+      out.on('pointerup', (event) {
+        if (event == null) return;
+        final (global, local) = _pointerPositions(event);
+        move(event, global, end: true);
+        onPointerUp?.call(
+          PointerUpEvent(
+            pointer: event.pointerId ?? 0,
+            kind: _pointerKind(event.pointerType),
+            position: global,
+            localPosition: local,
+            timeStamp: stamp(event),
+          ),
+        );
+      });
+    }
+    if (onPointerCancel != null || onPointerMove != null) {
+      out.on('pointercancel', (event) {
+        if (event == null) return;
+        final (global, local) = _pointerPositions(event);
+        move(event, global, end: true);
+        onPointerCancel?.call(
+          PointerCancelEvent(
+            pointer: event.pointerId ?? 0,
+            kind: _pointerKind(event.pointerType),
+            position: global,
+            localPosition: local,
+            timeStamp: stamp(event),
+          ),
+        );
+      });
+    }
+    if (onPointerSignal != null) {
+      out.on('wheel', (event) {
+        if (event == null) return;
+        event.preventDefault();
+        final (global, local) = _pointerPositions(event);
+        // Line and page deltas are scaled to pixels as browsers do.
+        final scale = switch (event.deltaMode ?? 0) {
+          1 => 16.0,
+          2 => 400.0,
+          _ => 1.0,
+        };
+        onPointerSignal!(
+          PointerScrollEvent(
+            position: global,
+            localPosition: local,
+            timeStamp: stamp(event),
+            scrollDelta: Offset(
+              (event.deltaX ?? 0) * scale,
+              (event.deltaY ?? 0) * scale,
+            ),
+          ),
+        );
+      });
+    }
+    if (child != null) out.child(child!);
+  }
+}

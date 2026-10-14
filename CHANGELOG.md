@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Map `package:flutter_map` to a built-in slippy map (tiles, polylines, polygons, circles, markers, attribution, controller and events; drag, wheel and double-tap zoom) using the app's `latlong2`; map `package:flutter/rendering.dart` and add `Listener` with pointer and scroll events.
 - Compile third-party packages that reach Flutter against the runtime by rewriting their imports in the build graph (pure-Dart packages keep their identity); report them as `rewrittenPackages`. Map `package:url_launcher/link.dart`.
 - Add `GestureDetector` tap details with local positions, long presses (also on `InkWell`, `ListTile` and buttons), and pan/horizontal/vertical drags from pointer events.
 - Add popup menus, date/time/range pickers on native inputs, filter/choice/action/input chips and `SegmentedButton`; `MaterialApp(home:)` now always provides a `Navigator`.
