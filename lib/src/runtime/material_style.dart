@@ -1720,7 +1720,7 @@ class BorderSide {
       );
 }
 
-abstract class BoxBorder {
+abstract class BoxBorder extends ShapeBorder {
   const BoxBorder();
   BorderSide get top;
   BorderSide get right;
@@ -2570,6 +2570,8 @@ String gradientCss(Gradient? gradient) {
 String shapeCss(ShapeBorder? shape) {
   if (shape == null) return '';
   final side = shape is OutlinedBorder ? shape.side : BorderSide.none;
+  // Box borders (Border, BorderDirectional) draw their own edges.
+  if (shape is BoxBorder) return boxBorderCss(shape);
   final border = borderSideCss('border', side);
   if (shape is StadiumBorder) return '${border}border-radius:9999px;';
   if (shape is CircleBorder) return '${border}border-radius:50%;';
