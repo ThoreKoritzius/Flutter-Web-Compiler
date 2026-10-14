@@ -434,6 +434,20 @@ Future<void> main(List<String> arguments) async {
   }
 }
 
+Map<String, String> _readPathMap(String path, String description) {
+  final file = File(p.absolute(path));
+  final decoded = jsonDecode(file.readAsStringSync());
+  if (decoded is! Map ||
+      decoded.entries.any((e) => e.key is! String || e.value is! String))
+    throw ArgumentError('$description must map strings to Dart files.');
+  return {
+    for (final item in decoded.entries)
+      item.key as String: p.normalize(
+        p.join(file.parent.path, item.value as String),
+      ),
+  };
+}
+
 Future<void> _inspect(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('project', defaultsTo: '.')
@@ -442,7 +456,33 @@ Future<void> _inspect(List<String> arguments) async {
     ..addFlag(
       'resolve-imports',
       negatable: false,
-      help: 'Check roots in the resolved web library graph.',
+      help: 'Check static HTML roots in the resolved web library graph.',
+    )
+    ..addFlag(
+      'dart-runtime',
+      negatable: false,
+      help:
+          'Also inspect the --source entry graph for the DOM runtime target '
+          '(original, replaced and blocked libraries).',
+    )
+    ..addFlag(
+      'compile',
+      negatable: false,
+      help:
+          'With --dart-runtime: run the official dart2js build and report its first errors (slow).',
+    )
+    ..addOption(
+      'runtime-bridges',
+      help: 'Library bridge JSON, as for build --dart-runtime.',
+    )
+    ..addOption(
+      'package-bridges',
+      help: 'Package URI adapter JSON, as for build --dart-runtime.',
+    )
+    ..addMultiOption(
+      'dart-define',
+      splitCommas: false,
+      help: 'Compile-time KEY=VALUE for --compile.',
     )
     ..addFlag('help', abbr: 'h', negatable: false);
   try {
@@ -453,6 +493,22 @@ Future<void> _inspect(List<String> arguments) async {
     }
     if (args.rest.isNotEmpty)
       throw ArgumentError('Unexpected arguments: ${args.rest}');
+    final runtime = args['dart-runtime'] as bool;
+    if (!runtime &&
+        (args['compile'] as bool ||
+            args.wasParsed('runtime-bridges') ||
+            args.wasParsed('package-bridges') ||
+            args.wasParsed('dart-define')))
+      throw ArgumentError(
+        '--compile, bridges and definitions require inspect --dart-runtime.',
+      );
+    final defines = <String, String>{};
+    for (final item in args['dart-define'] as List<String>) {
+      final separator = item.indexOf('=');
+      if (separator < 1)
+        throw ArgumentError('Dart definitions require KEY=VALUE.');
+      defines[item.substring(0, separator)] = item.substring(separator + 1);
+    }
     final inspector = ProjectInspector();
     final report = args['resolve-imports'] as bool
         ? await inspector.inspectResolved(
@@ -460,6 +516,31 @@ Future<void> _inspect(List<String> arguments) async {
             source: args['source'] as String,
           )
         : inspector.inspect(args['project'] as String);
+    if (runtime) {
+      if (args['compile'] as bool)
+        stdout.writeln('Compiling the DOM runtime build with dart2js…');
+      report['domRuntime'] = {
+        'measured': true,
+        ...await inspectDartRuntime(
+          args['project'] as String,
+          source: args['source'] as String,
+          libraryBridges: args.wasParsed('runtime-bridges')
+              ? _readPathMap(
+                  args['runtime-bridges'] as String,
+                  'Runtime bridges',
+                )
+              : const {},
+          packageBridges: args.wasParsed('package-bridges')
+              ? _readPathMap(
+                  args['package-bridges'] as String,
+                  'Package bridges',
+                )
+              : const {},
+          dartDefines: defines,
+          compile: args['compile'] as bool,
+        ),
+      };
+    }
     final output = File(args['output'] as String);
     if (p.extension(output.path) != '.json')
       throw ArgumentError('Inspection output must end in .json.');
@@ -474,15 +555,20 @@ Future<void> _inspect(List<String> arguments) async {
       'Inspected ${report['dartFiles']} Dart files; ${report['parserDiagnostics']} parser diagnostics.',
     );
     final coverage = report['compatibility'] as Map<String, Object?>;
+    final score = coverage['percent'] as num?;
+    stdout.writeln(
+      '${_accent(staticCompatibilityLabel)}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
+      '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']} widget roots).',
+    );
+    stdout.writeln(
+      '  Not whole-app coverage: ${coverage['needsInputs']} need inputs '
+      '(${coverage['statefulOnly']} stateful-only) · ${coverage['unsupported']} unsupported API · '
+      '${coverage['dependency']} dependency · ${coverage['untested']} untested.',
+    );
     final sites = report['callSites'] as Map<String, Object?>?;
     if (sites != null) {
       stdout.writeln(
-        '${_accent('Widget roots')}: ${coverage['native']} native · '
-        '${coverage['needsInputs']} need inputs · ${coverage['unsupported']} unsupported '
-        '(${coverage['total']} checked).',
-      );
-      stdout.writeln(
-        '${_accent('Constructor sites')}: ${sites['native']} native · '
+        '${_accent('Static constructor sites')}: ${sites['native']} native · '
         '${sites['needsContext']} need context · ${sites['unsupported']} unsupported '
         '(${sites['checked']}/${sites['total']} checked).',
       );
@@ -493,21 +579,6 @@ Future<void> _inspect(List<String> arguments) async {
       stdout.writeln(
         '  Isolated checks in the web library graph; not app conversion coverage.',
       );
-      for (final site
-          in (sites['entries'] as List)
-              .where((e) => e['status'] == 'native')
-              .take(3)) {
-        stdout.writeln(
-          '  ✓ ${site['file']}:${site['line']}:${site['column']} ${site['widget']}',
-        );
-      }
-    } else {
-      final score = coverage['percent'] as num?;
-      stdout.writeln(
-        '${_accent('Native entry compatibility')}: ${score?.toStringAsFixed(1) ?? 'N/A'}'
-        '${score == null ? '' : '%'} (${coverage['native']}/${coverage['total']}).',
-      );
-      stdout.writeln('  Independent widget roots · adapters/islands excluded');
     }
     var shown = 0;
     for (final entry in coverage['entries'] as List) {
@@ -515,16 +586,90 @@ Future<void> _inspect(List<String> arguments) async {
           entry['category'] != 'needs-inputs' &&
           shown++ < 5)
         stdout.writeln(
-          '  ${entry['file']}:${entry['line']} ${entry['widget']}: ${entry['blocker']}',
+          '  ${entry['file']}:${entry['line']} ${entry['widget']} '
+          '[${entry['category']}]: ${entry['blocker']}',
         );
     }
     if (shown > 5)
       stdout.writeln('  … ${shown - 5} more blockers in the report');
+    final dom = report['domRuntime'] as Map<String, Object?>;
+    if (dom['measured'] == true) {
+      _printRuntime(dom);
+    } else {
+      stdout.writeln(
+        '${_accent('DOM runtime (--dart-runtime)')}: not measured; add --dart-runtime.',
+      );
+    }
     stdout.writeln('Full report: ${output.path}');
   } catch (error) {
     stderr.writeln(error);
     exitCode = 1;
   }
+}
+
+void _printRuntime(Map<String, Object?> dom) {
+  final summary = dom['summary'] as Map;
+  stdout.writeln(
+    '${_accent('DOM runtime (--dart-runtime)')}: ${dom['status']} · entry ${dom['entry']}',
+  );
+  stdout.writeln(
+    '  Original: ${summary['originalLibraries']} project libraries '
+    '(${summary['originalWidgets']} widget classes), source unmodified'
+    '${summary['blockedLibraries'] == 0 ? '' : ' · ${summary['blockedLibraries']} libraries blocked'}',
+  );
+  final replacements = (dom['replacements'] as List).cast<Map>();
+  final facades = [
+    for (final item in replacements)
+      if (item['kind'] == 'flutter-facade')
+        (item['import'] as String)
+            .split(RegExp('[/:]'))
+            .last
+            .replaceAll('.dart', ''),
+  ];
+  final bridges = {
+    for (final item in replacements)
+      if (item['kind'] != 'flutter-facade') item['bridge'],
+  };
+  stdout.writeln(
+    '  Replaced: runtime facades for ${facades.isEmpty ? 'no Flutter libraries' : facades.join(', ')}'
+    '${bridges.isEmpty ? '' : ' · bridges ${bridges.join(', ')}'}',
+  );
+  final rewritten = (dom['rewrittenPackages'] as Map).keys;
+  if (rewritten.isNotEmpty)
+    stdout.writeln(
+      '  Rewritten packages (source unchanged): ${rewritten.join(', ')}',
+    );
+  final unsupported = (dom['unsupported'] as List).cast<Map>();
+  stdout.writeln(
+    '  Unsupported: ${summary['blockingImports']} blocking · ${summary['runtimeRisks']} runtime risks',
+  );
+  for (final item in unsupported.take(5)) {
+    stdout.writeln(
+      '    ${item['severity']} ${item['feature']}: ${(item['chain'] as List).join(' → ')}',
+    );
+  }
+  if (unsupported.length > 5)
+    stdout.writeln('    … ${unsupported.length - 5} more in the report');
+  final compile = dom['compile'] as Map;
+  if (compile['attempted'] != true) {
+    stdout.writeln(
+      '  Compile check: not run (add --compile for dart2js errors).',
+    );
+  } else if (compile['succeeded'] == true) {
+    stdout.writeln(
+      '  Compile check: dart2js succeeded (${compile['javascriptBytes']} bytes).',
+    );
+  } else {
+    stdout.writeln('  Compile check: dart2js failed');
+    for (final error in (compile['errors'] as List).take(5)) {
+      stdout.writeln(
+        '    ${error['location'] == null ? '' : '${error['location']}: '}${error['message']}',
+      );
+    }
+  }
+  stdout.writeln(
+    '  Runtime-rendered DOM has no prerendered HTML and no SEO advantage.',
+  );
 }
 
 const _loader = r'''
