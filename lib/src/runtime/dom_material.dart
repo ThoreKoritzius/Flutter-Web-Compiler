@@ -75,6 +75,14 @@ class Theme extends StatelessWidget {
   static ThemeData of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_InheritedTheme>()?.data ??
       _defaultTheme;
+  static Brightness brightnessOf(BuildContext context) =>
+      maybeBrightnessOf(context) ?? Brightness.light;
+  static Brightness? maybeBrightnessOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_InheritedTheme>()
+          ?.data
+          .brightness ??
+      MediaQuery.platformBrightnessOf(context);
   @override
   Widget build(BuildContext context) => _InheritedTheme(data, child);
 }
@@ -101,10 +109,38 @@ enum MaterialTapTargetSize { padded, shrinkWrap }
 class VisualDensity {
   const VisualDensity({this.horizontal = 0, this.vertical = 0});
   final double horizontal, vertical;
+  static const double minimumDensity = -4.0;
+  static const double maximumDensity = 4.0;
   static const standard = VisualDensity();
   static const comfortable = VisualDensity(horizontal: -1, vertical: -1);
   static const compact = VisualDensity(horizontal: -2, vertical: -2);
-  static const adaptivePlatformDensity = standard;
+  static VisualDensity get adaptivePlatformDensity =>
+      defaultDensityForPlatform(defaultTargetPlatform);
+  static VisualDensity defaultDensityForPlatform(TargetPlatform platform) =>
+      switch (platform) {
+        TargetPlatform.android ||
+        TargetPlatform.fuchsia ||
+        TargetPlatform.iOS => standard,
+        _ => compact,
+      };
+  VisualDensity copyWith({double? horizontal, double? vertical}) =>
+      VisualDensity(
+        horizontal: horizontal ?? this.horizontal,
+        vertical: vertical ?? this.vertical,
+      );
+  Offset get baseSizeAdjustment => Offset(horizontal * 4, vertical * 4);
+  static VisualDensity lerp(VisualDensity a, VisualDensity b, double t) =>
+      VisualDensity(
+        horizontal: a.horizontal + (b.horizontal - a.horizontal) * t,
+        vertical: a.vertical + (b.vertical - a.vertical) * t,
+      );
+  @override
+  bool operator ==(Object other) =>
+      other is VisualDensity &&
+      other.horizontal == horizontal &&
+      other.vertical == vertical;
+  @override
+  int get hashCode => Object.hash(horizontal, vertical);
 }
 
 class Title extends StatefulWidget {
@@ -316,6 +352,8 @@ class _AppSurface extends _DomWidget {
 
 enum MaterialType { canvas, card, circle, button, transparency }
 
+const Duration kThemeChangeDuration = Duration(milliseconds: 200);
+
 class Material extends StatelessWidget {
   const Material({
     super.key,
@@ -327,10 +365,14 @@ class Material extends StatelessWidget {
     this.textStyle,
     this.borderRadius,
     this.shape,
+    this.borderOnForeground = true,
     this.clipBehavior = Clip.none,
+    this.animationDuration = kThemeChangeDuration,
     this.child,
   });
   final MaterialType type;
+  final bool borderOnForeground;
+  final Duration animationDuration;
   final double elevation;
   final Color? color, shadowColor, surfaceTintColor;
   final TextStyle? textStyle;
@@ -418,8 +460,10 @@ class Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final cardTheme = CardTheme.of(context);
     final background =
         color ??
+        cardTheme.color ??
         switch (_variant) {
           _CardVariant.elevated => Theme.of(context).cardColor,
           _CardVariant.filled => scheme.surfaceContainerHighest,
@@ -427,16 +471,23 @@ class Card extends StatelessWidget {
         };
     final cardShape =
         shape ??
+        cardTheme.shape ??
         RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: _variant == _CardVariant.outlined
               ? BorderSide(color: scheme.outlineVariant)
               : BorderSide.none,
         );
-    final depth = elevation ?? (_variant == _CardVariant.elevated ? 1.0 : 0.0);
+    final depth =
+        elevation ??
+        cardTheme.elevation ??
+        (_variant == _CardVariant.elevated ? 1.0 : 0.0);
+    final clip = clipBehavior ?? cardTheme.clipBehavior ?? Clip.none;
+    final cardMargin = margin ?? cardTheme.margin ?? const EdgeInsets.all(4);
+    final shadow = shadowColor ?? cardTheme.shadowColor ?? scheme.shadow;
     return _Box(
       css:
-          'box-sizing:border-box;min-width:0;${edgeInsetsCss('margin', margin ?? const EdgeInsets.all(4))}background-color:${colorCss(background)};${shapeCss(cardShape)}${elevationCss(depth, shadowColor ?? scheme.shadow)}${(clipBehavior ?? Clip.none) == Clip.none ? '' : 'overflow:hidden;'}',
+          'box-sizing:border-box;min-width:0;${edgeInsetsCss('margin', cardMargin)}background-color:${colorCss(background)};${shapeCss(cardShape)}${elevationCss(depth, shadow)}${clip == Clip.none ? '' : 'overflow:hidden;'}',
       children: [?child],
     );
   }
@@ -464,6 +515,8 @@ abstract class WidgetStateProperty<T> {
   static WidgetStateProperty<T> resolveWith<T>(
     T Function(Set<WidgetState> states) callback,
   ) => _WidgetStatePropertyWith<T>(callback);
+  static WidgetStateProperty<T> all<T>(T value) =>
+      WidgetStatePropertyAll<T>(value);
   static T resolveAs<T>(T value, Set<WidgetState> states) =>
       value is WidgetStateProperty<T> ? value.resolve(states) : value;
 }
@@ -480,10 +533,34 @@ class WidgetStatePropertyAll<T> extends WidgetStateProperty<T> {
   final T value;
   @override
   T resolve(Set<WidgetState> states) => value;
+  @override
+  bool operator ==(Object other) =>
+      other is WidgetStatePropertyAll<T> && other.value == value;
+  @override
+  int get hashCode => value.hashCode;
 }
 
 typedef MaterialStateProperty<T> = WidgetStateProperty<T>;
 typedef MaterialStatePropertyAll<T> = WidgetStatePropertyAll<T>;
+
+/// The interactive states of a widget, as a listenable set.
+class WidgetStatesController extends ValueNotifier<Set<WidgetState>> {
+  WidgetStatesController([Set<WidgetState>? value])
+    : super(<WidgetState>{...?value});
+  void update(WidgetState state, bool add) {
+    final changed = add ? value.add(state) : value.remove(state);
+    if (changed) notifyListeners();
+  }
+}
+
+typedef MaterialStatesController = WidgetStatesController;
+
+typedef ButtonLayerBuilder =
+    Widget Function(
+      BuildContext context,
+      Set<WidgetState> states,
+      Widget? child,
+    );
 
 class ButtonStyle {
   const ButtonStyle({
@@ -500,67 +577,125 @@ class ButtonStyle {
     this.maximumSize,
     this.iconColor,
     this.iconSize,
+    this.iconAlignment,
     this.side,
     this.shape,
-    this.alignment,
+    this.mouseCursor,
     this.visualDensity,
     this.tapTargetSize,
+    this.animationDuration,
+    this.enableFeedback,
+    this.alignment,
+    this.splashFactory,
+    this.backgroundBuilder,
+    this.foregroundBuilder,
   });
   final WidgetStateProperty<TextStyle?>? textStyle;
   final WidgetStateProperty<Color?>? backgroundColor, foregroundColor;
   final WidgetStateProperty<Color?>? overlayColor, shadowColor;
   final WidgetStateProperty<Color?>? surfaceTintColor, iconColor;
   final WidgetStateProperty<double?>? elevation, iconSize;
+  final IconAlignment? iconAlignment;
   final WidgetStateProperty<EdgeInsetsGeometry?>? padding;
   final WidgetStateProperty<Size?>? minimumSize, fixedSize, maximumSize;
   final WidgetStateProperty<BorderSide?>? side;
   final WidgetStateProperty<OutlinedBorder?>? shape;
-  final AlignmentGeometry? alignment;
+  final WidgetStateProperty<MouseCursor?>? mouseCursor;
   final VisualDensity? visualDensity;
   final MaterialTapTargetSize? tapTargetSize;
+  final Duration? animationDuration;
+  final bool? enableFeedback;
+  final AlignmentGeometry? alignment;
+  final InteractiveInkFeatureFactory? splashFactory;
+  final ButtonLayerBuilder? backgroundBuilder, foregroundBuilder;
 
-  ButtonStyle merge(ButtonStyle? other) => other == null
+  /// Fills this style's null properties from [style].
+  ButtonStyle merge(ButtonStyle? style) => style == null
       ? this
-      : ButtonStyle(
-          textStyle: textStyle ?? other.textStyle,
-          backgroundColor: backgroundColor ?? other.backgroundColor,
-          foregroundColor: foregroundColor ?? other.foregroundColor,
-          overlayColor: overlayColor ?? other.overlayColor,
-          shadowColor: shadowColor ?? other.shadowColor,
-          surfaceTintColor: surfaceTintColor ?? other.surfaceTintColor,
-          elevation: elevation ?? other.elevation,
-          padding: padding ?? other.padding,
-          minimumSize: minimumSize ?? other.minimumSize,
-          fixedSize: fixedSize ?? other.fixedSize,
-          maximumSize: maximumSize ?? other.maximumSize,
-          iconColor: iconColor ?? other.iconColor,
-          iconSize: iconSize ?? other.iconSize,
-          side: side ?? other.side,
-          shape: shape ?? other.shape,
-          alignment: alignment ?? other.alignment,
-          visualDensity: visualDensity ?? other.visualDensity,
-          tapTargetSize: tapTargetSize ?? other.tapTargetSize,
+      : copyWith(
+          textStyle: textStyle ?? style.textStyle,
+          backgroundColor: backgroundColor ?? style.backgroundColor,
+          foregroundColor: foregroundColor ?? style.foregroundColor,
+          overlayColor: overlayColor ?? style.overlayColor,
+          shadowColor: shadowColor ?? style.shadowColor,
+          surfaceTintColor: surfaceTintColor ?? style.surfaceTintColor,
+          elevation: elevation ?? style.elevation,
+          padding: padding ?? style.padding,
+          minimumSize: minimumSize ?? style.minimumSize,
+          fixedSize: fixedSize ?? style.fixedSize,
+          maximumSize: maximumSize ?? style.maximumSize,
+          iconColor: iconColor ?? style.iconColor,
+          iconSize: iconSize ?? style.iconSize,
+          iconAlignment: iconAlignment ?? style.iconAlignment,
+          side: side ?? style.side,
+          shape: shape ?? style.shape,
+          mouseCursor: mouseCursor ?? style.mouseCursor,
+          visualDensity: visualDensity ?? style.visualDensity,
+          tapTargetSize: tapTargetSize ?? style.tapTargetSize,
+          animationDuration: animationDuration ?? style.animationDuration,
+          enableFeedback: enableFeedback ?? style.enableFeedback,
+          alignment: alignment ?? style.alignment,
+          splashFactory: splashFactory ?? style.splashFactory,
+          backgroundBuilder: backgroundBuilder ?? style.backgroundBuilder,
+          foregroundBuilder: foregroundBuilder ?? style.foregroundBuilder,
         );
 
   ButtonStyle copyWith({
+    WidgetStateProperty<TextStyle?>? textStyle,
     WidgetStateProperty<Color?>? backgroundColor,
     WidgetStateProperty<Color?>? foregroundColor,
-    WidgetStateProperty<EdgeInsetsGeometry?>? padding,
-    WidgetStateProperty<OutlinedBorder?>? shape,
-    WidgetStateProperty<BorderSide?>? side,
-    WidgetStateProperty<TextStyle?>? textStyle,
+    WidgetStateProperty<Color?>? overlayColor,
+    WidgetStateProperty<Color?>? shadowColor,
+    WidgetStateProperty<Color?>? surfaceTintColor,
     WidgetStateProperty<double?>? elevation,
+    WidgetStateProperty<EdgeInsetsGeometry?>? padding,
     WidgetStateProperty<Size?>? minimumSize,
+    WidgetStateProperty<Size?>? fixedSize,
+    WidgetStateProperty<Size?>? maximumSize,
+    WidgetStateProperty<Color?>? iconColor,
+    WidgetStateProperty<double?>? iconSize,
+    IconAlignment? iconAlignment,
+    WidgetStateProperty<BorderSide?>? side,
+    WidgetStateProperty<OutlinedBorder?>? shape,
+    WidgetStateProperty<MouseCursor?>? mouseCursor,
+    VisualDensity? visualDensity,
+    MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
   }) => ButtonStyle(
-    backgroundColor: backgroundColor,
-    foregroundColor: foregroundColor,
-    padding: padding,
-    shape: shape,
-    side: side,
-    textStyle: textStyle,
-    elevation: elevation,
-    minimumSize: minimumSize,
-  ).merge(this);
+    textStyle: textStyle ?? this.textStyle,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    foregroundColor: foregroundColor ?? this.foregroundColor,
+    overlayColor: overlayColor ?? this.overlayColor,
+    shadowColor: shadowColor ?? this.shadowColor,
+    surfaceTintColor: surfaceTintColor ?? this.surfaceTintColor,
+    elevation: elevation ?? this.elevation,
+    padding: padding ?? this.padding,
+    minimumSize: minimumSize ?? this.minimumSize,
+    fixedSize: fixedSize ?? this.fixedSize,
+    maximumSize: maximumSize ?? this.maximumSize,
+    iconColor: iconColor ?? this.iconColor,
+    iconSize: iconSize ?? this.iconSize,
+    iconAlignment: iconAlignment ?? this.iconAlignment,
+    side: side ?? this.side,
+    shape: shape ?? this.shape,
+    mouseCursor: mouseCursor ?? this.mouseCursor,
+    visualDensity: visualDensity ?? this.visualDensity,
+    tapTargetSize: tapTargetSize ?? this.tapTargetSize,
+    animationDuration: animationDuration ?? this.animationDuration,
+    enableFeedback: enableFeedback ?? this.enableFeedback,
+    alignment: alignment ?? this.alignment,
+    splashFactory: splashFactory ?? this.splashFactory,
+    backgroundBuilder: backgroundBuilder ?? this.backgroundBuilder,
+    foregroundBuilder: foregroundBuilder ?? this.foregroundBuilder,
+  );
+
+  static ButtonStyle? lerp(ButtonStyle? a, ButtonStyle? b, double t) =>
+      t < 0.5 ? a : b;
 }
 
 WidgetStateProperty<T?>? _allOrNull<T>(T? value) =>
@@ -568,6 +703,15 @@ WidgetStateProperty<T?>? _allOrNull<T>(T? value) =>
 
 WidgetStateProperty<Color?>? _disabledAware(Color? enabled, Color? disabled) =>
     enabled == null && disabled == null
+    ? null
+    : WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled) ? disabled : enabled,
+      );
+
+WidgetStateProperty<MouseCursor?>? _cursorFor(
+  MouseCursor? enabled,
+  MouseCursor? disabled,
+) => enabled == null && disabled == null
     ? null
     : WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.disabled) ? disabled : enabled,
@@ -582,6 +726,8 @@ ButtonStyle _styleFrom({
   Color? surfaceTintColor,
   Color? iconColor,
   double? iconSize,
+  IconAlignment? iconAlignment,
+  Color? disabledIconColor,
   Color? overlayColor,
   double? elevation,
   TextStyle? textStyle,
@@ -591,17 +737,35 @@ ButtonStyle _styleFrom({
   Size? maximumSize,
   BorderSide? side,
   OutlinedBorder? shape,
-  AlignmentGeometry? alignment,
+  MouseCursor? enabledMouseCursor,
+  MouseCursor? disabledMouseCursor,
   VisualDensity? visualDensity,
   MaterialTapTargetSize? tapTargetSize,
+  Duration? animationDuration,
+  bool? enableFeedback,
+  AlignmentGeometry? alignment,
+  InteractiveInkFeatureFactory? splashFactory,
+  ButtonLayerBuilder? backgroundBuilder,
+  ButtonLayerBuilder? foregroundBuilder,
 }) => ButtonStyle(
   foregroundColor: _disabledAware(foregroundColor, disabledForegroundColor),
   backgroundColor: _disabledAware(backgroundColor, disabledBackgroundColor),
   shadowColor: _allOrNull(shadowColor),
   surfaceTintColor: _allOrNull(surfaceTintColor),
-  iconColor: _allOrNull(iconColor),
+  iconColor: _disabledAware(iconColor, disabledIconColor),
   iconSize: _allOrNull(iconSize),
-  overlayColor: _allOrNull(overlayColor),
+  iconAlignment: iconAlignment,
+  overlayColor: overlayColor == null
+      ? null
+      : WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.pressed)
+              ? overlayColor.withValues(alpha: 0.1)
+              : states.contains(WidgetState.hovered)
+              ? overlayColor.withValues(alpha: 0.08)
+              : states.contains(WidgetState.focused)
+              ? overlayColor.withValues(alpha: 0.1)
+              : null,
+        ),
   elevation: _allOrNull(elevation),
   textStyle: _allOrNull(textStyle),
   padding: _allOrNull(padding),
@@ -610,63 +774,120 @@ ButtonStyle _styleFrom({
   maximumSize: _allOrNull(maximumSize),
   side: _allOrNull(side),
   shape: _allOrNull(shape),
-  alignment: alignment,
+  mouseCursor: _cursorFor(enabledMouseCursor, disabledMouseCursor),
   visualDensity: visualDensity,
   tapTargetSize: tapTargetSize,
+  animationDuration: animationDuration,
+  enableFeedback: enableFeedback,
+  alignment: alignment,
+  splashFactory: splashFactory,
+  backgroundBuilder: backgroundBuilder,
+  foregroundBuilder: foregroundBuilder,
 );
 
 /// Shared native implementation of Material buttons: a real `<button>` with
 /// disabled semantics, keyboard activation and focus from the browser.
+///
+/// As in Flutter, each property resolves from the widget's [style], then
+/// the component theme's style ([themeStyleOf]), then [defaultStyleOf].
 abstract class ButtonStyleButton extends StatelessWidget {
   const ButtonStyleButton({
     super.key,
     required this.onPressed,
     this.onLongPress,
+    this.onHover,
+    this.onFocusChange,
     this.style,
+    this.focusNode,
     this.autofocus = false,
     this.clipBehavior,
+    this.statesController,
+    this.isSemanticButton = true,
+    this.iconAlignment,
     this.tooltip,
     required this.child,
   });
   final VoidCallback? onPressed, onLongPress;
+  final ValueChanged<bool>? onHover, onFocusChange;
   final ButtonStyle? style;
+  final FocusNode? focusNode;
   final bool autofocus;
   final Clip? clipBehavior;
+  final WidgetStatesController? statesController;
+  final bool? isSemanticButton;
+  final IconAlignment? iconAlignment;
   final String? tooltip;
   final Widget? child;
-  bool get enabled => onPressed != null;
+  bool get enabled => onPressed != null || onLongPress != null;
   ButtonStyle defaultStyleOf(BuildContext context);
+  ButtonStyle? themeStyleOf(BuildContext context) => null;
+  Set<WidgetState> get _extraStates => const {};
+
+  static WidgetStateProperty<T>? allOrNull<T>(T? value) =>
+      value == null ? null : WidgetStatePropertyAll<T>(value);
+
+  static EdgeInsetsGeometry scaledPadding(
+    EdgeInsetsGeometry geometry1x,
+    EdgeInsetsGeometry geometry2x,
+    EdgeInsetsGeometry geometry3x,
+    double fontSizeMultiplier,
+  ) => fontSizeMultiplier <= 1
+      ? geometry1x
+      : fontSizeMultiplier < 2
+      ? geometry2x
+      : geometry3x;
 
   @override
   Widget build(BuildContext context) {
-    final states = <WidgetState>{if (!enabled) WidgetState.disabled};
-    final resolvedStyle = (style ?? const ButtonStyle()).merge(
-      defaultStyleOf(context),
-    );
-    T? resolve<T>(WidgetStateProperty<T?>? property) =>
-        property?.resolve(states);
-    final foreground =
-        resolve(resolvedStyle.foregroundColor) ??
-        Theme.of(context).colorScheme.primary;
-    final background = resolve(resolvedStyle.backgroundColor);
+    final states = <WidgetState>{
+      ...?statesController?.value,
+      ..._extraStates,
+      if (!enabled) WidgetState.disabled,
+    };
+    final widgetStyle = style;
+    final themeStyle = themeStyleOf(context);
+    final defaults = defaultStyleOf(context);
+    T? pick<T>(T? Function(ButtonStyle? style) get) =>
+        get(widgetStyle) ?? get(themeStyle) ?? get(defaults);
+    T? resolveIn<T>(
+      WidgetStateProperty<T?>? Function(ButtonStyle? style) get,
+      Set<WidgetState> states,
+    ) =>
+        get(widgetStyle)?.resolve(states) ??
+        get(themeStyle)?.resolve(states) ??
+        get(defaults)?.resolve(states);
+    T? resolve<T>(WidgetStateProperty<T?>? Function(ButtonStyle? style) get) =>
+        resolveIn(get, states);
+    final scheme = Theme.of(context).colorScheme;
+    final foreground = resolve((s) => s?.foregroundColor) ?? scheme.primary;
+    final background = resolve((s) => s?.backgroundColor);
     final text = Theme.of(
       context,
-    ).textTheme.labelLarge!.merge(resolve(resolvedStyle.textStyle));
+    ).textTheme.labelLarge!.merge(resolve((s) => s?.textStyle));
     final padding =
-        resolve(resolvedStyle.padding) ??
+        resolve((s) => s?.padding) ??
         const EdgeInsets.symmetric(horizontal: 24);
-    final minimum = resolve(resolvedStyle.minimumSize) ?? const Size(64, 40);
-    final fixed = resolve(resolvedStyle.fixedSize);
-    final maximum = resolve(resolvedStyle.maximumSize);
-    final side = resolve(resolvedStyle.side);
-    final shape = resolve(resolvedStyle.shape) ?? const StadiumBorder();
-    final elevation = resolve(resolvedStyle.elevation) ?? 0;
-    final iconColor = resolve(resolvedStyle.iconColor) ?? foreground;
-    final iconSize = resolve(resolvedStyle.iconSize) ?? 18;
-    final shadow =
-        resolve(resolvedStyle.shadowColor) ??
-        Theme.of(context).colorScheme.shadow;
-    final alignment = resolvedStyle.alignment;
+    final minimum = resolve((s) => s?.minimumSize) ?? const Size(64, 40);
+    final fixed = resolve((s) => s?.fixedSize);
+    final maximum = resolve((s) => s?.maximumSize);
+    final side = resolve((s) => s?.side);
+    final shape = resolve((s) => s?.shape) ?? const StadiumBorder();
+    final elevation = resolve((s) => s?.elevation) ?? 0;
+    final iconColor = resolve((s) => s?.iconColor) ?? foreground;
+    final iconSize = resolve((s) => s?.iconSize) ?? 18;
+    final shadow = resolve((s) => s?.shadowColor) ?? scheme.shadow;
+    final cursor = resolve((s) => s?.mouseCursor);
+    final alignment = pick((s) => s?.alignment);
+    final splash =
+        pick((s) => s?.splashFactory) ?? Theme.of(context).splashFactory;
+    final hoverOverlay = resolveIn((s) => s?.overlayColor, {
+      ...states,
+      WidgetState.hovered,
+    });
+    final pressOverlay = resolveIn((s) => s?.overlayColor, {
+      ...states,
+      WidgetState.pressed,
+    });
     final css = StringBuffer(
       'display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;flex-shrink:0;margin:0;border:0;font:inherit;text-align:center;',
     )..write(textStyleCss(text.copyWith(color: foreground)));
@@ -698,31 +919,61 @@ abstract class ButtonStyleButton extends StatelessWidget {
       );
     }
     css.write(_stateLayerCss(foreground));
+    if (hoverOverlay != null)
+      css.write('--fd-hover:${colorCss(hoverOverlay)};');
+    if (_noSplash(splash)) {
+      css.write('--fd-press:transparent;');
+    } else if (pressOverlay != null) {
+      css.write('--fd-press:${colorCss(pressOverlay)};');
+    }
+    if (cursor != null) css.write('cursor:${cursor._css};');
     if (clipBehavior != null && clipBehavior != Clip.none)
       css.write('overflow:hidden;');
+    final semantic = isSemanticButton ?? true;
+    Widget? content = child;
+    final iconSide = iconAlignment ?? pick((s) => s?.iconAlignment);
+    if (content is _IconLabel && content.alignment == null && iconSide != null)
+      content = _IconLabel(content.icon, content.label, iconSide);
     return _Box(
-      tag: 'button',
+      tag: semantic ? 'button' : 'div',
       css: css.toString(),
       fill: _Fill.none,
       layout: _DomLayout.row,
       attributes: {
-        'type': 'button',
+        if (semantic) 'type': 'button',
+        if (!semantic && enabled) 'tabindex': '0',
         'class': 'fd-ink fd-button',
         if (!enabled) 'disabled': '',
+        if (!enabled && !semantic) 'aria-disabled': 'true',
+        if (autofocus) 'autofocus': '',
         if (tooltip != null) 'title': tooltip!,
         if (tooltip != null && child is Icon) 'aria-label': tooltip!,
       },
-      handlers: {if (enabled) 'click': (_) => onPressed!()},
+      handlers: {
+        if (onPressed != null) 'click': (_) => onPressed!(),
+        if (onHover != null) 'mouseenter': (_) => onHover!(true),
+        if (onHover != null) 'mouseleave': (_) => onHover!(false),
+        if (onFocusChange != null || statesController != null)
+          'focus': (_) {
+            statesController?.update(WidgetState.focused, true);
+            onFocusChange?.call(true);
+          },
+        if (onFocusChange != null || statesController != null)
+          'blur': (_) {
+            statesController?.update(WidgetState.focused, false);
+            onFocusChange?.call(false);
+          },
+      },
       gestures: enabled && onLongPress != null
           ? _GestureCallbacks(onLongPress: onLongPress)
           : null,
       children: [
-        if (child != null)
+        if (content != null)
           IconTheme.merge(
             data: IconThemeData(color: iconColor, size: iconSize),
             child: DefaultTextStyle(
               style: text.copyWith(color: foreground),
-              child: child!,
+              child: content,
             ),
           ),
       ],
@@ -731,17 +982,17 @@ abstract class ButtonStyleButton extends StatelessWidget {
 }
 
 class _IconLabel extends StatelessWidget {
-  const _IconLabel(this.icon, this.label);
+  const _IconLabel(this.icon, this.label, [this.alignment]);
   final Widget? icon;
   final Widget label;
+  final IconAlignment? alignment;
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     spacing: 8,
-    children: [
-      ?icon,
-      Flexible(child: label),
-    ],
+    children: alignment == IconAlignment.end
+        ? [Flexible(child: label), ?icon]
+        : [?icon, Flexible(child: label)],
   );
 }
 
@@ -750,21 +1001,42 @@ class ElevatedButton extends ButtonStyleButton {
     super.key,
     required super.onPressed,
     super.onLongPress,
+    super.onHover,
+    super.onFocusChange,
     super.style,
+    super.focusNode,
     super.autofocus,
     super.clipBehavior,
+    super.statesController,
     required super.child,
+    super.iconAlignment,
   });
   ElevatedButton.icon({
     Key? key,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    ValueChanged<bool>? onHover,
+    ValueChanged<bool>? onFocusChange,
     ButtonStyle? style,
+    FocusNode? focusNode,
+    bool? autofocus,
+    Clip? clipBehavior,
+    WidgetStatesController? statesController,
     Widget? icon,
     required Widget label,
+    IconAlignment? iconAlignment,
   }) : this(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
+         onHover: onHover,
+         onFocusChange: onFocusChange,
          style: style,
+         focusNode: focusNode,
+         autofocus: autofocus ?? false,
+         clipBehavior: clipBehavior,
+         statesController: statesController,
+         iconAlignment: iconAlignment,
          child: _IconLabel(icon, label),
        );
   static ButtonStyle styleFrom({
@@ -776,6 +1048,8 @@ class ElevatedButton extends ButtonStyleButton {
     Color? surfaceTintColor,
     Color? iconColor,
     double? iconSize,
+    IconAlignment? iconAlignment,
+    Color? disabledIconColor,
     Color? overlayColor,
     double? elevation,
     TextStyle? textStyle,
@@ -785,9 +1059,16 @@ class ElevatedButton extends ButtonStyleButton {
     Size? maximumSize,
     BorderSide? side,
     OutlinedBorder? shape,
-    AlignmentGeometry? alignment,
+    MouseCursor? enabledMouseCursor,
+    MouseCursor? disabledMouseCursor,
     VisualDensity? visualDensity,
     MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
   }) => _styleFrom(
     foregroundColor: foregroundColor,
     backgroundColor: backgroundColor,
@@ -797,6 +1078,8 @@ class ElevatedButton extends ButtonStyleButton {
     surfaceTintColor: surfaceTintColor,
     iconColor: iconColor,
     iconSize: iconSize,
+    iconAlignment: iconAlignment,
+    disabledIconColor: disabledIconColor,
     overlayColor: overlayColor,
     elevation: elevation,
     textStyle: textStyle,
@@ -806,10 +1089,20 @@ class ElevatedButton extends ButtonStyleButton {
     maximumSize: maximumSize,
     side: side,
     shape: shape,
-    alignment: alignment,
+    enabledMouseCursor: enabledMouseCursor,
+    disabledMouseCursor: disabledMouseCursor,
     visualDensity: visualDensity,
     tapTargetSize: tapTargetSize,
+    animationDuration: animationDuration,
+    enableFeedback: enableFeedback,
+    alignment: alignment,
+    splashFactory: splashFactory,
+    backgroundBuilder: backgroundBuilder,
+    foregroundBuilder: foregroundBuilder,
   );
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) =>
+      ElevatedButtonTheme.of(context).style;
   @override
   ButtonStyle defaultStyleOf(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -834,43 +1127,81 @@ class FilledButton extends ButtonStyleButton {
     super.key,
     required super.onPressed,
     super.onLongPress,
+    super.onHover,
+    super.onFocusChange,
     super.style,
+    super.focusNode,
     super.autofocus,
     super.clipBehavior,
+    super.statesController,
     required super.child,
   }) : _tonal = false;
   const FilledButton.tonal({
     super.key,
     required super.onPressed,
     super.onLongPress,
+    super.onHover,
+    super.onFocusChange,
     super.style,
+    super.focusNode,
     super.autofocus,
     super.clipBehavior,
+    super.statesController,
     required super.child,
   }) : _tonal = true;
   FilledButton.icon({
     Key? key,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    ValueChanged<bool>? onHover,
+    ValueChanged<bool>? onFocusChange,
     ButtonStyle? style,
+    FocusNode? focusNode,
+    bool? autofocus,
+    Clip? clipBehavior,
+    WidgetStatesController? statesController,
     Widget? icon,
     required Widget label,
+    IconAlignment? iconAlignment,
   }) : this(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
+         onHover: onHover,
+         onFocusChange: onFocusChange,
          style: style,
-         child: _IconLabel(icon, label),
+         focusNode: focusNode,
+         autofocus: autofocus ?? false,
+         clipBehavior: clipBehavior,
+         statesController: statesController,
+         child: _IconLabel(icon, label, iconAlignment),
        );
   FilledButton.tonalIcon({
     Key? key,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    ValueChanged<bool>? onHover,
+    ValueChanged<bool>? onFocusChange,
     ButtonStyle? style,
+    FocusNode? focusNode,
+    bool? autofocus,
+    Clip? clipBehavior,
+    WidgetStatesController? statesController,
     Widget? icon,
     required Widget label,
+    IconAlignment? iconAlignment,
   }) : this.tonal(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
+         onHover: onHover,
+         onFocusChange: onFocusChange,
          style: style,
-         child: _IconLabel(icon, label),
+         focusNode: focusNode,
+         autofocus: autofocus ?? false,
+         clipBehavior: clipBehavior,
+         statesController: statesController,
+         child: _IconLabel(icon, label, iconAlignment),
        );
   final bool _tonal;
   static ButtonStyle styleFrom({
@@ -878,8 +1209,13 @@ class FilledButton extends ButtonStyleButton {
     Color? backgroundColor,
     Color? disabledForegroundColor,
     Color? disabledBackgroundColor,
+    Color? shadowColor,
+    Color? surfaceTintColor,
     Color? iconColor,
     double? iconSize,
+    IconAlignment? iconAlignment,
+    Color? disabledIconColor,
+    Color? overlayColor,
     double? elevation,
     TextStyle? textStyle,
     EdgeInsetsGeometry? padding,
@@ -888,16 +1224,28 @@ class FilledButton extends ButtonStyleButton {
     Size? maximumSize,
     BorderSide? side,
     OutlinedBorder? shape,
-    AlignmentGeometry? alignment,
+    MouseCursor? enabledMouseCursor,
+    MouseCursor? disabledMouseCursor,
     VisualDensity? visualDensity,
     MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
   }) => _styleFrom(
     foregroundColor: foregroundColor,
     backgroundColor: backgroundColor,
     disabledForegroundColor: disabledForegroundColor,
     disabledBackgroundColor: disabledBackgroundColor,
+    shadowColor: shadowColor,
+    surfaceTintColor: surfaceTintColor,
     iconColor: iconColor,
     iconSize: iconSize,
+    iconAlignment: iconAlignment,
+    disabledIconColor: disabledIconColor,
+    overlayColor: overlayColor,
     elevation: elevation,
     textStyle: textStyle,
     padding: padding,
@@ -906,10 +1254,20 @@ class FilledButton extends ButtonStyleButton {
     maximumSize: maximumSize,
     side: side,
     shape: shape,
-    alignment: alignment,
+    enabledMouseCursor: enabledMouseCursor,
+    disabledMouseCursor: disabledMouseCursor,
     visualDensity: visualDensity,
     tapTargetSize: tapTargetSize,
+    animationDuration: animationDuration,
+    enableFeedback: enableFeedback,
+    alignment: alignment,
+    splashFactory: splashFactory,
+    backgroundBuilder: backgroundBuilder,
+    foregroundBuilder: foregroundBuilder,
   );
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) =>
+      FilledButtonTheme.of(context).style;
   @override
   ButtonStyle defaultStyleOf(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -931,21 +1289,42 @@ class OutlinedButton extends ButtonStyleButton {
     super.key,
     required super.onPressed,
     super.onLongPress,
+    super.onHover,
+    super.onFocusChange,
     super.style,
+    super.focusNode,
     super.autofocus,
     super.clipBehavior,
+    super.statesController,
     required super.child,
+    super.iconAlignment,
   });
   OutlinedButton.icon({
     Key? key,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    ValueChanged<bool>? onHover,
+    ValueChanged<bool>? onFocusChange,
     ButtonStyle? style,
+    FocusNode? focusNode,
+    bool? autofocus,
+    Clip? clipBehavior,
+    WidgetStatesController? statesController,
     Widget? icon,
     required Widget label,
+    IconAlignment? iconAlignment,
   }) : this(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
+         onHover: onHover,
+         onFocusChange: onFocusChange,
          style: style,
+         focusNode: focusNode,
+         autofocus: autofocus ?? false,
+         clipBehavior: clipBehavior,
+         statesController: statesController,
+         iconAlignment: iconAlignment,
          child: _IconLabel(icon, label),
        );
   static ButtonStyle styleFrom({
@@ -953,8 +1332,13 @@ class OutlinedButton extends ButtonStyleButton {
     Color? backgroundColor,
     Color? disabledForegroundColor,
     Color? disabledBackgroundColor,
+    Color? shadowColor,
+    Color? surfaceTintColor,
     Color? iconColor,
     double? iconSize,
+    IconAlignment? iconAlignment,
+    Color? disabledIconColor,
+    Color? overlayColor,
     double? elevation,
     TextStyle? textStyle,
     EdgeInsetsGeometry? padding,
@@ -963,16 +1347,28 @@ class OutlinedButton extends ButtonStyleButton {
     Size? maximumSize,
     BorderSide? side,
     OutlinedBorder? shape,
-    AlignmentGeometry? alignment,
+    MouseCursor? enabledMouseCursor,
+    MouseCursor? disabledMouseCursor,
     VisualDensity? visualDensity,
     MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
   }) => _styleFrom(
     foregroundColor: foregroundColor,
     backgroundColor: backgroundColor,
     disabledForegroundColor: disabledForegroundColor,
     disabledBackgroundColor: disabledBackgroundColor,
+    shadowColor: shadowColor,
+    surfaceTintColor: surfaceTintColor,
     iconColor: iconColor,
     iconSize: iconSize,
+    iconAlignment: iconAlignment,
+    disabledIconColor: disabledIconColor,
+    overlayColor: overlayColor,
     elevation: elevation,
     textStyle: textStyle,
     padding: padding,
@@ -981,10 +1377,20 @@ class OutlinedButton extends ButtonStyleButton {
     maximumSize: maximumSize,
     side: side,
     shape: shape,
-    alignment: alignment,
+    enabledMouseCursor: enabledMouseCursor,
+    disabledMouseCursor: disabledMouseCursor,
     visualDensity: visualDensity,
     tapTargetSize: tapTargetSize,
+    animationDuration: animationDuration,
+    enableFeedback: enableFeedback,
+    alignment: alignment,
+    splashFactory: splashFactory,
+    backgroundBuilder: backgroundBuilder,
+    foregroundBuilder: foregroundBuilder,
   );
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) =>
+      OutlinedButtonTheme.of(context).style;
   @override
   ButtonStyle defaultStyleOf(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1009,21 +1415,43 @@ class TextButton extends ButtonStyleButton {
     super.key,
     required super.onPressed,
     super.onLongPress,
+    super.onHover,
+    super.onFocusChange,
     super.style,
+    super.focusNode,
     super.autofocus,
     super.clipBehavior,
-    required super.child,
+    super.statesController,
+    super.isSemanticButton,
+    required Widget super.child,
+    super.iconAlignment,
   });
   TextButton.icon({
     Key? key,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    ValueChanged<bool>? onHover,
+    ValueChanged<bool>? onFocusChange,
     ButtonStyle? style,
+    FocusNode? focusNode,
+    bool? autofocus,
+    Clip? clipBehavior,
+    WidgetStatesController? statesController,
     Widget? icon,
     required Widget label,
+    IconAlignment? iconAlignment,
   }) : this(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
+         onHover: onHover,
+         onFocusChange: onFocusChange,
          style: style,
+         focusNode: focusNode,
+         autofocus: autofocus ?? false,
+         clipBehavior: clipBehavior,
+         statesController: statesController,
+         iconAlignment: iconAlignment,
          child: _IconLabel(icon, label),
        );
   static ButtonStyle styleFrom({
@@ -1031,8 +1459,13 @@ class TextButton extends ButtonStyleButton {
     Color? backgroundColor,
     Color? disabledForegroundColor,
     Color? disabledBackgroundColor,
+    Color? shadowColor,
+    Color? surfaceTintColor,
     Color? iconColor,
     double? iconSize,
+    IconAlignment? iconAlignment,
+    Color? disabledIconColor,
+    Color? overlayColor,
     double? elevation,
     TextStyle? textStyle,
     EdgeInsetsGeometry? padding,
@@ -1041,16 +1474,28 @@ class TextButton extends ButtonStyleButton {
     Size? maximumSize,
     BorderSide? side,
     OutlinedBorder? shape,
-    AlignmentGeometry? alignment,
+    MouseCursor? enabledMouseCursor,
+    MouseCursor? disabledMouseCursor,
     VisualDensity? visualDensity,
     MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
   }) => _styleFrom(
     foregroundColor: foregroundColor,
     backgroundColor: backgroundColor,
     disabledForegroundColor: disabledForegroundColor,
     disabledBackgroundColor: disabledBackgroundColor,
+    shadowColor: shadowColor,
+    surfaceTintColor: surfaceTintColor,
     iconColor: iconColor,
     iconSize: iconSize,
+    iconAlignment: iconAlignment,
+    disabledIconColor: disabledIconColor,
+    overlayColor: overlayColor,
     elevation: elevation,
     textStyle: textStyle,
     padding: padding,
@@ -1059,10 +1504,20 @@ class TextButton extends ButtonStyleButton {
     maximumSize: maximumSize,
     side: side,
     shape: shape,
-    alignment: alignment,
+    enabledMouseCursor: enabledMouseCursor,
+    disabledMouseCursor: disabledMouseCursor,
     visualDensity: visualDensity,
     tapTargetSize: tapTargetSize,
+    animationDuration: animationDuration,
+    enableFeedback: enableFeedback,
+    alignment: alignment,
+    splashFactory: splashFactory,
+    backgroundBuilder: backgroundBuilder,
+    foregroundBuilder: foregroundBuilder,
   );
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) =>
+      TextButtonTheme.of(context).style;
   @override
   ButtonStyle defaultStyleOf(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1078,74 +1533,245 @@ class TextButton extends ButtonStyleButton {
   }
 }
 
+enum _IconButtonVariant { standard, filled, filledTonal, outlined }
+
 class IconButton extends StatelessWidget {
   const IconButton({
     super.key,
-    required this.onPressed,
-    required this.icon,
     this.iconSize,
-    this.padding,
-    this.color,
-    this.disabledColor,
-    this.tooltip,
-    this.style,
-    this.isSelected,
-    this.selectedIcon,
-    this.constraints,
     this.visualDensity,
+    this.padding,
     this.alignment,
     this.splashRadius,
+    this.color,
     this.focusColor,
     this.hoverColor,
     this.highlightColor,
     this.splashColor,
+    this.disabledColor,
+    required this.onPressed,
+    this.onHover,
+    this.onLongPress,
     this.mouseCursor,
     this.focusNode,
     this.autofocus = false,
+    this.tooltip,
     this.enableFeedback,
-  });
+    this.constraints,
+    this.style,
+    this.isSelected,
+    this.selectedIcon,
+    required this.icon,
+  }) : _variant = _IconButtonVariant.standard;
+  const IconButton.filled({
+    super.key,
+    this.iconSize,
+    this.visualDensity,
+    this.padding,
+    this.alignment,
+    this.splashRadius,
+    this.color,
+    this.focusColor,
+    this.hoverColor,
+    this.highlightColor,
+    this.splashColor,
+    this.disabledColor,
+    required this.onPressed,
+    this.onHover,
+    this.onLongPress,
+    this.mouseCursor,
+    this.focusNode,
+    this.autofocus = false,
+    this.tooltip,
+    this.enableFeedback,
+    this.constraints,
+    this.style,
+    this.isSelected,
+    this.selectedIcon,
+    required this.icon,
+  }) : _variant = _IconButtonVariant.filled;
+  const IconButton.filledTonal({
+    super.key,
+    this.iconSize,
+    this.visualDensity,
+    this.padding,
+    this.alignment,
+    this.splashRadius,
+    this.color,
+    this.focusColor,
+    this.hoverColor,
+    this.highlightColor,
+    this.splashColor,
+    this.disabledColor,
+    required this.onPressed,
+    this.onHover,
+    this.onLongPress,
+    this.mouseCursor,
+    this.focusNode,
+    this.autofocus = false,
+    this.tooltip,
+    this.enableFeedback,
+    this.constraints,
+    this.style,
+    this.isSelected,
+    this.selectedIcon,
+    required this.icon,
+  }) : _variant = _IconButtonVariant.filledTonal;
+  const IconButton.outlined({
+    super.key,
+    this.iconSize,
+    this.visualDensity,
+    this.padding,
+    this.alignment,
+    this.splashRadius,
+    this.color,
+    this.focusColor,
+    this.hoverColor,
+    this.highlightColor,
+    this.splashColor,
+    this.disabledColor,
+    required this.onPressed,
+    this.onHover,
+    this.onLongPress,
+    this.mouseCursor,
+    this.focusNode,
+    this.autofocus = false,
+    this.tooltip,
+    this.enableFeedback,
+    this.constraints,
+    this.style,
+    this.isSelected,
+    this.selectedIcon,
+    required this.icon,
+  }) : _variant = _IconButtonVariant.outlined;
+  final double? iconSize, splashRadius;
   final VisualDensity? visualDensity;
+  final EdgeInsetsGeometry? padding;
   final AlignmentGeometry? alignment;
-  final double? splashRadius;
-  final Color? focusColor, hoverColor, highlightColor, splashColor;
+  final Color? color, focusColor, hoverColor, highlightColor, splashColor;
+  final Color? disabledColor;
+  final VoidCallback? onPressed, onLongPress;
+  final ValueChanged<bool>? onHover;
   final MouseCursor? mouseCursor;
   final FocusNode? focusNode;
   final bool autofocus;
-  final bool? enableFeedback;
-  final VoidCallback? onPressed;
-  final Widget icon;
-  final Widget? selectedIcon;
-  final bool? isSelected;
-  final double? iconSize;
-  final EdgeInsetsGeometry? padding;
-  final Color? color, disabledColor;
   final String? tooltip;
-  final ButtonStyle? style;
+  final bool? enableFeedback;
   final BoxConstraints? constraints;
+  final ButtonStyle? style;
+  final bool? isSelected;
+  final Widget? selectedIcon;
+  final Widget icon;
+  final _IconButtonVariant _variant;
+
+  static ButtonStyle styleFrom({
+    Color? foregroundColor,
+    Color? backgroundColor,
+    Color? disabledForegroundColor,
+    Color? disabledBackgroundColor,
+    Color? focusColor,
+    Color? hoverColor,
+    Color? highlightColor,
+    Color? shadowColor,
+    Color? surfaceTintColor,
+    Color? overlayColor,
+    double? elevation,
+    Size? minimumSize,
+    Size? fixedSize,
+    Size? maximumSize,
+    double? iconSize,
+    BorderSide? side,
+    OutlinedBorder? shape,
+    EdgeInsetsGeometry? padding,
+    MouseCursor? enabledMouseCursor,
+    MouseCursor? disabledMouseCursor,
+    VisualDensity? visualDensity,
+    MaterialTapTargetSize? tapTargetSize,
+    Duration? animationDuration,
+    bool? enableFeedback,
+    AlignmentGeometry? alignment,
+    InteractiveInkFeatureFactory? splashFactory,
+    ButtonLayerBuilder? backgroundBuilder,
+    ButtonLayerBuilder? foregroundBuilder,
+  }) {
+    final base = _styleFrom(
+      foregroundColor: foregroundColor,
+      backgroundColor: backgroundColor,
+      disabledForegroundColor: disabledForegroundColor,
+      disabledBackgroundColor: disabledBackgroundColor,
+      iconColor: foregroundColor,
+      disabledIconColor: disabledForegroundColor,
+      shadowColor: shadowColor,
+      surfaceTintColor: surfaceTintColor,
+      overlayColor: overlayColor,
+      elevation: elevation,
+      minimumSize: minimumSize,
+      fixedSize: fixedSize,
+      maximumSize: maximumSize,
+      iconSize: iconSize,
+      side: side,
+      shape: shape,
+      padding: padding,
+      enabledMouseCursor: enabledMouseCursor,
+      disabledMouseCursor: disabledMouseCursor,
+      visualDensity: visualDensity,
+      tapTargetSize: tapTargetSize,
+      animationDuration: animationDuration,
+      enableFeedback: enableFeedback,
+      alignment: alignment,
+      splashFactory: splashFactory,
+      backgroundBuilder: backgroundBuilder,
+      foregroundBuilder: foregroundBuilder,
+    );
+    if (overlayColor != null || (hoverColor == null && highlightColor == null))
+      return base;
+    return base.copyWith(
+      overlayColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.pressed)
+            ? highlightColor
+            : states.contains(WidgetState.hovered)
+            ? hoverColor
+            : states.contains(WidgetState.focused)
+            ? focusColor
+            : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final selected = isSelected == true;
-    final foreground = onPressed == null
-        ? disabledColor ?? scheme.onSurface.withValues(alpha: 0.38)
-        : color ?? (selected ? scheme.primary : scheme.onSurfaceVariant);
+    // Widget parameters form a style that the explicit [style] overrides.
+    var adjusted = styleFrom(
+      foregroundColor: color,
+      disabledForegroundColor: disabledColor,
+      focusColor: focusColor,
+      hoverColor: hoverColor,
+      highlightColor: highlightColor,
+      iconSize: iconSize,
+      padding: padding,
+      minimumSize: constraints == null
+          ? null
+          : Size(constraints!.minWidth, constraints!.minHeight),
+      maximumSize: constraints == null
+          ? null
+          : Size(constraints!.maxWidth, constraints!.maxHeight),
+      visualDensity: visualDensity,
+      enabledMouseCursor: mouseCursor,
+      enableFeedback: enableFeedback,
+      alignment: alignment,
+    );
+    if (style != null) adjusted = style!.merge(adjusted);
     return _IconButton(
       onPressed: onPressed,
+      onLongPress: onLongPress,
+      onHover: onHover,
+      focusNode: focusNode,
+      autofocus: autofocus,
       tooltip: tooltip,
-      style: ButtonStyle(
-        foregroundColor: WidgetStatePropertyAll(foreground),
-        iconColor: WidgetStatePropertyAll(foreground),
-        iconSize: WidgetStatePropertyAll(iconSize ?? 24),
-        padding: WidgetStatePropertyAll(padding ?? const EdgeInsets.all(8)),
-        // Density shrinks the 40px target by 4px per step, as in Flutter.
-        minimumSize: WidgetStatePropertyAll(
-          Size(
-            40 + 4 * (visualDensity?.horizontal ?? 0).clamp(-4, 0),
-            40 + 4 * (visualDensity?.vertical ?? 0).clamp(-4, 0),
-          ),
-        ),
-        shape: const WidgetStatePropertyAll(CircleBorder()),
-      ).merge(style),
+      style: adjusted,
+      selected: selected,
+      variant: _variant,
       child: selected && selectedIcon != null ? selectedIcon! : icon,
     );
   }
@@ -1154,87 +1780,309 @@ class IconButton extends StatelessWidget {
 class _IconButton extends ButtonStyleButton {
   const _IconButton({
     required super.onPressed,
+    super.onLongPress,
+    super.onHover,
+    super.focusNode,
+    super.autofocus,
     super.style,
     super.tooltip,
+    this.selected = false,
+    this.variant = _IconButtonVariant.standard,
+    this.useTheme = true,
     required super.child,
   });
+  final bool selected, useTheme;
+  final _IconButtonVariant variant;
   @override
-  ButtonStyle defaultStyleOf(BuildContext context) => const ButtonStyle();
+  Set<WidgetState> get _extraStates =>
+      selected ? const {WidgetState.selected} : const {};
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) =>
+      useTheme ? IconButtonTheme.of(context).style : null;
+  @override
+  ButtonStyle defaultStyleOf(BuildContext context) {
+    if (!useTheme) return const ButtonStyle();
+    final scheme = Theme.of(context).colorScheme;
+    final disabled = scheme.onSurface.withValues(alpha: 0.38);
+    Color foreground(Set<WidgetState> states) => switch (variant) {
+      _ when states.contains(WidgetState.disabled) => disabled,
+      _IconButtonVariant.filled => scheme.onPrimary,
+      _IconButtonVariant.filledTonal => scheme.onSecondaryContainer,
+      _ when states.contains(WidgetState.selected) =>
+        variant == _IconButtonVariant.outlined
+            ? scheme.onInverseSurface
+            : scheme.primary,
+      _ => scheme.onSurfaceVariant,
+    };
+    return ButtonStyle(
+      foregroundColor: WidgetStateProperty.resolveWith(foreground),
+      iconColor: WidgetStateProperty.resolveWith(foreground),
+      backgroundColor: WidgetStateProperty.resolveWith(
+        (states) => switch (variant) {
+          _IconButtonVariant.standard => null,
+          _ when states.contains(WidgetState.disabled) =>
+            variant == _IconButtonVariant.outlined
+                ? null
+                : scheme.onSurface.withValues(alpha: 0.12),
+          _IconButtonVariant.filled => scheme.primary,
+          _IconButtonVariant.filledTonal => scheme.secondaryContainer,
+          _IconButtonVariant.outlined =>
+            states.contains(WidgetState.selected)
+                ? scheme.inverseSurface
+                : null,
+        },
+      ),
+      side: variant == _IconButtonVariant.outlined
+          ? WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? null
+                  : BorderSide(
+                      color: states.contains(WidgetState.disabled)
+                          ? scheme.onSurface.withValues(alpha: 0.12)
+                          : scheme.outline,
+                    ),
+            )
+          : null,
+      iconSize: const WidgetStatePropertyAll(24),
+      padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
+      minimumSize: const WidgetStatePropertyAll(Size(40, 40)),
+      shape: const WidgetStatePropertyAll(CircleBorder()),
+    );
+  }
 }
+
+enum _FabSize { regular, small, large, extended }
 
 class FloatingActionButton extends StatelessWidget {
   const FloatingActionButton({
-    this.clipBehavior,
     super.key,
-    required this.onPressed,
     this.child,
     this.tooltip,
-    this.backgroundColor,
     this.foregroundColor,
-    this.elevation,
-    this.shape,
-    this.mini = false,
+    this.backgroundColor,
+    this.focusColor,
+    this.hoverColor,
+    this.splashColor,
     this.heroTag,
-  }) : _label = null;
-  const FloatingActionButton.extended({
-    this.clipBehavior,
-    super.key,
+    this.elevation,
+    this.focusElevation,
+    this.hoverElevation,
+    this.highlightElevation,
+    this.disabledElevation,
     required this.onPressed,
-    required Widget label,
-    Widget? icon,
-    this.tooltip,
-    this.backgroundColor,
-    this.foregroundColor,
-    this.elevation,
+    this.mouseCursor,
+    this.mini = false,
     this.shape,
+    this.clipBehavior = Clip.none,
+    this.focusNode,
+    this.autofocus = false,
+    this.materialTapTargetSize,
+    this.isExtended = false,
+    this.enableFeedback,
+  }) : _label = null,
+       _size = mini ? _FabSize.small : _FabSize.regular,
+       extendedIconLabelSpacing = null,
+       extendedPadding = null,
+       extendedTextStyle = null;
+  const FloatingActionButton.small({
+    super.key,
+    this.child,
+    this.tooltip,
+    this.foregroundColor,
+    this.backgroundColor,
+    this.focusColor,
+    this.hoverColor,
+    this.splashColor,
     this.heroTag,
+    this.elevation,
+    this.focusElevation,
+    this.hoverElevation,
+    this.highlightElevation,
+    this.disabledElevation,
+    required this.onPressed,
+    this.mouseCursor,
+    this.shape,
+    this.clipBehavior = Clip.none,
+    this.focusNode,
+    this.autofocus = false,
+    this.materialTapTargetSize,
+    this.enableFeedback,
+  }) : _label = null,
+       _size = _FabSize.small,
+       mini = true,
+       isExtended = false,
+       extendedIconLabelSpacing = null,
+       extendedPadding = null,
+       extendedTextStyle = null;
+  const FloatingActionButton.large({
+    super.key,
+    this.child,
+    this.tooltip,
+    this.foregroundColor,
+    this.backgroundColor,
+    this.focusColor,
+    this.hoverColor,
+    this.splashColor,
+    this.heroTag,
+    this.elevation,
+    this.focusElevation,
+    this.hoverElevation,
+    this.highlightElevation,
+    this.disabledElevation,
+    required this.onPressed,
+    this.mouseCursor,
+    this.shape,
+    this.clipBehavior = Clip.none,
+    this.focusNode,
+    this.autofocus = false,
+    this.materialTapTargetSize,
+    this.enableFeedback,
+  }) : _label = null,
+       _size = _FabSize.large,
+       mini = false,
+       isExtended = false,
+       extendedIconLabelSpacing = null,
+       extendedPadding = null,
+       extendedTextStyle = null;
+  const FloatingActionButton.extended({
+    super.key,
+    this.tooltip,
+    this.foregroundColor,
+    this.backgroundColor,
+    this.focusColor,
+    this.hoverColor,
+    this.heroTag,
+    this.elevation,
+    this.focusElevation,
+    this.hoverElevation,
+    this.splashColor,
+    this.highlightElevation,
+    this.disabledElevation,
+    required this.onPressed,
+    this.mouseCursor,
+    this.shape,
+    this.isExtended = true,
+    this.materialTapTargetSize,
+    this.clipBehavior = Clip.none,
+    this.focusNode,
+    this.autofocus = false,
+    this.extendedIconLabelSpacing,
+    this.extendedPadding,
+    this.extendedTextStyle,
+    Widget? icon,
+    required Widget label,
+    this.enableFeedback,
   }) : _label = label,
        child = icon,
+       _size = _FabSize.extended,
        mini = false;
-
-  /// Accepted for API compatibility; shaped boxes clip through CSS.
-  final Clip? clipBehavior;
-  final VoidCallback? onPressed;
   final Widget? child;
   final Widget? _label;
+  final _FabSize _size;
   final String? tooltip;
-  final Color? backgroundColor, foregroundColor;
-  final double? elevation;
-  final ShapeBorder? shape;
-  final bool mini;
+  final Color? foregroundColor, backgroundColor;
+  final Color? focusColor, hoverColor, splashColor;
   final Object? heroTag;
+  final double? elevation, focusElevation, hoverElevation;
+  final double? highlightElevation, disabledElevation;
+  final VoidCallback? onPressed;
+  final MouseCursor? mouseCursor;
+  final bool mini;
+  final ShapeBorder? shape;
+  final Clip clipBehavior;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final MaterialTapTargetSize? materialTapTargetSize;
+  final bool isExtended;
+  final bool? enableFeedback;
+  final double? extendedIconLabelSpacing;
+  final EdgeInsetsGeometry? extendedPadding;
+  final TextStyle? extendedTextStyle;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final extended = _label != null;
-    final size = mini ? 40.0 : 56.0;
+    final fabTheme = Theme.of(context).floatingActionButtonTheme;
+    final extended = _size == _FabSize.extended;
+    final constraints = switch (_size) {
+      _FabSize.small => fabTheme.smallSizeConstraints,
+      _FabSize.large => fabTheme.largeSizeConstraints,
+      _FabSize.extended => fabTheme.extendedSizeConstraints,
+      _FabSize.regular => fabTheme.sizeConstraints,
+    };
+    final size = switch (_size) {
+      _FabSize.small => 40.0,
+      _FabSize.large => 96.0,
+      _ => 56.0,
+    };
+    final radius = switch (_size) {
+      _FabSize.small => 12.0,
+      _FabSize.large => 28.0,
+      _ => 16.0,
+    };
+    final resolvedShape = shape ?? fabTheme.shape;
+    final iconSize =
+        fabTheme.iconSize ?? (_size == _FabSize.large ? 36.0 : 24.0);
+    final textStyle = extendedTextStyle ?? fabTheme.extendedTextStyle;
     return _IconButton(
       onPressed: onPressed,
       tooltip: tooltip,
+      autofocus: autofocus,
+      focusNode: focusNode,
+      useTheme: false,
       style: ButtonStyle(
         foregroundColor: WidgetStatePropertyAll(
-          foregroundColor ?? scheme.onPrimaryContainer,
+          foregroundColor ??
+              fabTheme.foregroundColor ??
+              scheme.onPrimaryContainer,
         ),
         backgroundColor: WidgetStatePropertyAll(
-          backgroundColor ?? scheme.primaryContainer,
+          backgroundColor ??
+              fabTheme.backgroundColor ??
+              scheme.primaryContainer,
         ),
-        iconSize: const WidgetStatePropertyAll(24),
-        elevation: WidgetStatePropertyAll(elevation ?? 6),
+        iconSize: WidgetStatePropertyAll(iconSize),
+        textStyle: textStyle == null ? null : WidgetStatePropertyAll(textStyle),
+        elevation: WidgetStatePropertyAll(
+          onPressed == null
+              ? disabledElevation ??
+                    fabTheme.disabledElevation ??
+                    elevation ??
+                    fabTheme.elevation ??
+                    6
+              : elevation ?? fabTheme.elevation ?? 6,
+        ),
         padding: WidgetStatePropertyAll(
           extended
-              ? const EdgeInsets.symmetric(horizontal: 16)
+              ? extendedPadding ??
+                    fabTheme.extendedPadding ??
+                    const EdgeInsets.symmetric(horizontal: 16)
               : EdgeInsets.zero,
         ),
-        minimumSize: WidgetStatePropertyAll(Size(extended ? 80 : size, size)),
+        minimumSize: WidgetStatePropertyAll(
+          constraints != null
+              ? Size(constraints.minWidth, constraints.minHeight)
+              : Size(extended ? 80 : size, size),
+        ),
+        fixedSize: extended || constraints == null
+            ? null
+            : WidgetStatePropertyAll(
+                Size(constraints.maxWidth, constraints.maxHeight),
+              ),
+        mouseCursor: mouseCursor == null
+            ? null
+            : WidgetStatePropertyAll(mouseCursor),
         shape: WidgetStatePropertyAll(
-          shape is OutlinedBorder
-              ? shape as OutlinedBorder
+          resolvedShape is OutlinedBorder
+              ? resolvedShape
               : RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(mini ? 12 : 16),
+                  borderRadius: BorderRadius.circular(radius),
                 ),
         ),
       ),
-      child: extended ? _IconLabel(child, _label) : child,
+      child: extended
+          ? (isExtended ? _IconLabel(child, _label!) : child ?? _label)
+          : child,
     );
   }
 }
@@ -1251,44 +2099,85 @@ class InkWell extends StatelessWidget {
     this.onTap,
     this.onDoubleTap,
     this.onLongPress,
+    this.onTapDown,
+    this.onTapUp,
+    this.onTapCancel,
+    this.onSecondaryTap,
+    this.onHighlightChanged,
     this.onHover,
     this.mouseCursor,
     this.focusColor,
     this.hoverColor,
     this.highlightColor,
+    this.overlayColor,
     this.splashColor,
+    this.splashFactory,
+    this.radius,
     this.borderRadius,
     this.customBorder,
     this.enableFeedback = true,
     this.excludeFromSemantics = false,
+    this.focusNode,
     this.canRequestFocus = true,
+    this.onFocusChange,
     this.autofocus = false,
+    this.statesController,
+    this.hoverDuration,
   });
   final Widget? child;
   final VoidCallback? onTap, onDoubleTap, onLongPress;
-  final ValueChanged<bool>? onHover;
+  final GestureTapDownCallback? onTapDown;
+  final GestureTapUpCallback? onTapUp;
+  final GestureTapCallback? onTapCancel, onSecondaryTap;
+  final ValueChanged<bool>? onHighlightChanged, onHover, onFocusChange;
   final MouseCursor? mouseCursor;
   final Color? focusColor, hoverColor, highlightColor, splashColor;
+  final WidgetStateProperty<Color?>? overlayColor;
+  final InteractiveInkFeatureFactory? splashFactory;
+  final double? radius;
   final BorderRadius? borderRadius;
   final ShapeBorder? customBorder;
   final bool enableFeedback, excludeFromSemantics, canRequestFocus, autofocus;
+  final FocusNode? focusNode;
+  final WidgetStatesController? statesController;
+  final Duration? hoverDuration;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onTap != null || onDoubleTap != null || onLongPress != null;
+    final enabled =
+        onTap != null ||
+        onDoubleTap != null ||
+        onLongPress != null ||
+        onTapDown != null ||
+        onTapUp != null ||
+        onSecondaryTap != null;
+    final theme = Theme.of(context);
     final overlay =
+        overlayColor?.resolve(const {WidgetState.hovered}) ??
         hoverColor ??
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08);
+        theme.colorScheme.onSurface.withValues(alpha: 0.08);
+    final press = _noSplash(splashFactory ?? theme.splashFactory)
+        ? null
+        : overlayColor?.resolve(const {WidgetState.pressed}) ??
+              highlightColor ??
+              overlay;
     final handlers = <String, _DomHandler>{
       ..._activationHandlers(onTap),
       if (onDoubleTap != null) 'dblclick': (_) => onDoubleTap!(),
+      if (onSecondaryTap != null)
+        'contextmenu': (event) {
+          event?.preventDefault();
+          onSecondaryTap!();
+        },
       if (onHover != null) 'mouseenter': (_) => onHover!(true),
       if (onHover != null) 'mouseleave': (_) => onHover!(false),
+      if (onFocusChange != null) 'focus': (_) => onFocusChange!(true),
+      if (onFocusChange != null) 'blur': (_) => onFocusChange!(false),
     };
     return _Box(
       css:
           'box-sizing:border-box;min-width:0;${borderRadiusCss(borderRadius)}${customBorder == null ? '' : shapeCss(customBorder)}'
-          '${enabled ? '--fd-hover:${colorCss(overlay)};--fd-press:${colorCss(overlay)};--fd-focus:${colorCss(Theme.of(context).colorScheme.primary)};' : ''}'
+          '${enabled ? '--fd-hover:${colorCss(overlay)};--fd-press:${press == null ? 'transparent' : colorCss(press)};--fd-focus:${colorCss(theme.colorScheme.primary)};' : ''}'
           '${mouseCursor == null ? '' : 'cursor:${mouseCursor!._css};'}',
       attributes: {
         if (enabled && !excludeFromSemantics) 'role': 'button',
@@ -1296,9 +2185,18 @@ class InkWell extends StatelessWidget {
         if (enabled) 'class': 'fd-ink',
       },
       handlers: handlers,
-      gestures: onLongPress == null
+      gestures:
+          onLongPress == null &&
+              onTapDown == null &&
+              onTapUp == null &&
+              onTapCancel == null
           ? null
-          : _GestureCallbacks(onLongPress: onLongPress),
+          : _GestureCallbacks(
+              onLongPress: onLongPress,
+              onTapDown: onTapDown,
+              onTapUp: onTapUp,
+              onTapCancel: onTapCancel,
+            ),
       layout: _DomLayout.grid,
       children: [?child],
     );
@@ -1310,11 +2208,37 @@ class InkResponse extends InkWell {
     super.key,
     super.child,
     super.onTap,
+    super.onTapDown,
+    super.onTapUp,
+    super.onTapCancel,
     super.onDoubleTap,
+    super.onLongPress,
+    super.onSecondaryTap,
+    super.onHighlightChanged,
     super.onHover,
+    super.mouseCursor,
+    this.containedInkWell = false,
+    this.highlightShape = BoxShape.circle,
+    super.radius,
     super.borderRadius,
+    super.customBorder,
+    super.focusColor,
     super.hoverColor,
+    super.highlightColor,
+    super.overlayColor,
+    super.splashColor,
+    super.splashFactory,
+    super.enableFeedback,
+    super.excludeFromSemantics,
+    super.focusNode,
+    super.canRequestFocus,
+    super.onFocusChange,
+    super.autofocus,
+    super.statesController,
+    super.hoverDuration,
   });
+  final bool containedInkWell;
+  final BoxShape highlightShape;
 }
 
 class ListTile extends StatelessWidget {
@@ -1344,10 +2268,31 @@ class ListTile extends StatelessWidget {
     this.minTileHeight,
     this.titleTextStyle,
     this.subtitleTextStyle,
+    this.leadingAndTrailingTextStyle,
+    this.style,
     this.mouseCursor,
+    this.focusColor,
+    this.hoverColor,
+    this.splashColor,
+    this.focusNode,
+    this.autofocus = false,
+    this.enableFeedback,
+    this.onFocusChange,
+    this.titleAlignment,
+    this.internalAddSemanticForOnTap = false,
+    this.statesController,
   });
   final Widget? leading, title, subtitle, trailing;
-  final bool isThreeLine, enabled, selected;
+  final bool isThreeLine, enabled, selected, autofocus;
+  final bool internalAddSemanticForOnTap;
+  final TextStyle? leadingAndTrailingTextStyle;
+  final ListTileStyle? style;
+  final Color? focusColor, hoverColor, splashColor;
+  final FocusNode? focusNode;
+  final bool? enableFeedback;
+  final ValueChanged<bool>? onFocusChange;
+  final ListTileTitleAlignment? titleAlignment;
+  final WidgetStatesController? statesController;
   final bool? dense;
   final VisualDensity? visualDensity;
   final ShapeBorder? shape;
@@ -1364,53 +2309,94 @@ class ListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final compact = dense == true;
+    final tileTheme = ListTileTheme.of(context);
+    final compact = dense ?? tileTheme.dense ?? false;
     final disabled = scheme.onSurface.withValues(alpha: 0.38);
+    final selectedForeground =
+        selectedColor ?? tileTheme.selectedColor ?? scheme.primary;
     final titleColor = !enabled
         ? disabled
         : selected
-        ? selectedColor ?? scheme.primary
-        : textColor ?? scheme.onSurface;
+        ? selectedForeground
+        : textColor ?? tileTheme.textColor ?? scheme.onSurface;
     final leadingColor = !enabled
         ? disabled
         : selected
-        ? selectedColor ?? scheme.primary
-        : iconColor ?? scheme.onSurfaceVariant;
+        ? selectedForeground
+        : iconColor ?? tileTheme.iconColor ?? scheme.onSurfaceVariant;
+    final explicitTitle = titleTextStyle ?? tileTheme.titleTextStyle;
     final titleStyle =
         (compact ? theme.textTheme.bodyMedium! : theme.textTheme.bodyLarge!)
-            .merge(titleTextStyle)
-            .copyWith(color: titleTextStyle?.color ?? titleColor);
+            .merge(explicitTitle)
+            .copyWith(
+              color: !enabled || selected
+                  ? titleColor
+                  : textColor ??
+                        tileTheme.textColor ??
+                        explicitTitle?.color ??
+                        titleColor,
+            );
+    final explicitSubtitle = subtitleTextStyle ?? tileTheme.subtitleTextStyle;
     final subtitleStyle = theme.textTheme.bodyMedium!
-        .merge(subtitleTextStyle)
+        .merge(explicitSubtitle)
         .copyWith(
-          color:
-              subtitleTextStyle?.color ??
-              (enabled ? scheme.onSurfaceVariant : disabled),
+          color: !enabled
+              ? disabled
+              : selected
+              ? selectedForeground
+              : textColor ??
+                    tileTheme.textColor ??
+                    explicitSubtitle?.color ??
+                    scheme.onSurfaceVariant,
         );
+    final trailingStyle = theme.textTheme.labelSmall!
+        .merge(
+          leadingAndTrailingTextStyle ?? tileTheme.leadingAndTrailingTextStyle,
+        )
+        .copyWith(color: enabled ? null : disabled);
+    final threeLine = isThreeLine || (tileTheme.isThreeLine ?? false);
     final height =
         minTileHeight ??
+        tileTheme.minTileHeight ??
         (subtitle == null
             ? (compact ? 48.0 : 56.0)
-            : isThreeLine
+            : threeLine
             ? 88.0
             : (compact ? 64.0 : 72.0));
     final padding =
-        contentPadding ?? const EdgeInsetsDirectional.only(start: 16, end: 24);
-    final background = selected && selectedTileColor != null
-        ? selectedTileColor
-        : tileColor;
+        contentPadding ??
+        tileTheme.contentPadding ??
+        const EdgeInsetsDirectional.only(start: 16, end: 24);
+    final background = selected
+        ? selectedTileColor ??
+              tileTheme.selectedTileColor ??
+              tileColor ??
+              tileTheme.tileColor
+        : tileColor ?? tileTheme.tileColor;
+    final tileShape = shape ?? tileTheme.shape;
+    final gap = horizontalTitleGap ?? tileTheme.horizontalTitleGap ?? 16;
+    final verticalPadding =
+        minVerticalPadding ?? tileTheme.minVerticalPadding ?? 8;
+    final leadingWidth = minLeadingWidth ?? tileTheme.minLeadingWidth;
+    final align = switch (titleAlignment ?? tileTheme.titleAlignment) {
+      ListTileTitleAlignment.top ||
+      ListTileTitleAlignment.titleHeight => 'flex-start',
+      ListTileTitleAlignment.bottom => 'flex-end',
+      ListTileTitleAlignment.threeLine when threeLine => 'flex-start',
+      _ => 'center',
+    };
     final row = _Box(
       css:
-          'display:flex;flex-direction:row;align-items:center;gap:${px(horizontalTitleGap ?? 16)};box-sizing:border-box;min-height:${px(height)};${edgeInsetsCss('padding', padding)}'
-          'padding-top:${px(minVerticalPadding ?? 8)};padding-bottom:${px(minVerticalPadding ?? 8)};'
-          '${background == null ? '' : 'background-color:${colorCss(background)};'}${shape == null ? '' : shapeCss(shape)}',
+          'display:flex;flex-direction:row;align-items:$align;gap:${px(gap)};box-sizing:border-box;min-height:${px(height)};${edgeInsetsCss('padding', padding)}'
+          'padding-top:${px(verticalPadding)};padding-bottom:${px(verticalPadding)};'
+          '${background == null ? '' : 'background-color:${colorCss(background)};'}${tileShape == null ? '' : shapeCss(tileShape)}',
       layout: _DomLayout.row,
       fill: _Fill.expand,
       children: [
         if (leading != null)
           _Box(
             css:
-                'display:flex;align-items:center;flex-shrink:0;${minLeadingWidth == null ? '' : 'min-width:${px(minLeadingWidth!)};'}',
+                'display:flex;align-items:center;flex-shrink:0;${leadingWidth == null ? '' : 'min-width:${px(leadingWidth)};'}',
             layout: _DomLayout.row,
             fill: _Fill.none,
             children: [
@@ -1443,8 +2429,8 @@ class ListTile extends StatelessWidget {
               IconTheme.merge(
                 data: IconThemeData(color: leadingColor),
                 child: DefaultTextStyle(
-                  style: theme.textTheme.labelSmall!.copyWith(
-                    color: enabled ? scheme.onSurfaceVariant : disabled,
+                  style: trailingStyle.copyWith(
+                    color: trailingStyle.color ?? scheme.onSurfaceVariant,
                   ),
                   child: trailing!,
                 ),
@@ -1457,7 +2443,15 @@ class ListTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
-      mouseCursor: mouseCursor,
+      onFocusChange: onFocusChange,
+      autofocus: autofocus,
+      hoverColor: hoverColor,
+      focusColor: focusColor,
+      splashColor: splashColor,
+      customBorder: tileShape,
+      mouseCursor:
+          mouseCursor ??
+          tileTheme.mouseCursor?.resolve({if (selected) WidgetState.selected}),
       child: row,
     );
   }
@@ -1471,17 +2465,24 @@ class Divider extends StatelessWidget {
     this.indent,
     this.endIndent,
     this.color,
+    this.radius,
   });
   final double? height, thickness, indent, endIndent;
   final Color? color;
+  final BorderRadiusGeometry? radius;
   @override
   Widget build(BuildContext context) {
-    final extent = checkedDimension(height ?? 16);
-    final line = checkedDimension(thickness ?? 1);
+    final dividerTheme = DividerTheme.of(context);
+    final extent = checkedDimension(height ?? dividerTheme.space ?? 16);
+    final line = checkedDimension(thickness ?? dividerTheme.thickness ?? 1);
+    final start = indent ?? dividerTheme.indent ?? 0;
+    final end = endIndent ?? dividerTheme.endIndent ?? 0;
+    final lineColor =
+        color ?? dividerTheme.color ?? Theme.of(context).dividerColor;
     final margin = (extent - line) / 2;
     return _Box(
       css:
-          'box-sizing:content-box;height:0;flex-shrink:0;border-top:${px(line)} solid ${colorCss(color ?? Theme.of(context).dividerColor)};margin:${px(margin < 0 ? 0 : margin)} ${px(endIndent ?? 0)} ${px(margin < 0 ? 0 : margin)} ${px(indent ?? 0)};',
+          'box-sizing:content-box;height:0;flex-shrink:0;border-top:${px(line)} solid ${colorCss(lineColor)};margin:${px(margin < 0 ? 0 : margin)} ${px(end)} ${px(margin < 0 ? 0 : margin)} ${px(start)};',
       attributes: const {'role': 'separator'},
       fill: _Fill.expand,
     );
@@ -1496,17 +2497,24 @@ class VerticalDivider extends StatelessWidget {
     this.indent,
     this.endIndent,
     this.color,
+    this.radius,
   });
   final double? width, thickness, indent, endIndent;
   final Color? color;
+  final BorderRadiusGeometry? radius;
   @override
   Widget build(BuildContext context) {
-    final extent = checkedDimension(width ?? 16);
-    final line = checkedDimension(thickness ?? 1);
+    final dividerTheme = DividerTheme.of(context);
+    final extent = checkedDimension(width ?? dividerTheme.space ?? 16);
+    final line = checkedDimension(thickness ?? dividerTheme.thickness ?? 1);
+    final start = indent ?? dividerTheme.indent ?? 0;
+    final end = endIndent ?? dividerTheme.endIndent ?? 0;
+    final lineColor =
+        color ?? dividerTheme.color ?? Theme.of(context).dividerColor;
     final margin = (extent - line) / 2;
     return _Box(
       css:
-          'box-sizing:content-box;width:0;flex-shrink:0;align-self:stretch;border-left:${px(line)} solid ${colorCss(color ?? Theme.of(context).dividerColor)};margin:${px(indent ?? 0)} ${px(margin < 0 ? 0 : margin)} ${px(endIndent ?? 0)} ${px(margin < 0 ? 0 : margin)};',
+          'box-sizing:content-box;width:0;flex-shrink:0;align-self:stretch;border-left:${px(line)} solid ${colorCss(lineColor)};margin:${px(start)} ${px(margin < 0 ? 0 : margin)} ${px(end)} ${px(margin < 0 ? 0 : margin)};',
       attributes: const {'role': 'separator', 'aria-orientation': 'vertical'},
       fill: _Fill.none,
     );
@@ -1565,84 +2573,100 @@ class CircleAvatar extends StatelessWidget {
 
 class Chip extends StatelessWidget {
   const Chip({
-    this.clipBehavior,
     super.key,
-    required this.label,
     this.avatar,
+    required this.label,
     this.labelStyle,
-    this.backgroundColor,
+    this.labelPadding,
+    this.deleteIcon,
+    this.onDeleted,
+    this.deleteIconColor,
+    this.deleteButtonTooltipMessage,
     this.side,
     this.shape,
+    this.clipBehavior = Clip.none,
+    this.focusNode,
+    this.autofocus = false,
+    this.color,
+    this.backgroundColor,
     this.padding,
-    this.onDeleted,
-    this.deleteIcon,
-    this.deleteButtonTooltipMessage,
-    this.labelPadding,
-    this.deleteIconColor,
+    this.visualDensity,
+    this.materialTapTargetSize,
     this.elevation,
     this.shadowColor,
     this.surfaceTintColor,
     this.iconTheme,
-    this.color,
-    this.materialTapTargetSize,
-    this.visualDensity,
-    this.focusNode,
-    this.autofocus = false,
     this.avatarBoxConstraints,
     this.deleteIconBoxConstraints,
     this.chipAnimationStyle,
     this.mouseCursor,
   });
 
-  /// Accepted for API compatibility; shaped boxes clip through CSS.
-  final Clip? clipBehavior;
-  final EdgeInsetsGeometry? labelPadding;
-  final Color? deleteIconColor, shadowColor, surfaceTintColor;
-  final double? elevation;
-  final IconThemeData? iconTheme;
-  final WidgetStateProperty<Color?>? color;
-  final MaterialTapTargetSize? materialTapTargetSize;
-  final VisualDensity? visualDensity;
-  final FocusNode? focusNode;
-  final bool autofocus;
-  final BoxConstraints? avatarBoxConstraints, deleteIconBoxConstraints;
   final Object? chipAnimationStyle;
   final MouseCursor? mouseCursor;
   final Widget label;
   final Widget? avatar, deleteIcon;
   final TextStyle? labelStyle;
-  final Color? backgroundColor;
+  final EdgeInsetsGeometry? labelPadding, padding;
+  final Color? deleteIconColor, backgroundColor, shadowColor;
+  final Color? surfaceTintColor;
+  final WidgetStateProperty<Color?>? color;
   final BorderSide? side;
   final OutlinedBorder? shape;
-  final EdgeInsetsGeometry? padding;
+  final Clip clipBehavior;
+  final FocusNode? focusNode;
+  final bool autofocus;
   final VoidCallback? onDeleted;
   final String? deleteButtonTooltipMessage;
+  final VisualDensity? visualDensity;
+  final MaterialTapTargetSize? materialTapTargetSize;
+  final double? elevation;
+  final IconThemeData? iconTheme;
+  final BoxConstraints? avatarBoxConstraints, deleteIconBoxConstraints;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final chipShape =
-        shape ??
+    final chipTheme = ChipTheme.of(context);
+    final chipSide =
+        side ?? chipTheme.side ?? BorderSide(color: scheme.outlineVariant);
+    final explicitShape = shape ?? chipTheme.shape;
+    final OutlinedBorder chipShape =
+        explicitShape?.copyWith(
+          side: side ?? chipTheme.side ?? explicitShape.side,
+        ) ??
         RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: side ?? BorderSide(color: scheme.outlineVariant),
+          side: chipSide,
         );
+    final background =
+        color?.resolve(const {}) ??
+        backgroundColor ??
+        chipTheme.color?.resolve(const {}) ??
+        chipTheme.backgroundColor ??
+        scheme.surface;
+    final depth = elevation ?? chipTheme.elevation ?? 0;
+    final icons = IconThemeData(
+      color: scheme.primary,
+      size: 18,
+    ).merge(chipTheme.iconTheme).merge(iconTheme);
+    final text = theme.textTheme.labelLarge!
+        .copyWith(color: scheme.onSurfaceVariant)
+        .merge(chipTheme.labelStyle)
+        .merge(labelStyle);
+    final contentPadding = labelPadding ?? chipTheme.labelPadding;
     return _Box(
       css:
-          'display:inline-flex;align-items:center;gap:8px;box-sizing:border-box;flex-shrink:0;min-height:32px;${edgeInsetsCss('padding', padding ?? const EdgeInsets.symmetric(horizontal: 8))}background-color:${colorCss(backgroundColor ?? scheme.surface)};${shapeCss(chipShape)}',
+          'display:inline-flex;align-items:center;gap:8px;box-sizing:border-box;flex-shrink:0;min-height:32px;${edgeInsetsCss('padding', padding ?? chipTheme.padding ?? const EdgeInsets.symmetric(horizontal: 8))}background-color:${colorCss(background)};${shapeCss(chipShape)}${depth > 0 ? elevationCss(depth, shadowColor ?? chipTheme.shadowColor ?? scheme.shadow) : ''}${clipBehavior == Clip.none ? '' : 'overflow:hidden;'}',
       layout: _DomLayout.row,
       fill: _Fill.none,
       children: [
-        if (avatar != null)
-          IconTheme.merge(
-            data: IconThemeData(color: scheme.primary, size: 18),
-            child: avatar!,
-          ),
+        if (avatar != null) IconTheme.merge(data: icons, child: avatar!),
         DefaultTextStyle(
-          style: theme.textTheme.labelLarge!
-              .copyWith(color: scheme.onSurfaceVariant)
-              .merge(labelStyle),
-          child: label,
+          style: text,
+          child: contentPadding == null
+              ? label
+              : Padding(padding: contentPadding, child: label),
         ),
         if (onDeleted != null)
           IconButton(
@@ -1650,6 +2674,10 @@ class Chip extends StatelessWidget {
             tooltip: deleteButtonTooltipMessage ?? 'Delete',
             iconSize: 18,
             padding: EdgeInsets.zero,
+            color:
+                deleteIconColor ??
+                chipTheme.deleteIconColor ??
+                scheme.onSurfaceVariant,
             style: const ButtonStyle(
               minimumSize: WidgetStatePropertyAll(Size(24, 24)),
             ),
@@ -1663,38 +2691,67 @@ class Chip extends StatelessWidget {
 class Badge extends StatelessWidget {
   const Badge({
     super.key,
-    this.label,
     this.backgroundColor,
     this.textColor,
+    this.smallSize,
+    this.largeSize,
+    this.textStyle,
+    this.padding,
+    this.alignment,
+    this.offset,
+    this.label,
     this.isLabelVisible = true,
     this.child,
   });
   Badge.count({
     super.key,
-    required int count,
     this.backgroundColor,
     this.textColor,
+    this.smallSize,
+    this.largeSize,
+    this.textStyle,
+    this.padding,
+    this.alignment,
+    this.offset,
+    required int count,
+    int maxCount = 999,
     this.isLabelVisible = true,
     this.child,
-  }) : label = Text(count > 999 ? '999+' : '$count');
+  }) : label = Text(count > maxCount ? '$maxCount+' : '$count');
   final Widget? label, child;
   final Color? backgroundColor, textColor;
+  final double? smallSize, largeSize;
+  final TextStyle? textStyle;
+  final EdgeInsetsGeometry? padding;
+  final AlignmentGeometry? alignment;
+  final Offset? offset;
   final bool isLabelVisible;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final badgeTheme = BadgeTheme.of(context);
+    final small = smallSize ?? badgeTheme.smallSize ?? 6;
+    final large = largeSize ?? badgeTheme.largeSize ?? 16;
+    final inset =
+        padding ??
+        badgeTheme.padding ??
+        const EdgeInsets.symmetric(horizontal: 4);
+    final shift = offset ?? badgeTheme.offset;
     final badge = _Box(
       tag: 'span',
       css:
-          '${child == null ? '' : 'position:absolute;top:-4px;right:-4px;'}display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:9999px;background-color:${colorCss(backgroundColor ?? scheme.error)};${label == null ? 'width:6px;height:6px;' : 'min-width:16px;height:16px;padding:0 4px;'}',
+          '${child == null ? '' : 'position:absolute;top:${px(-4 + (shift?.dy ?? 0))};right:${px(-4 - (shift?.dx ?? 0))};'}display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:9999px;background-color:${colorCss(backgroundColor ?? badgeTheme.backgroundColor ?? scheme.error)};${label == null ? 'width:${px(small)};height:${px(small)};' : 'min-width:${px(large)};height:${px(large)};${edgeInsetsCss('padding', inset)}'}',
       fill: _Fill.none,
       children: [
         if (label != null)
           DefaultTextStyle(
-            style: theme.textTheme.labelSmall!.copyWith(
-              color: textColor ?? scheme.onError,
-            ),
+            style: theme.textTheme.labelSmall!
+                .merge(badgeTheme.textStyle)
+                .merge(textStyle)
+                .copyWith(
+                  color: textColor ?? badgeTheme.textColor ?? scheme.onError,
+                ),
             child: label!,
           ),
       ],
@@ -1709,15 +2766,56 @@ class Badge extends StatelessWidget {
 }
 
 class Tooltip extends StatelessWidget {
-  const Tooltip({super.key, this.message, this.child});
+  const Tooltip({
+    super.key,
+    this.message,
+    this.richMessage,
+    @Deprecated('Use constraints instead.') this.height,
+    this.constraints,
+    this.padding,
+    this.margin,
+    this.verticalOffset,
+    this.preferBelow,
+    this.excludeFromSemantics,
+    this.decoration,
+    this.textStyle,
+    this.textAlign,
+    this.waitDuration,
+    this.showDuration,
+    this.exitDuration,
+    this.enableTapToDismiss = true,
+    this.triggerMode,
+    this.enableFeedback,
+    this.onTriggered,
+    this.mouseCursor,
+    this.ignorePointer,
+    this.child,
+  });
   final String? message;
+  final InlineSpan? richMessage;
+  final double? height, verticalOffset;
+  final BoxConstraints? constraints;
+  final EdgeInsetsGeometry? padding, margin;
+  final bool? preferBelow, excludeFromSemantics, enableFeedback;
+  final bool? ignorePointer;
+  final Decoration? decoration;
+  final TextStyle? textStyle;
+  final TextAlign? textAlign;
+  final Duration? waitDuration, showDuration, exitDuration;
+  final bool enableTapToDismiss;
+  final TooltipTriggerMode? triggerMode;
+  final VoidCallback? onTriggered;
+  final MouseCursor? mouseCursor;
   final Widget? child;
   @override
-  Widget build(BuildContext context) => _Box(
-    css: 'display:contents;',
-    attributes: {if (message != null) 'title': message!},
-    children: [?child],
-  );
+  Widget build(BuildContext context) {
+    final text = message ?? richMessage?.toPlainText();
+    return _Box(
+      css: 'display:contents;',
+      attributes: {if (text != null) 'title': text},
+      children: [?child],
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1731,32 +2829,36 @@ class LinearProgressIndicator extends StatelessWidget {
     this.color,
     this.valueColor,
     this.minHeight,
-    this.borderRadius,
     this.semanticsLabel,
     this.semanticsValue,
+    this.borderRadius,
     this.stopIndicatorColor,
     this.stopIndicatorRadius,
     this.trackGap,
+    this.year2023,
   });
-  final Animation<Color?>? valueColor;
-  final Color? stopIndicatorColor;
-  final double? stopIndicatorRadius, trackGap;
   final double? value;
-  final Color? backgroundColor, color;
-  final double? minHeight;
+  final Color? backgroundColor, color, stopIndicatorColor;
+  final Animation<Color?>? valueColor;
+  final double? minHeight, stopIndicatorRadius, trackGap;
   final BorderRadiusGeometry? borderRadius;
   final String? semanticsLabel, semanticsValue;
+  final bool? year2023;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final progressTheme = ProgressIndicatorTheme.of(context);
     final v = value;
     if (v != null && !v.isFinite)
       throw ArgumentError('Progress values must be finite.');
     final clamped = v?.clamp(0.0, 1.0);
-    final indicator = colorCss(color ?? valueColor?.value ?? scheme.primary);
+    final indicator = colorCss(
+      valueColor?.value ?? color ?? progressTheme.color ?? scheme.primary,
+    );
+    final radius = borderRadius ?? progressTheme.borderRadius;
     return _Box(
       css:
-          'position:relative;overflow:hidden;box-sizing:border-box;height:${px(minHeight ?? 4)};background-color:${colorCss(backgroundColor ?? scheme.secondaryContainer)};${borderRadiusCss(borderRadius)}--fd-indicator:$indicator;',
+          'position:relative;overflow:hidden;box-sizing:border-box;height:${px(minHeight ?? progressTheme.linearMinHeight ?? 4)};background-color:${colorCss(backgroundColor ?? progressTheme.linearTrackColor ?? scheme.secondaryContainer)};${borderRadiusCss(radius)}--fd-indicator:$indicator;',
       attributes: {
         'role': 'progressbar',
         'aria-valuemin': '0',
@@ -1771,7 +2873,7 @@ class LinearProgressIndicator extends StatelessWidget {
         if (clamped != null)
           _Box(
             css:
-                'height:100%;width:${cssNumber(clamped * 100)}%;background-color:$indicator;${borderRadiusCss(borderRadius)}',
+                'height:100%;width:${cssNumber(clamped * 100)}%;background-color:$indicator;${borderRadiusCss(radius)}',
             fill: _Fill.none,
           ),
       ],
@@ -1786,66 +2888,133 @@ class CircularProgressIndicator extends StatelessWidget {
     this.backgroundColor,
     this.color,
     this.valueColor,
-    this.strokeWidth = 4,
-    this.strokeAlign = 0,
-    this.strokeCap,
+    this.strokeWidth,
+    this.strokeAlign,
     this.semanticsLabel,
     this.semanticsValue,
+    this.strokeCap,
     this.constraints,
     this.trackGap,
+    this.year2023,
     this.padding,
-  });
+  }) : _size = 36;
   const CircularProgressIndicator.adaptive({
     super.key,
     this.value,
     this.backgroundColor,
-    this.color,
     this.valueColor,
-    this.strokeWidth = 4,
-    this.strokeAlign = 0,
-    this.strokeCap,
+    this.strokeWidth,
     this.semanticsLabel,
     this.semanticsValue,
+    this.strokeCap,
+    this.strokeAlign,
     this.constraints,
     this.trackGap,
+    this.year2023,
     this.padding,
-  });
+  }) : color = null,
+       _size = 36;
+  const CircularProgressIndicator._sized(
+    this._size, {
+    this.value,
+    this.color,
+    this.valueColor,
+    this.strokeWidth,
+    this.semanticsLabel,
+    this.semanticsValue,
+  }) : backgroundColor = null,
+       strokeAlign = null,
+       strokeCap = null,
+       constraints = null,
+       trackGap = null,
+       year2023 = null,
+       padding = null;
   final double? value;
   final Color? backgroundColor, color;
-  final double strokeWidth, strokeAlign;
   final Animation<Color?>? valueColor;
-  final StrokeCap? strokeCap;
+  final double? strokeWidth, strokeAlign, trackGap;
   final String? semanticsLabel, semanticsValue;
+  final StrokeCap? strokeCap;
   final BoxConstraints? constraints;
-  final double? trackGap;
+  final bool? year2023;
   final EdgeInsetsGeometry? padding;
+  final double _size;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final progressTheme = ProgressIndicatorTheme.of(context);
     final v = value;
     if (v != null && !v.isFinite)
       throw ArgumentError('Progress values must be finite.');
     final clamped = v?.clamp(0.0, 1.0);
-    final indicator = colorCss(color ?? valueColor?.value ?? scheme.primary);
-    final track = backgroundColor == null
-        ? 'transparent'
-        : colorCss(backgroundColor!);
-    final stroke = px(strokeWidth);
+    final indicator = colorCss(
+      valueColor?.value ?? color ?? progressTheme.color ?? scheme.primary,
+    );
+    final trackColor = backgroundColor ?? progressTheme.circularTrackColor;
+    final track = trackColor == null ? 'transparent' : colorCss(trackColor);
+    final stroke = px(strokeWidth ?? progressTheme.strokeWidth ?? 4);
+    final box = constraints ?? progressTheme.constraints;
+    final size = px(box == null ? _size : box.minWidth);
     final ring =
         'radial-gradient(farthest-side,transparent calc(100% - $stroke),#000 calc(100% - $stroke))';
     return _Box(
       css: clamped == null
-          ? 'box-sizing:border-box;flex-shrink:0;width:36px;height:36px;border-radius:50%;border:$stroke solid $track;border-top-color:$indicator;'
-          : 'box-sizing:border-box;flex-shrink:0;width:36px;height:36px;border-radius:50%;background:conic-gradient($indicator ${cssNumber(clamped * 360)}deg,$track 0);-webkit-mask:$ring;mask:$ring;',
+          ? 'box-sizing:border-box;flex-shrink:0;width:$size;height:$size;border-radius:50%;border:$stroke solid $track;border-top-color:$indicator;'
+          : 'box-sizing:border-box;flex-shrink:0;width:$size;height:$size;border-radius:50%;background:conic-gradient($indicator ${cssNumber(clamped * 360)}deg,$track 0);-webkit-mask:$ring;mask:$ring;',
       attributes: {
         'role': 'progressbar',
         'aria-valuemin': '0',
         'aria-valuemax': '100',
         if (clamped != null) 'aria-valuenow': '${(clamped * 100).round()}',
         if (semanticsLabel != null) 'aria-label': semanticsLabel!,
+        if (semanticsValue != null) 'aria-valuetext': semanticsValue!,
         if (clamped == null) 'class': 'fd-spin',
       },
       fill: _Fill.none,
+    );
+  }
+}
+
+/// A circular indicator on a raised disc, as used by pull-to-refresh.
+class RefreshProgressIndicator extends StatelessWidget {
+  const RefreshProgressIndicator({
+    super.key,
+    this.value,
+    this.backgroundColor,
+    this.color,
+    this.valueColor,
+    this.strokeWidth = 2.5,
+    this.indicatorMargin = const EdgeInsets.all(4.0),
+    this.indicatorPadding = const EdgeInsets.all(12.0),
+    this.elevation = 2.0,
+    this.semanticsLabel,
+    this.semanticsValue,
+  });
+  final double? value;
+  final Color? backgroundColor, color;
+  final Animation<Color?>? valueColor;
+  final double strokeWidth, elevation;
+  final EdgeInsetsGeometry indicatorMargin, indicatorPadding;
+  final String? semanticsLabel, semanticsValue;
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progressTheme = ProgressIndicatorTheme.of(context);
+    return _Box(
+      css:
+          'display:inline-flex;flex-shrink:0;box-sizing:border-box;border-radius:50%;${edgeInsetsCss('margin', indicatorMargin)}${edgeInsetsCss('padding', indicatorPadding)}background-color:${colorCss(backgroundColor ?? progressTheme.refreshBackgroundColor ?? scheme.surfaceContainerHighest)};${elevationCss(elevation, scheme.shadow)}',
+      fill: _Fill.none,
+      children: [
+        CircularProgressIndicator._sized(
+          16,
+          value: value,
+          color: color,
+          valueColor: valueColor,
+          strokeWidth: strokeWidth,
+          semanticsLabel: semanticsLabel,
+          semanticsValue: semanticsValue,
+        ),
+      ],
     );
   }
 }
@@ -1877,53 +3046,52 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
     this.automaticallyImplyLeading = true,
     this.title,
     this.actions,
-    this.backgroundColor,
-    this.foregroundColor,
-    this.elevation,
-    this.centerTitle,
-    this.titleSpacing,
-    this.toolbarHeight,
-    this.titleTextStyle,
-    this.bottom,
     this.flexibleSpace,
+    this.bottom,
+    this.elevation,
+    this.scrolledUnderElevation,
     this.shadowColor,
     this.surfaceTintColor,
-    this.scrolledUnderElevation,
-    this.notificationPredicate,
     this.shape,
+    this.backgroundColor,
+    this.foregroundColor,
     this.iconTheme,
     this.actionsIconTheme,
     this.primary = true,
+    this.centerTitle,
     this.excludeHeaderSemantics = false,
-    this.toolbarOpacity = 1,
-    this.bottomOpacity = 1,
+    this.titleSpacing,
+    this.toolbarOpacity = 1.0,
+    this.bottomOpacity = 1.0,
+    this.toolbarHeight,
     this.leadingWidth,
     this.toolbarTextStyle,
+    this.titleTextStyle,
     this.systemOverlayStyle,
     this.forceMaterialTransparency = false,
     this.clipBehavior,
     this.actionsPadding,
   });
-  final Widget? flexibleSpace;
-  final Color? shadowColor, surfaceTintColor;
-  final double? scrolledUnderElevation, leadingWidth;
-  final bool Function(Object notification)? notificationPredicate;
-  final ShapeBorder? shape;
-  final IconThemeData? iconTheme, actionsIconTheme;
-  final bool primary, excludeHeaderSemantics, forceMaterialTransparency;
-  final double toolbarOpacity, bottomOpacity;
-  final TextStyle? toolbarTextStyle;
-  final Object? systemOverlayStyle;
-  final Clip? clipBehavior;
-  final EdgeInsetsGeometry? actionsPadding;
-  final Widget? leading, title;
+  final Widget? leading, title, flexibleSpace;
   final bool automaticallyImplyLeading;
   final List<Widget>? actions;
-  final Color? backgroundColor, foregroundColor;
-  final double? elevation, titleSpacing, toolbarHeight;
-  final bool? centerTitle;
-  final TextStyle? titleTextStyle;
   final PreferredSizeWidget? bottom;
+  final double? elevation, scrolledUnderElevation;
+  final Color? shadowColor, surfaceTintColor;
+  final ShapeBorder? shape;
+  final Color? backgroundColor, foregroundColor;
+  final IconThemeData? iconTheme, actionsIconTheme;
+  final bool primary;
+  final bool? centerTitle;
+  final bool excludeHeaderSemantics;
+  final double? titleSpacing;
+  final double toolbarOpacity, bottomOpacity;
+  final double? toolbarHeight, leadingWidth;
+  final TextStyle? toolbarTextStyle, titleTextStyle;
+  final SystemUiOverlayStyle? systemOverlayStyle;
+  final bool forceMaterialTransparency;
+  final Clip? clipBehavior;
+  final EdgeInsetsGeometry? actionsPadding;
   @override
   Size get preferredSize => Size(
     double.infinity,
@@ -1934,7 +3102,12 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final foreground = foregroundColor ?? scheme.onSurface;
+    final barTheme = theme.appBarTheme;
+    final foreground =
+        foregroundColor ?? barTheme.foregroundColor ?? scheme.onSurface;
+    final background = forceMaterialTransparency
+        ? null
+        : backgroundColor ?? barTheme.backgroundColor ?? scheme.surface;
     var leadingWidget = leading;
     if (leadingWidget == null && automaticallyImplyLeading) {
       final scaffold = Scaffold.maybeOf(context);
@@ -1949,31 +3122,57 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
         leadingWidget = BackButton(onPressed: navigator.maybePop);
       }
     }
-    final toolbar = _toolbar(context, theme, scheme, foreground, leadingWidget);
-    if (bottom == null && flexibleSpace == null) return toolbar;
-    final bars = _Box(
-      css:
-          'grid-area:1/1;position:relative;display:flex;flex-direction:column;min-width:0;',
-      layout: _DomLayout.column,
-      fill: _Fill.expand,
-      children: [toolbar, ?bottom],
-    );
-    // The flexible space paints behind the toolbar and bottom, as in Flutter.
+    final barShape = shape ?? barTheme.shape;
+    final depth = elevation ?? barTheme.elevation ?? 0;
+    final shadow = shadowColor ?? barTheme.shadowColor ?? scheme.shadow;
+    final clip = clipBehavior ?? Clip.none;
+    final surfaceCss =
+        '${background == null ? 'background-color:transparent;' : 'background-color:${colorCss(background)};'}'
+        '${barShape == null ? '' : shapeCss(barShape)}${elevationCss(depth, shadow)}'
+        '${clip == Clip.none ? '' : 'overflow:hidden;'}';
+    final opacity = toolbarOpacity < 1
+        ? 'opacity:${cssNumber(toolbarOpacity)};'
+        : '';
+    if (bottom == null && flexibleSpace == null)
+      return _toolbar(
+        context,
+        theme,
+        scheme,
+        foreground,
+        leadingWidget,
+        'header',
+        'position:sticky;top:0;z-index:2;$surfaceCss$opacity',
+      );
     return _Box(
       tag: 'header',
       css:
-          'position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(0,1fr);background-color:${colorCss(backgroundColor ?? scheme.surface)};${elevationCss(elevation ?? 0, scheme.shadow)}',
-      layout: _DomLayout.grid,
+          'position:sticky;top:0;z-index:2;display:flex;flex-direction:column;$surfaceCss',
+      layout: _DomLayout.column,
       fill: _Fill.expand,
       children: [
         if (flexibleSpace != null)
           _Box(
-            css: 'grid-area:1/1;display:grid;min-height:0;overflow:hidden;',
-            layout: _DomLayout.grid,
-            fill: _Fill.expand,
+            css: 'position:absolute;inset:0;z-index:0;overflow:hidden;',
+            attributes: const {'aria-hidden': 'true'},
+            fill: _Fill.none,
             children: [flexibleSpace!],
           ),
-        bars,
+        _toolbar(
+          context,
+          theme,
+          scheme,
+          foreground,
+          leadingWidget,
+          'div',
+          'position:relative;$opacity',
+        ),
+        if (bottom != null)
+          _Box(
+            css:
+                'position:relative;${bottomOpacity < 1 ? 'opacity:${cssNumber(bottomOpacity)};' : ''}',
+            fill: _Fill.expand,
+            children: [bottom!],
+          ),
       ],
     );
   }
@@ -1984,29 +3183,61 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
     ColorScheme scheme,
     Color foreground,
     Widget? leadingWidget,
+    String tag,
+    String outerCss,
   ) {
+    final barTheme = theme.appBarTheme;
+    final height = toolbarHeight ?? barTheme.toolbarHeight ?? 64;
+    final spacing = titleSpacing ?? barTheme.titleSpacing ?? 16;
+    final center = centerTitle ?? barTheme.centerTitle ?? false;
+    final icons = IconThemeData(
+      color: foreground,
+      size: 24,
+    ).merge(barTheme.iconTheme).merge(iconTheme);
+    final actionIcons =
+        IconThemeData(
+          color:
+              foregroundColor ??
+              barTheme.foregroundColor ??
+              scheme.onSurfaceVariant,
+          size: 24,
+        ).merge(
+          actionsIconTheme ??
+              barTheme.actionsIconTheme ??
+              iconTheme ??
+              barTheme.iconTheme,
+        );
+    final toolbarStyle = theme.textTheme.bodyMedium!
+        .copyWith(color: foreground)
+        .merge(toolbarTextStyle ?? barTheme.toolbarTextStyle);
+    final width = leadingWidth ?? barTheme.leadingWidth;
+    final padding = actionsPadding ?? barTheme.actionsPadding;
     return _Box(
-      tag: bottom == null && flexibleSpace == null ? 'header' : 'div',
-      css: bottom == null && flexibleSpace == null
-          ? 'position:sticky;top:0;z-index:2;display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(toolbarHeight ?? 64)};padding:0 4px;gap:${px(titleSpacing ?? 16)};background-color:${colorCss(backgroundColor ?? scheme.surface)};color:${colorCss(foreground)};${elevationCss(elevation ?? 0, scheme.shadow)}'
-          : 'display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(toolbarHeight ?? 64)};padding:0 4px;gap:${px(titleSpacing ?? 16)};color:${colorCss(foreground)};',
+      tag: tag,
+      css:
+          '${outerCss}display:flex;flex-direction:row;align-items:center;box-sizing:border-box;min-height:${px(height)};padding:0 4px;gap:${px(spacing)};color:${colorCss(foreground)};',
       layout: _DomLayout.row,
       fill: _Fill.expand,
       children: [
         IconTheme.merge(
-          data: IconThemeData(color: foreground, size: 24),
-          child: leadingWidget ?? const SizedBox(width: 12),
+          data: icons,
+          child: width == null || leadingWidget == null
+              ? leadingWidget ?? const SizedBox(width: 12)
+              : SizedBox(width: width, child: leadingWidget),
         ),
         _Box(
           css:
-              'flex:1 1 0;min-width:0;${centerTitle == true ? 'text-align:center;display:flex;justify-content:center;' : ''}',
-          attributes: const {'role': 'heading', 'aria-level': '1'},
+              'flex:1 1 0;min-width:0;${center ? 'text-align:center;display:flex;justify-content:center;' : ''}',
+          attributes: {
+            if (!excludeHeaderSemantics) 'role': 'heading',
+            if (!excludeHeaderSemantics) 'aria-level': '1',
+          },
           children: [
             if (title != null)
               DefaultTextStyle(
                 style: theme.textTheme.titleLarge!
                     .copyWith(color: foreground)
-                    .merge(titleTextStyle),
+                    .merge(titleTextStyle ?? barTheme.titleTextStyle),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 child: title!,
@@ -2015,8 +3246,19 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         if (actions != null)
           IconTheme.merge(
-            data: IconThemeData(color: scheme.onSurfaceVariant, size: 24),
-            child: Row(mainAxisSize: MainAxisSize.min, children: actions!),
+            data: actionIcons,
+            child: DefaultTextStyle(
+              style: toolbarStyle,
+              child: padding == null
+                  ? Row(mainAxisSize: MainAxisSize.min, children: actions!)
+                  : Padding(
+                      padding: padding,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: actions!,
+                      ),
+                    ),
+            ),
           ),
       ],
     );
@@ -2049,15 +3291,61 @@ class CloseButton extends StatelessWidget {
   );
 }
 
+/// Where the scaffold places its floating action button. The DOM runtime
+/// positions it with fixed CSS offsets; docked locations sit over the
+/// bottom bar's top edge.
 class FloatingActionButtonLocation {
-  const FloatingActionButtonLocation._(this._css);
+  const FloatingActionButtonLocation._(
+    this._css, [
+    this._vertical = 'bottom:16px;',
+  ]);
   final String _css;
-  static const endFloat = FloatingActionButtonLocation._('right:16px;');
-  static const centerFloat = FloatingActionButtonLocation._(
-    'left:50%;transform:translateX(-50%);',
+  final String _vertical;
+  static const _start = 'left:16px;';
+  static const _center = 'left:50%;transform:translateX(-50%);';
+  static const _end = 'right:16px;';
+  static const _top = 'top:36px;';
+  static const _docked = 'bottom:52px;';
+  static const startTop = FloatingActionButtonLocation._(_start, _top);
+  static const miniStartTop = FloatingActionButtonLocation._(_start, _top);
+  static const centerTop = FloatingActionButtonLocation._(_center, _top);
+  static const miniCenterTop = FloatingActionButtonLocation._(_center, _top);
+  static const endTop = FloatingActionButtonLocation._(_end, _top);
+  static const miniEndTop = FloatingActionButtonLocation._(_end, _top);
+  static const startFloat = FloatingActionButtonLocation._(_start);
+  static const miniStartFloat = FloatingActionButtonLocation._(_start);
+  static const centerFloat = FloatingActionButtonLocation._(_center);
+  static const miniCenterFloat = FloatingActionButtonLocation._(_center);
+  static const endFloat = FloatingActionButtonLocation._(_end);
+  static const miniEndFloat = FloatingActionButtonLocation._(_end);
+  static const startDocked = FloatingActionButtonLocation._(_start, _docked);
+  static const miniStartDocked = FloatingActionButtonLocation._(
+    _start,
+    _docked,
   );
-  static const startFloat = FloatingActionButtonLocation._('left:16px;');
+  static const centerDocked = FloatingActionButtonLocation._(_center, _docked);
+  static const miniCenterDocked = FloatingActionButtonLocation._(
+    _center,
+    _docked,
+  );
+  static const endDocked = FloatingActionButtonLocation._(_end, _docked);
+  static const miniEndDocked = FloatingActionButtonLocation._(_end, _docked);
+  static const endContained = FloatingActionButtonLocation._(_end, _docked);
 }
+
+/// Accepted for API compatibility; the FAB does not animate between
+/// locations.
+abstract class FloatingActionButtonAnimator {
+  const FloatingActionButtonAnimator();
+  static const FloatingActionButtonAnimator scaling = _NoFabAnimator();
+  static const FloatingActionButtonAnimator noAnimation = _NoFabAnimator();
+}
+
+class _NoFabAnimator extends FloatingActionButtonAnimator {
+  const _NoFabAnimator();
+}
+
+typedef DrawerCallback = void Function(bool isOpened);
 
 class Scaffold extends StatefulWidget {
   const Scaffold({
@@ -2066,28 +3354,53 @@ class Scaffold extends StatefulWidget {
     this.body,
     this.floatingActionButton,
     this.floatingActionButtonLocation,
+    this.floatingActionButtonAnimator,
+    this.persistentFooterButtons,
+    this.persistentFooterAlignment = AlignmentDirectional.centerEnd,
+    this.persistentFooterDecoration,
+    this.drawer,
+    this.onDrawerChanged,
+    this.endDrawer,
+    this.onEndDrawerChanged,
     this.bottomNavigationBar,
     this.bottomSheet,
     this.backgroundColor,
-    this.drawer,
-    this.endDrawer,
     this.resizeToAvoidBottomInset,
+    this.primary = true,
     this.extendBody = false,
     this.extendBodyBehindAppBar = false,
+    this.drawerScrimColor,
+    this.drawerEdgeDragWidth,
+    this.drawerEnableOpenDragGesture = true,
+    this.endDrawerEnableOpenDragGesture = true,
+    this.restorationId,
   });
   final PreferredSizeWidget? appBar;
   final Widget? body, floatingActionButton, bottomNavigationBar, bottomSheet;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
+  final FloatingActionButtonAnimator? floatingActionButtonAnimator;
+  final List<Widget>? persistentFooterButtons;
+  final AlignmentDirectional persistentFooterAlignment;
+  final BoxDecoration? persistentFooterDecoration;
   final Color? backgroundColor;
   final Widget? drawer, endDrawer;
+  final DrawerCallback? onDrawerChanged, onEndDrawerChanged;
   final bool? resizeToAvoidBottomInset;
-  final bool extendBody, extendBodyBehindAppBar;
+  final bool primary, extendBody, extendBodyBehindAppBar;
+  final Color? drawerScrimColor;
+  final double? drawerEdgeDragWidth;
+  final bool drawerEnableOpenDragGesture, endDrawerEnableOpenDragGesture;
+  final String? restorationId;
 
   static ScaffoldState of(BuildContext context) =>
       maybeOf(context) ??
       (throw StateError('No Scaffold ancestor in this context.'));
   static ScaffoldState? maybeOf(BuildContext context) =>
       context.findAncestorStateOfType<ScaffoldState>();
+  static bool hasDrawer(
+    BuildContext context, {
+    bool registerForUpdates = true,
+  }) => maybeOf(context)?.hasDrawer ?? false;
 
   @override
   State<Scaffold> createState() => ScaffoldState();
@@ -2119,6 +3432,20 @@ class _ScaffoldBody extends StatelessWidget {
           children: [?scaffold.body],
         ),
         ?scaffold.bottomSheet,
+        if (state._persistentSheet case final sheet?) sheet,
+        if (scaffold.persistentFooterButtons case final buttons?
+            when buttons.isNotEmpty)
+          _Box(
+            css:
+                'display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;box-sizing:border-box;padding:8px;justify-content:${switch (scaffold.persistentFooterAlignment.start) {
+                  < 0 => 'flex-start',
+                  > 0 => 'flex-end',
+                  _ => 'center',
+                }};${scaffold.persistentFooterDecoration == null ? 'border-top:1px solid ${colorCss(theme.dividerColor)};' : decorationCss(scaffold.persistentFooterDecoration)}',
+            layout: _DomLayout.row,
+            fill: _Fill.expand,
+            children: buttons,
+          ),
         if (scaffold.bottomNavigationBar != null)
           _Box(
             css: 'position:sticky;bottom:0;z-index:2;',
@@ -2128,19 +3455,21 @@ class _ScaffoldBody extends StatelessWidget {
         if (scaffold.floatingActionButton != null)
           _Box(
             css:
-                'position:fixed;bottom:16px;z-index:3;${(scaffold.floatingActionButtonLocation ?? FloatingActionButtonLocation.endFloat)._css}',
+                'position:fixed;z-index:3;${(scaffold.floatingActionButtonLocation ?? FloatingActionButtonLocation.endFloat)._vertical}${(scaffold.floatingActionButtonLocation ?? FloatingActionButtonLocation.endFloat)._css}',
             fill: _Fill.none,
             children: [scaffold.floatingActionButton!],
           ),
         if (state._drawerOpen && scaffold.drawer != null)
           _DrawerOverlay(
             drawer: scaffold.drawer!,
+            scrim: scaffold.drawerScrimColor,
             end: false,
             onClose: state.closeDrawer,
           ),
         if (state._endDrawerOpen && scaffold.endDrawer != null)
           _DrawerOverlay(
             drawer: scaffold.endDrawer!,
+            scrim: scaffold.drawerScrimColor,
             end: true,
             onClose: state.closeEndDrawer,
           ),
@@ -2156,61 +3485,91 @@ enum SnackBarClosedReason { action, dismiss, swipe, hide, remove, timeout }
 class SnackBarAction extends StatelessWidget {
   const SnackBarAction({
     super.key,
+    this.textColor,
+    this.disabledTextColor,
+    this.backgroundColor,
+    this.disabledBackgroundColor,
     required this.label,
     required this.onPressed,
-    this.textColor,
   });
   final String label;
   final VoidCallback onPressed;
-  final Color? textColor;
+  final Color? textColor, disabledTextColor;
+  final Color? backgroundColor, disabledBackgroundColor;
   @override
-  Widget build(BuildContext context) => TextButton(
-    onPressed: () {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.hideCurrentSnackBar(reason: SnackBarClosedReason.action);
-      onPressed();
-    },
-    style: TextButton.styleFrom(
-      foregroundColor:
-          textColor ?? Theme.of(context).colorScheme.inversePrimary,
-    ),
-    child: Text(label),
-  );
+  Widget build(BuildContext context) {
+    final snackTheme = Theme.of(context).snackBarTheme;
+    final background = backgroundColor ?? snackTheme.actionBackgroundColor;
+    return TextButton(
+      onPressed: () {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.hideCurrentSnackBar(reason: SnackBarClosedReason.action);
+        onPressed();
+      },
+      style: TextButton.styleFrom(
+        foregroundColor:
+            textColor ??
+            snackTheme.actionTextColor ??
+            Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: background,
+      ),
+      child: Text(label),
+    );
+  }
 }
 
 class SnackBar extends StatelessWidget {
   const SnackBar({
-    this.clipBehavior,
     super.key,
     required this.content,
-    this.action,
     this.backgroundColor,
-    this.duration = const Duration(milliseconds: 4000),
-    this.behavior,
-    this.showCloseIcon,
-    this.width,
+    this.elevation,
     this.margin,
     this.padding,
+    this.width,
+    this.shape,
+    this.hitTestBehavior,
+    this.behavior,
+    this.action,
+    this.actionOverflowThreshold,
+    this.showCloseIcon,
+    this.closeIconColor,
+    this.duration = const Duration(milliseconds: 4000),
+    this.persist,
+    this.animation,
+    this.onVisible,
+    this.dismissDirection,
+    this.clipBehavior = Clip.hardEdge,
   });
 
-  /// Accepted for API compatibility; shaped boxes clip through CSS.
-  final Clip? clipBehavior;
   final Widget content;
-  final SnackBarAction? action;
-  final Color? backgroundColor;
-  final Duration duration;
-  final SnackBarBehavior? behavior;
-  final bool? showCloseIcon;
-  final double? width;
+  final Color? backgroundColor, closeIconColor;
+  final double? elevation, width, actionOverflowThreshold;
   final EdgeInsetsGeometry? margin, padding;
+  final ShapeBorder? shape;
+  final HitTestBehavior? hitTestBehavior;
+  final SnackBarBehavior? behavior;
+  final SnackBarAction? action;
+  final bool? showCloseIcon, persist;
+  final Duration duration;
+  final Animation<double>? animation;
+  final VoidCallback? onVisible;
+  final DismissDirection? dismissDirection;
+  final Clip clipBehavior;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final snackTheme = theme.snackBarTheme;
+    final snackShape = shape ?? snackTheme.shape;
+    final snackWidth = width ?? snackTheme.width;
+    final closeIcon = showCloseIcon ?? snackTheme.showCloseIcon ?? false;
+    final floating =
+        (behavior ?? snackTheme.behavior) == SnackBarBehavior.floating;
     return _Box(
       css:
-          'display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:48px;${edgeInsetsCss('padding', padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 4))}border-radius:4px;background-color:${colorCss(backgroundColor ?? scheme.inverseSurface)};${elevationCss(6, scheme.shadow)}${width == null ? '' : 'width:${px(width!)};'}',
+          'display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:48px;${edgeInsetsCss('padding', padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 4))}${floating && margin != null ? edgeInsetsCss('margin', margin) : ''}${snackShape == null ? 'border-radius:4px;' : shapeCss(snackShape)}background-color:${colorCss(backgroundColor ?? snackTheme.backgroundColor ?? scheme.inverseSurface)};${elevationCss(elevation ?? snackTheme.elevation ?? 6, scheme.shadow)}${snackWidth == null ? '' : 'width:${px(snackWidth)};'}${clipBehavior == Clip.none ? '' : 'overflow:hidden;'}',
       attributes: const {'role': 'status', 'aria-live': 'polite'},
       layout: _DomLayout.row,
       fill: _Fill.expand,
@@ -2219,21 +3578,24 @@ class SnackBar extends StatelessWidget {
           css: 'flex:1 1 0;min-width:0;',
           children: [
             DefaultTextStyle(
-              style: theme.textTheme.bodyMedium!.copyWith(
-                color: scheme.onInverseSurface,
-              ),
+              style: theme.textTheme.bodyMedium!
+                  .copyWith(color: scheme.onInverseSurface)
+                  .merge(snackTheme.contentTextStyle),
               child: content,
             ),
           ],
         ),
         ?action,
-        if (showCloseIcon == true)
+        if (closeIcon)
           IconButton(
             onPressed: () => ScaffoldMessenger.maybeOf(
               context,
             )?.hideCurrentSnackBar(reason: SnackBarClosedReason.dismiss),
             tooltip: 'Close',
-            color: scheme.onInverseSurface,
+            color:
+                closeIconColor ??
+                snackTheme.closeIconColor ??
+                scheme.onInverseSurface,
             icon: const Icon(Icons.close),
           ),
       ],
@@ -2266,8 +3628,9 @@ class ScaffoldMessengerState extends State<ScaffoldMessenger>
   Timer? _timer;
 
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSnackBar(
-    SnackBar snackBar,
-  ) {
+    SnackBar snackBar, {
+    AnimationStyle? snackBarAnimationStyle,
+  }) {
     final completer = Completer<SnackBarClosedReason>();
     final entry = (snackBar, completer);
     setState(() => _queue.add(entry));
@@ -2282,6 +3645,9 @@ class ScaffoldMessengerState extends State<ScaffoldMessenger>
     _timer?.cancel();
     if (_queue.isEmpty) return;
     final current = _queue.first;
+    final onVisible = current.$1.onVisible;
+    if (onVisible != null) scheduleMicrotask(onVisible);
+    if (current.$1.persist == true) return;
     _timer = Timer(
       current.$1.duration,
       () => _close(current, SnackBarClosedReason.timeout),

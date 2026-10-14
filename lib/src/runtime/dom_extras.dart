@@ -656,9 +656,6 @@ class Ink extends StatelessWidget {
   );
 }
 
-typedef ImageErrorListener =
-    void Function(Object exception, StackTrace? stackTrace);
-
 typedef OrientationWidgetBuilder =
     Widget Function(BuildContext context, Orientation orientation);
 
@@ -912,8 +909,6 @@ class RepaintBoundary extends StatelessWidget {
   Widget build(BuildContext context) => child ?? const SizedBox.shrink();
 }
 
-enum OverflowBarAlignment { start, end, center }
-
 /// Lays children in a row and wraps them when they do not fit.
 class OverflowBar extends StatelessWidget {
   const OverflowBar({
@@ -950,8 +945,6 @@ class OverflowBar extends StatelessWidget {
     children: children,
   );
 }
-
-enum ButtonBarLayoutBehavior { constrained, padded }
 
 class ButtonBar extends StatelessWidget {
   const ButtonBar({

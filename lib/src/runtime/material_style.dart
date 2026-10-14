@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:material_color_utilities/material_color_utilities.dart';
 
+import 'material_colors.dart';
 import 'painting_ui.dart';
 import 'ui_enums.dart';
 
@@ -727,24 +728,6 @@ class TextTheme {
     labelSmall: labelSmall ?? this.labelSmall,
   );
 
-  TextTheme _map(TextStyle? Function(TextStyle?) f) => TextTheme(
-    displayLarge: f(displayLarge),
-    displayMedium: f(displayMedium),
-    displaySmall: f(displaySmall),
-    headlineLarge: f(headlineLarge),
-    headlineMedium: f(headlineMedium),
-    headlineSmall: f(headlineSmall),
-    titleLarge: f(titleLarge),
-    titleMedium: f(titleMedium),
-    titleSmall: f(titleSmall),
-    bodyLarge: f(bodyLarge),
-    bodyMedium: f(bodyMedium),
-    bodySmall: f(bodySmall),
-    labelLarge: f(labelLarge),
-    labelMedium: f(labelMedium),
-    labelSmall: f(labelSmall),
-  );
-
   TextTheme merge(TextTheme? other) {
     if (other == null) return this;
     TextStyle? pick(TextStyle? mine, TextStyle? theirs) =>
@@ -768,15 +751,93 @@ class TextTheme {
     );
   }
 
+  /// As in Flutter, [displayColor] applies to the display and headline
+  /// styles and `bodySmall`; [bodyColor] applies to the rest.
   TextTheme apply({
     String? fontFamily,
-    Color? bodyColor,
+    List<String>? fontFamilyFallback,
+    String? package,
+    double fontSizeFactor = 1.0,
+    double fontSizeDelta = 0.0,
     Color? displayColor,
-  }) => _map(
-    (style) => style?.copyWith(
-      fontFamily: fontFamily,
-      color: bodyColor ?? displayColor,
-    ),
+    Color? bodyColor,
+    TextDecoration? decoration,
+    Color? decorationColor,
+  }) {
+    TextStyle? Function(TextStyle?) with_(Color? color) =>
+        (style) => style
+            ?.apply(
+              color: color,
+              decorationColor: decorationColor,
+              fontFamily: fontFamily,
+              fontSizeFactor: fontSizeFactor,
+              fontSizeDelta: fontSizeDelta,
+            )
+            .copyWith(
+              fontFamilyFallback: fontFamilyFallback,
+              decoration: decoration,
+            );
+    final display = with_(displayColor);
+    final body = with_(bodyColor);
+    return TextTheme(
+      displayLarge: display(displayLarge),
+      displayMedium: display(displayMedium),
+      displaySmall: display(displaySmall),
+      headlineLarge: display(headlineLarge),
+      headlineMedium: display(headlineMedium),
+      headlineSmall: display(headlineSmall),
+      titleLarge: body(titleLarge),
+      titleMedium: body(titleMedium),
+      titleSmall: body(titleSmall),
+      bodyLarge: body(bodyLarge),
+      bodyMedium: body(bodyMedium),
+      bodySmall: display(bodySmall),
+      labelLarge: body(labelLarge),
+      labelMedium: body(labelMedium),
+      labelSmall: body(labelSmall),
+    );
+  }
+
+  static TextTheme lerp(TextTheme? a, TextTheme? b, double t) =>
+      (t < 0.5 ? a : b) ?? const TextTheme();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextTheme &&
+          other.displayLarge == displayLarge &&
+          other.displayMedium == displayMedium &&
+          other.displaySmall == displaySmall &&
+          other.headlineLarge == headlineLarge &&
+          other.headlineMedium == headlineMedium &&
+          other.headlineSmall == headlineSmall &&
+          other.titleLarge == titleLarge &&
+          other.titleMedium == titleMedium &&
+          other.titleSmall == titleSmall &&
+          other.bodyLarge == bodyLarge &&
+          other.bodyMedium == bodyMedium &&
+          other.bodySmall == bodySmall &&
+          other.labelLarge == labelLarge &&
+          other.labelMedium == labelMedium &&
+          other.labelSmall == labelSmall;
+
+  @override
+  int get hashCode => Object.hash(
+    displayLarge,
+    displayMedium,
+    displaySmall,
+    headlineLarge,
+    headlineMedium,
+    headlineSmall,
+    titleLarge,
+    titleMedium,
+    titleSmall,
+    bodyLarge,
+    bodyMedium,
+    bodySmall,
+    labelLarge,
+    labelMedium,
+    labelSmall,
   );
 }
 
@@ -830,7 +891,13 @@ class ColorScheme {
     this.onTertiaryFixed = const Color(0xff31111d),
     this.onTertiaryFixedVariant = const Color(0xff633b48),
     Color? surfaceTint,
-  }) : _surfaceTint = surfaceTint;
+    @Deprecated('Use surface instead.') Color? background,
+    @Deprecated('Use onSurface instead.') Color? onBackground,
+    @Deprecated('Use surfaceContainerHighest instead.') Color? surfaceVariant,
+  }) : _surfaceTint = surfaceTint,
+       _background = background,
+       _onBackground = onBackground,
+       _surfaceVariant = surfaceVariant;
 
   /// Material 3 dynamic color, computed with the same
   /// material_color_utilities schemes Flutter uses.
@@ -861,6 +928,33 @@ class ColorScheme {
     Color? onSurfaceVariant,
     Color? outline,
     Color? outlineVariant,
+    Color? primaryFixed,
+    Color? primaryFixedDim,
+    Color? onPrimaryFixed,
+    Color? onPrimaryFixedVariant,
+    Color? secondaryFixed,
+    Color? secondaryFixedDim,
+    Color? onSecondaryFixed,
+    Color? onSecondaryFixedVariant,
+    Color? tertiaryFixed,
+    Color? tertiaryFixedDim,
+    Color? onTertiaryFixed,
+    Color? onTertiaryFixedVariant,
+    Color? surfaceDim,
+    Color? surfaceBright,
+    Color? surfaceContainerLowest,
+    Color? surfaceContainerLow,
+    Color? surfaceContainer,
+    Color? surfaceContainerHigh,
+    Color? inverseSurface,
+    Color? onInverseSurface,
+    Color? inversePrimary,
+    Color? shadow,
+    Color? scrim,
+    Color? surfaceTint,
+    @Deprecated('Use surface instead.') Color? background,
+    @Deprecated('Use onSurface instead.') Color? onBackground,
+    @Deprecated('Use surfaceContainerHighest instead.') Color? surfaceVariant,
   }) {
     if (contrastLevel < -1 || contrastLevel > 1)
       throw ArgumentError('contrastLevel must be between -1.0 and 1.0.');
@@ -914,7 +1008,7 @@ class ColorScheme {
       ),
     };
     Color role(DynamicColor color) => Color(color.getArgb(scheme));
-    return ColorScheme(
+    final base = ColorScheme(
       brightness: brightness,
       primary: primary ?? role(MaterialDynamicColors.primary),
       onPrimary: onPrimary ?? role(MaterialDynamicColors.onPrimary),
@@ -982,6 +1076,76 @@ class ColorScheme {
       shadow: role(MaterialDynamicColors.shadow),
       scrim: role(MaterialDynamicColors.scrim),
       surfaceTint: role(MaterialDynamicColors.primary),
+    );
+    return base.copyWith(
+      primaryFixed: primaryFixed,
+      primaryFixedDim: primaryFixedDim,
+      onPrimaryFixed: onPrimaryFixed,
+      onPrimaryFixedVariant: onPrimaryFixedVariant,
+      secondaryFixed: secondaryFixed,
+      secondaryFixedDim: secondaryFixedDim,
+      onSecondaryFixed: onSecondaryFixed,
+      onSecondaryFixedVariant: onSecondaryFixedVariant,
+      tertiaryFixed: tertiaryFixed,
+      tertiaryFixedDim: tertiaryFixedDim,
+      onTertiaryFixed: onTertiaryFixed,
+      onTertiaryFixedVariant: onTertiaryFixedVariant,
+      surfaceDim: surfaceDim,
+      surfaceBright: surfaceBright,
+      surfaceContainerLowest: surfaceContainerLowest,
+      surfaceContainerLow: surfaceContainerLow,
+      surfaceContainer: surfaceContainer,
+      surfaceContainerHigh: surfaceContainerHigh,
+      inverseSurface: inverseSurface,
+      onInverseSurface: onInverseSurface,
+      inversePrimary: inversePrimary,
+      shadow: shadow,
+      scrim: scrim,
+      surfaceTint: surfaceTint,
+      // ignore: deprecated_member_use_from_same_package
+      background: background,
+      // ignore: deprecated_member_use_from_same_package
+      onBackground: onBackground,
+      // ignore: deprecated_member_use_from_same_package
+      surfaceVariant: surfaceVariant,
+    );
+  }
+
+  /// Material 2 scheme derived from a swatch, as in Flutter.
+  factory ColorScheme.fromSwatch({
+    MaterialColor primarySwatch = Colors.blue,
+    Color? primaryColorDark,
+    Color? accentColor,
+    Color? cardColor,
+    Color? backgroundColor,
+    Color? errorColor,
+    Brightness brightness = Brightness.light,
+  }) {
+    final isDark = brightness == Brightness.dark;
+    final primaryIsDark = _isDarkColor(primarySwatch);
+    final secondary =
+        accentColor ?? (isDark ? Colors.tealAccent[200]! : primarySwatch);
+    final secondaryIsDark = _isDarkColor(secondary);
+    return ColorScheme(
+      brightness: brightness,
+      primary: primarySwatch,
+      onPrimary: primaryIsDark ? Colors.white : Colors.black,
+      primaryContainer:
+          primaryColorDark ?? (isDark ? Colors.black : primarySwatch[700]!),
+      secondary: secondary,
+      onSecondary: secondaryIsDark ? Colors.white : Colors.black,
+      secondaryContainer: isDark
+          ? Colors.tealAccent[700]!
+          : primarySwatch[700]!,
+      surface: cardColor ?? (isDark ? Colors.grey[800]! : Colors.white),
+      onSurface: isDark ? Colors.white : Colors.black,
+      error: errorColor ?? Colors.red[700]!,
+      onError: isDark ? Colors.black : Colors.white,
+      // ignore: deprecated_member_use_from_same_package
+      background:
+          backgroundColor ?? (isDark ? Colors.grey[700]! : primarySwatch[200]!),
+      // ignore: deprecated_member_use_from_same_package
+      onBackground: primaryIsDark ? Colors.white : Colors.black,
     );
   }
 
@@ -1063,14 +1227,14 @@ class ColorScheme {
   final Color onPrimaryFixedVariant, secondaryFixed, secondaryFixedDim;
   final Color onSecondaryFixed, onSecondaryFixedVariant, tertiaryFixed;
   final Color tertiaryFixedDim, onTertiaryFixed, onTertiaryFixedVariant;
-  final Color? _surfaceTint;
+  final Color? _surfaceTint, _background, _onBackground, _surfaceVariant;
   Color get surfaceTint => _surfaceTint ?? primary;
   @Deprecated('Use surface instead.')
-  Color get background => surface;
+  Color get background => _background ?? surface;
   @Deprecated('Use onSurface instead.')
-  Color get onBackground => onSurface;
+  Color get onBackground => _onBackground ?? onSurface;
   @Deprecated('Use surfaceContainerHighest instead.')
-  Color get surfaceVariant => surfaceContainerHighest;
+  Color get surfaceVariant => _surfaceVariant ?? surfaceContainerHighest;
 
   ColorScheme copyWith({
     Brightness? brightness,
@@ -1107,7 +1271,22 @@ class ColorScheme {
     Color? inverseSurface,
     Color? onInverseSurface,
     Color? inversePrimary,
+    Color? primaryFixed,
+    Color? primaryFixedDim,
+    Color? onPrimaryFixed,
+    Color? onPrimaryFixedVariant,
+    Color? secondaryFixed,
+    Color? secondaryFixedDim,
+    Color? onSecondaryFixed,
+    Color? onSecondaryFixedVariant,
+    Color? tertiaryFixed,
+    Color? tertiaryFixedDim,
+    Color? onTertiaryFixed,
+    Color? onTertiaryFixedVariant,
     Color? surfaceTint,
+    @Deprecated('Use surface instead.') Color? background,
+    @Deprecated('Use onSurface instead.') Color? onBackground,
+    @Deprecated('Use surfaceContainerHighest instead.') Color? surfaceVariant,
   }) => ColorScheme(
     brightness: brightness ?? this.brightness,
     primary: primary ?? this.primary,
@@ -1145,130 +1324,185 @@ class ColorScheme {
     inverseSurface: inverseSurface ?? this.inverseSurface,
     onInverseSurface: onInverseSurface ?? this.onInverseSurface,
     inversePrimary: inversePrimary ?? this.inversePrimary,
-    primaryFixed: primaryFixed,
-    primaryFixedDim: primaryFixedDim,
-    onPrimaryFixed: onPrimaryFixed,
-    onPrimaryFixedVariant: onPrimaryFixedVariant,
-    secondaryFixed: secondaryFixed,
-    secondaryFixedDim: secondaryFixedDim,
-    onSecondaryFixed: onSecondaryFixed,
-    onSecondaryFixedVariant: onSecondaryFixedVariant,
-    tertiaryFixed: tertiaryFixed,
-    tertiaryFixedDim: tertiaryFixedDim,
-    onTertiaryFixed: onTertiaryFixed,
-    onTertiaryFixedVariant: onTertiaryFixedVariant,
+    primaryFixed: primaryFixed ?? this.primaryFixed,
+    primaryFixedDim: primaryFixedDim ?? this.primaryFixedDim,
+    onPrimaryFixed: onPrimaryFixed ?? this.onPrimaryFixed,
+    onPrimaryFixedVariant: onPrimaryFixedVariant ?? this.onPrimaryFixedVariant,
+    secondaryFixed: secondaryFixed ?? this.secondaryFixed,
+    secondaryFixedDim: secondaryFixedDim ?? this.secondaryFixedDim,
+    onSecondaryFixed: onSecondaryFixed ?? this.onSecondaryFixed,
+    onSecondaryFixedVariant:
+        onSecondaryFixedVariant ?? this.onSecondaryFixedVariant,
+    tertiaryFixed: tertiaryFixed ?? this.tertiaryFixed,
+    tertiaryFixedDim: tertiaryFixedDim ?? this.tertiaryFixedDim,
+    onTertiaryFixed: onTertiaryFixed ?? this.onTertiaryFixed,
+    onTertiaryFixedVariant:
+        onTertiaryFixedVariant ?? this.onTertiaryFixedVariant,
     surfaceTint: surfaceTint ?? _surfaceTint,
+    background: background ?? _background,
+    onBackground: onBackground ?? _onBackground,
+    surfaceVariant: surfaceVariant ?? _surfaceVariant,
+  );
+
+  static ColorScheme lerp(ColorScheme a, ColorScheme b, double t) =>
+      t < 0.5 ? a : b;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ColorScheme &&
+          other.brightness == brightness &&
+          other.primary == primary &&
+          other.onPrimary == onPrimary &&
+          other.primaryContainer == primaryContainer &&
+          other.onPrimaryContainer == onPrimaryContainer &&
+          other.secondary == secondary &&
+          other.onSecondary == onSecondary &&
+          other.secondaryContainer == secondaryContainer &&
+          other.onSecondaryContainer == onSecondaryContainer &&
+          other.tertiary == tertiary &&
+          other.onTertiary == onTertiary &&
+          other.tertiaryContainer == tertiaryContainer &&
+          other.onTertiaryContainer == onTertiaryContainer &&
+          other.error == error &&
+          other.onError == onError &&
+          other.errorContainer == errorContainer &&
+          other.onErrorContainer == onErrorContainer &&
+          other.surface == surface &&
+          other.onSurface == onSurface &&
+          other.surfaceDim == surfaceDim &&
+          other.surfaceBright == surfaceBright &&
+          other.surfaceContainerLowest == surfaceContainerLowest &&
+          other.surfaceContainerLow == surfaceContainerLow &&
+          other.surfaceContainer == surfaceContainer &&
+          other.surfaceContainerHigh == surfaceContainerHigh &&
+          other.surfaceContainerHighest == surfaceContainerHighest &&
+          other.onSurfaceVariant == onSurfaceVariant &&
+          other.outline == outline &&
+          other.outlineVariant == outlineVariant &&
+          other.shadow == shadow &&
+          other.scrim == scrim &&
+          other.inverseSurface == inverseSurface &&
+          other.onInverseSurface == onInverseSurface &&
+          other.inversePrimary == inversePrimary &&
+          other.surfaceTint == surfaceTint;
+
+  @override
+  int get hashCode => Object.hash(
+    brightness,
+    primary,
+    secondary,
+    tertiary,
+    error,
+    surface,
+    onSurface,
+    surfaceContainerHighest,
+    outline,
+    surfaceTint,
   );
 }
 
-class IconThemeData {
-  const IconThemeData({this.color, this.size, this.opacity});
-  final Color? color;
-  final double? size;
-  final double? opacity;
-  IconThemeData copyWith({Color? color, double? size, double? opacity}) =>
-      IconThemeData(
-        color: color ?? this.color,
-        size: size ?? this.size,
-        opacity: opacity ?? this.opacity,
-      );
-  IconThemeData merge(IconThemeData? other) => other == null
-      ? this
-      : copyWith(color: other.color, size: other.size, opacity: other.opacity);
+bool _isDarkColor(Color color) {
+  final luminance = color.computeLuminance();
+  return (luminance + 0.05) * (luminance + 0.05) <= 0.15;
 }
 
-class ThemeData {
-  factory ThemeData({
-    ColorScheme? colorScheme,
-    Color? colorSchemeSeed,
-    Brightness? brightness,
-    bool? useMaterial3,
-    TextTheme? textTheme,
-    String? fontFamily,
-    Color? scaffoldBackgroundColor,
-    Color? dividerColor,
-    Color? cardColor,
-    IconThemeData? iconTheme,
-    Iterable<ThemeExtension<dynamic>> extensions = const [],
-  }) {
-    if (colorScheme != null && colorSchemeSeed != null)
-      throw ArgumentError('Use either colorScheme or colorSchemeSeed.');
-    final scheme =
-        colorScheme ??
-        (colorSchemeSeed != null
-            ? ColorScheme.fromSeed(
-                seedColor: colorSchemeSeed,
-                brightness: brightness ?? Brightness.light,
-              )
-            : brightness == Brightness.dark
-            ? const ColorScheme.dark()
-            : const ColorScheme());
-    var text = TextTheme.material3.merge(textTheme);
-    if (fontFamily != null) text = text.apply(fontFamily: fontFamily);
-    return ThemeData.raw(
-      colorScheme: scheme,
-      textTheme: text,
-      useMaterial3: useMaterial3 ?? true,
-      scaffoldBackgroundColor: scaffoldBackgroundColor ?? scheme.surface,
-      dividerColor: dividerColor ?? scheme.outlineVariant,
-      cardColor: cardColor ?? scheme.surfaceContainerLow,
-      iconTheme: iconTheme ?? IconThemeData(color: scheme.onSurface, size: 24),
-      extensions: extensions,
-    );
-  }
-  factory ThemeData.light({bool? useMaterial3}) =>
-      ThemeData(useMaterial3: useMaterial3);
-  factory ThemeData.dark({bool? useMaterial3}) =>
-      ThemeData(brightness: Brightness.dark, useMaterial3: useMaterial3);
-  const ThemeData.raw({
-    required this.colorScheme,
-    required this.textTheme,
-    required this.useMaterial3,
-    required this.scaffoldBackgroundColor,
-    required this.dividerColor,
-    required this.cardColor,
-    required this.iconTheme,
-    required this.extensions,
+class IconThemeData {
+  const IconThemeData({
+    this.size,
+    this.fill,
+    this.weight,
+    this.grade,
+    this.opticalSize,
+    this.color,
+    this.opacity,
+    this.shadows,
+    this.applyTextScaling,
   });
-
-  final ColorScheme colorScheme;
-  final TextTheme textTheme;
-  final bool useMaterial3;
-  final Color scaffoldBackgroundColor, dividerColor, cardColor;
-  final IconThemeData iconTheme;
-  final Iterable<ThemeExtension<dynamic>> extensions;
-  Brightness get brightness => colorScheme.brightness;
-  Color get primaryColor => colorScheme.primary;
-  Color get canvasColor => colorScheme.surface;
-  Color get disabledColor => colorScheme.onSurface.withValues(alpha: 0.38);
-  Color get hintColor => colorScheme.onSurfaceVariant;
-
-  T? extension<T>() {
-    for (final extension in extensions) {
-      if (extension is T) return extension as T;
-    }
-    return null;
-  }
-
-  ThemeData copyWith({
-    ColorScheme? colorScheme,
-    TextTheme? textTheme,
-    bool? useMaterial3,
-    Color? scaffoldBackgroundColor,
-    Color? dividerColor,
-    Color? cardColor,
-    IconThemeData? iconTheme,
-    Iterable<ThemeExtension<dynamic>>? extensions,
-  }) => ThemeData.raw(
-    colorScheme: colorScheme ?? this.colorScheme,
-    textTheme: textTheme ?? this.textTheme,
-    useMaterial3: useMaterial3 ?? this.useMaterial3,
-    scaffoldBackgroundColor:
-        scaffoldBackgroundColor ?? this.scaffoldBackgroundColor,
-    dividerColor: dividerColor ?? this.dividerColor,
-    cardColor: cardColor ?? this.cardColor,
-    iconTheme: iconTheme ?? this.iconTheme,
-    extensions: extensions ?? this.extensions,
+  const IconThemeData.fallback()
+    : size = 24,
+      fill = 0,
+      weight = 400,
+      grade = 0,
+      opticalSize = 48,
+      color = const Color(0xff000000),
+      opacity = 1,
+      shadows = null,
+      applyTextScaling = false;
+  final Color? color;
+  final double? size, fill, weight, grade, opticalSize;
+  final double? opacity;
+  final List<Shadow>? shadows;
+  final bool? applyTextScaling;
+  bool get isConcrete =>
+      size != null &&
+      fill != null &&
+      weight != null &&
+      grade != null &&
+      opticalSize != null &&
+      color != null &&
+      opacity != null &&
+      applyTextScaling != null;
+  IconThemeData copyWith({
+    double? size,
+    double? fill,
+    double? weight,
+    double? grade,
+    double? opticalSize,
+    Color? color,
+    double? opacity,
+    List<Shadow>? shadows,
+    bool? applyTextScaling,
+  }) => IconThemeData(
+    size: size ?? this.size,
+    fill: fill ?? this.fill,
+    weight: weight ?? this.weight,
+    grade: grade ?? this.grade,
+    opticalSize: opticalSize ?? this.opticalSize,
+    color: color ?? this.color,
+    opacity: opacity ?? this.opacity,
+    shadows: shadows ?? this.shadows,
+    applyTextScaling: applyTextScaling ?? this.applyTextScaling,
+  );
+  IconThemeData merge(IconThemeData? other) => other == null
+      ? this
+      : copyWith(
+          size: other.size,
+          fill: other.fill,
+          weight: other.weight,
+          grade: other.grade,
+          opticalSize: other.opticalSize,
+          color: other.color,
+          opacity: other.opacity,
+          shadows: other.shadows,
+          applyTextScaling: other.applyTextScaling,
+        );
+  static IconThemeData lerp(IconThemeData? a, IconThemeData? b, double t) =>
+      (t < 0.5 ? a : b) ?? const IconThemeData();
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is IconThemeData &&
+          other.size == size &&
+          other.fill == fill &&
+          other.weight == weight &&
+          other.grade == grade &&
+          other.opticalSize == opticalSize &&
+          other.color == color &&
+          other.opacity == opacity &&
+          other.shadows == shadows &&
+          other.applyTextScaling == applyTextScaling;
+  @override
+  int get hashCode => Object.hash(
+    size,
+    fill,
+    weight,
+    grade,
+    opticalSize,
+    color,
+    opacity,
+    shadows,
+    applyTextScaling,
   );
 }
 
@@ -1534,6 +1768,7 @@ abstract class ShapeBorder {
 abstract class OutlinedBorder extends ShapeBorder {
   const OutlinedBorder({this.side = BorderSide.none});
   final BorderSide side;
+  OutlinedBorder copyWith({BorderSide? side});
 }
 
 class RoundedRectangleBorder extends OutlinedBorder {
@@ -1542,6 +1777,14 @@ class RoundedRectangleBorder extends OutlinedBorder {
     super.side,
   });
   final BorderRadiusGeometry borderRadius;
+  @override
+  RoundedRectangleBorder copyWith({
+    BorderSide? side,
+    BorderRadiusGeometry? borderRadius,
+  }) => RoundedRectangleBorder(
+    side: side ?? this.side,
+    borderRadius: borderRadius ?? this.borderRadius,
+  );
 }
 
 /// Corners cut diagonally; approximated with rounded corners of the same
@@ -1554,6 +1797,11 @@ class BeveledRectangleBorder extends RoundedRectangleBorder {
 class OvalBorder extends OutlinedBorder {
   const OvalBorder({super.side, this.eccentricity = 1});
   final double eccentricity;
+  @override
+  OvalBorder copyWith({BorderSide? side, double? eccentricity}) => OvalBorder(
+    side: side ?? this.side,
+    eccentricity: eccentricity ?? this.eccentricity,
+  );
 }
 
 /// Drawn as its bounding circle; star points are not cut.
@@ -1578,6 +1826,16 @@ class StarBorder extends OutlinedBorder {
        valleyRounding = 0;
   final double points, pointRounding, valleyRounding, rotation, squash;
   final double? innerRadiusRatio;
+  @override
+  StarBorder copyWith({BorderSide? side}) => StarBorder(
+    side: side ?? this.side,
+    points: points,
+    innerRadiusRatio: innerRadiusRatio ?? 0.4,
+    pointRounding: pointRounding,
+    valleyRounding: valleyRounding,
+    rotation: rotation,
+    squash: squash,
+  );
 }
 
 /// Borders on chosen edges of the box.
@@ -1585,6 +1843,20 @@ class LinearBorder extends OutlinedBorder {
   const LinearBorder({super.side, this.start, this.end, this.top, this.bottom});
   final LinearBorderEdge? start, end, top, bottom;
   static const none = LinearBorder();
+  @override
+  LinearBorder copyWith({
+    BorderSide? side,
+    LinearBorderEdge? start,
+    LinearBorderEdge? end,
+    LinearBorderEdge? top,
+    LinearBorderEdge? bottom,
+  }) => LinearBorder(
+    side: side ?? this.side,
+    start: start ?? this.start,
+    end: end ?? this.end,
+    top: top ?? this.top,
+    bottom: bottom ?? this.bottom,
+  );
   LinearBorder.start({super.side, double alignment = 0, double size = 1})
     : start = LinearBorderEdge(alignment: alignment, size: size),
       end = null,
@@ -1615,14 +1887,32 @@ class LinearBorderEdge {
 /// Approximated as a rounded rectangle; CSS has no superellipse corners.
 class ContinuousRectangleBorder extends RoundedRectangleBorder {
   const ContinuousRectangleBorder({super.borderRadius, super.side});
+  @override
+  ContinuousRectangleBorder copyWith({
+    BorderSide? side,
+    BorderRadiusGeometry? borderRadius,
+  }) => ContinuousRectangleBorder(
+    side: side ?? this.side,
+    borderRadius: borderRadius ?? this.borderRadius,
+  );
 }
 
 class StadiumBorder extends OutlinedBorder {
   const StadiumBorder({super.side});
+  @override
+  StadiumBorder copyWith({BorderSide? side}) =>
+      StadiumBorder(side: side ?? this.side);
 }
 
 class CircleBorder extends OutlinedBorder {
-  const CircleBorder({super.side});
+  const CircleBorder({super.side, this.eccentricity = 0.0});
+  final double eccentricity;
+  @override
+  CircleBorder copyWith({BorderSide? side, double? eccentricity}) =>
+      CircleBorder(
+        side: side ?? this.side,
+        eccentricity: eccentricity ?? this.eccentricity,
+      );
 }
 
 class Shadow {

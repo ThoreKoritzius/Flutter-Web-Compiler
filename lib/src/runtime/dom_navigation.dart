@@ -1034,18 +1034,22 @@ Future<T?> showDialog<T>({
   bool barrierDismissible = true,
   Color? barrierColor,
   String? barrierLabel,
+  bool useSafeArea = true,
   bool useRootNavigator = true,
   RouteSettings? routeSettings,
-  bool useSafeArea = true,
   Offset? anchorPoint,
+  TraversalEdgeBehavior? traversalEdgeBehavior,
   bool? requestFocus,
-  Object? traversalEdgeBehavior,
+  AnimationStyle? animationStyle,
   bool fullscreenDialog = false,
 }) => Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
   _OverlayRoute<T>(
     builder: builder,
     dismissible: barrierDismissible,
-    color: barrierColor ?? const Color(0x8a000000),
+    color:
+        barrierColor ??
+        DialogTheme.of(context).barrierColor ??
+        const Color(0x8a000000),
     sheet: false,
     settings: routeSettings,
   ),
@@ -1233,99 +1237,291 @@ class WillPopScope extends StatelessWidget {
   }
 }
 
+/// How focus traversal behaves at the edges of a route; carried only.
+enum TraversalEdgeBehavior { closedLoop, leaveFlutterView, parentScope, stop }
+
 Future<T?> showModalBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   Color? backgroundColor,
-  Color? barrierColor,
-  bool isDismissible = true,
-  bool isScrollControlled = false,
-  bool useRootNavigator = false,
-  bool showDragHandle = false,
-  RouteSettings? routeSettings,
-  bool useSafeArea = false,
-  Clip? clipBehavior,
-  ShapeBorder? shape,
+  String? barrierLabel,
   double? elevation,
+  ShapeBorder? shape,
+  Clip? clipBehavior,
+  BoxConstraints? constraints,
+  Color? barrierColor,
+  bool isScrollControlled = false,
+  double scrollControlDisabledMaxHeightRatio = 9.0 / 16.0,
+  bool useRootNavigator = false,
+  bool isDismissible = true,
+  bool enableDrag = true,
+  bool? showDragHandle,
+  bool useSafeArea = false,
+  RouteSettings? routeSettings,
+  AnimationController? transitionAnimationController,
+  Offset? anchorPoint,
+  AnimationStyle? sheetAnimationStyle,
+  bool? requestFocus,
+}) {
+  final sheetTheme = Theme.of(context).bottomSheetTheme;
+  return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
+    _OverlayRoute<T>(
+      builder: (context) => _BottomSheetSurface(
+        color:
+            backgroundColor ??
+            sheetTheme.modalBackgroundColor ??
+            sheetTheme.backgroundColor,
+        elevation: elevation ?? sheetTheme.modalElevation,
+        shape: shape,
+        clipBehavior: clipBehavior,
+        constraints: constraints,
+        showDragHandle: showDragHandle,
+        modal: true,
+        scrollControlled: isScrollControlled,
+        child: builder(context),
+      ),
+      dismissible: isDismissible,
+      color:
+          barrierColor ??
+          sheetTheme.modalBarrierColor ??
+          const Color(0x52000000),
+      sheet: true,
+      settings: routeSettings,
+    ),
+  );
+}
+
+/// Shows a persistent bottom sheet in the nearest [Scaffold].
+PersistentBottomSheetController showBottomSheet({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  Color? backgroundColor,
+  double? elevation,
+  ShapeBorder? shape,
+  Clip? clipBehavior,
   BoxConstraints? constraints,
   bool? enableDrag,
-  String? barrierLabel,
-  Offset? anchorPoint,
-  bool? requestFocus,
-  Object? sheetAnimationStyle,
+  bool? showDragHandle,
   AnimationController? transitionAnimationController,
-}) => Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
-  _OverlayRoute<T>(
-    builder: (context) => _BottomSheetSurface(
-      color: backgroundColor,
-      scrollControlled: isScrollControlled,
-      shape: shape,
-      maxWidth: constraints?.maxWidth,
-      child: builder(context),
-    ),
-    dismissible: isDismissible,
-    color: barrierColor ?? const Color(0x52000000),
-    sheet: true,
-    settings: routeSettings,
-  ),
+  AnimationStyle? sheetAnimationStyle,
+}) => Scaffold.of(context).showBottomSheet(
+  builder,
+  backgroundColor: backgroundColor,
+  elevation: elevation,
+  shape: shape,
+  clipBehavior: clipBehavior,
+  constraints: constraints,
+  enableDrag: enableDrag,
+  showDragHandle: showDragHandle,
+  transitionAnimationController: transitionAnimationController,
+  sheetAnimationStyle: sheetAnimationStyle,
 );
+
+class PersistentBottomSheetController
+    extends ScaffoldFeatureController<BottomSheet, void> {
+  PersistentBottomSheetController._(
+    void Function() close,
+    Future<void> closed,
+    this._rebuild,
+  ) : super._(close, closed);
+  final void Function() _rebuild;
+
+  /// Rebuilds the sheet after [fn] runs.
+  void setState(VoidCallback fn) {
+    fn();
+    _rebuild();
+  }
+}
+
+/// A Material bottom sheet surface. [onClosing] is called when its drag
+/// handle is activated.
+class BottomSheet extends StatelessWidget {
+  const BottomSheet({
+    super.key,
+    this.animationController,
+    this.enableDrag = true,
+    this.showDragHandle,
+    this.dragHandleColor,
+    this.dragHandleSize,
+    this.onDragStart,
+    this.onDragEnd,
+    this.backgroundColor,
+    this.shadowColor,
+    this.elevation,
+    this.shape,
+    this.clipBehavior,
+    this.constraints,
+    required this.onClosing,
+    required this.builder,
+  });
+  final AnimationController? animationController;
+  final bool enableDrag;
+  final bool? showDragHandle;
+  final Color? dragHandleColor, backgroundColor, shadowColor;
+  final Size? dragHandleSize;
+  final void Function(DragStartDetails details)? onDragStart;
+  final void Function(DragEndDetails details, {required bool isClosing})?
+  onDragEnd;
+  final double? elevation;
+  final ShapeBorder? shape;
+  final Clip? clipBehavior;
+  final BoxConstraints? constraints;
+  final VoidCallback onClosing;
+  final WidgetBuilder builder;
+  @override
+  Widget build(BuildContext context) => _BottomSheetSurface(
+    color: backgroundColor,
+    elevation: elevation,
+    shadowColor: shadowColor,
+    shape: shape,
+    clipBehavior: clipBehavior,
+    constraints: constraints,
+    showDragHandle: showDragHandle,
+    dragHandleColor: dragHandleColor,
+    dragHandleSize: dragHandleSize,
+    onHandle: onClosing,
+    modal: false,
+    child: Builder(builder: builder),
+  );
+}
 
 class _BottomSheetSurface extends StatelessWidget {
   const _BottomSheetSurface({
     required this.color,
     required this.child,
-    this.scrollControlled = false,
+    required this.modal,
+    this.elevation,
+    this.shadowColor,
     this.shape,
-    this.maxWidth,
+    this.clipBehavior,
+    this.constraints,
+    this.showDragHandle,
+    this.dragHandleColor,
+    this.dragHandleSize,
+    this.onHandle,
+    this.scrollControlled = false,
   });
-  final Color? color;
+  final Color? color, shadowColor, dragHandleColor;
+  final double? elevation;
+  final ShapeBorder? shape;
+  final Clip? clipBehavior;
+  final BoxConstraints? constraints;
+  final bool? showDragHandle;
+  final Size? dragHandleSize;
+  final VoidCallback? onHandle;
+  final bool modal;
   final Widget child;
   final bool scrollControlled;
-  final ShapeBorder? shape;
-  final double? maxWidth;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final width = maxWidth == null || !maxWidth!.isFinite
-        ? 'min(640px,100vw)'
-        : 'min(${px(maxWidth!)},100vw)';
+    final sheetTheme = Theme.of(context).bottomSheetTheme;
+    final sheetShape = shape ?? sheetTheme.shape;
+    final limits = constraints ?? sheetTheme.constraints;
+    final maxWidth = limits == null || !limits.maxWidth.isFinite
+        ? 640.0
+        : limits.maxWidth;
+    final depth = elevation ?? sheetTheme.elevation ?? 1;
+    final handle = showDragHandle ?? sheetTheme.showDragHandle ?? false;
+    final handleSize =
+        dragHandleSize ?? sheetTheme.dragHandleSize ?? const Size(32, 4);
+    final clip = clipBehavior ?? sheetTheme.clipBehavior ?? Clip.none;
     return _Box(
       css:
-          'box-sizing:border-box;width:$width;max-height:${scrollControlled ? '100vh' : '90vh'};overflow-y:auto;${shape == null ? 'border-radius:28px 28px 0 0;' : shapeCss(shape)}background-color:${colorCss(color ?? scheme.surfaceContainerLow)};',
-      attributes: const {'role': 'dialog', 'aria-modal': 'true'},
+          'box-sizing:border-box;width:min(${px(maxWidth)},100vw);${modal ? 'max-height:${scrollControlled ? '100vh' : '90vh'};overflow-y:auto;' : 'margin:0 auto;'}${sheetShape == null ? 'border-radius:28px 28px 0 0;' : shapeCss(sheetShape)}background-color:${colorCss(color ?? sheetTheme.backgroundColor ?? scheme.surfaceContainerLow)};${depth > 1 ? elevationCss(depth, shadowColor ?? sheetTheme.shadowColor ?? scheme.shadow) : ''}${clip == Clip.none ? '' : 'overflow:hidden;'}',
+      attributes: {
+        if (modal) 'role': 'dialog',
+        if (modal) 'aria-modal': 'true',
+      },
       fill: _Fill.none,
-      children: [child],
+      children: [
+        if (handle)
+          _Box(
+            css:
+                'display:flex;justify-content:center;padding:22px 0;${onHandle == null ? '' : 'cursor:pointer;'}',
+            attributes: {
+              'role': 'button',
+              'aria-label': 'Dismiss',
+              if (onHandle != null) 'tabindex': '0',
+            },
+            handlers: _activationHandlers(
+              onHandle ?? () => Navigator.maybePop(context),
+            ),
+            fill: _Fill.expand,
+            children: [
+              _Box(
+                css:
+                    'width:${px(handleSize.width)};height:${px(handleSize.height)};border-radius:${px(handleSize.height / 2)};background-color:${colorCss(dragHandleColor ?? sheetTheme.dragHandleColor ?? scheme.onSurfaceVariant.withValues(alpha: 0.4))};',
+                fill: _Fill.none,
+              ),
+            ],
+          ),
+        child,
+      ],
     );
   }
 }
 
 class Dialog extends StatelessWidget {
   const Dialog({
-    this.clipBehavior,
     super.key,
     this.backgroundColor,
     this.elevation,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.insetAnimationDuration = const Duration(milliseconds: 100),
+    this.insetAnimationCurve = Curves.decelerate,
     this.insetPadding,
+    this.clipBehavior,
     this.shape,
+    this.alignment,
     this.child,
-  });
-
-  /// Accepted for API compatibility; shaped boxes clip through CSS.
-  final Clip? clipBehavior;
-  final Color? backgroundColor;
+    this.semanticsRole,
+  }) : _fullscreen = false;
+  const Dialog.fullscreen({
+    super.key,
+    this.backgroundColor,
+    this.insetAnimationDuration = Duration.zero,
+    this.insetAnimationCurve = Curves.decelerate,
+    this.child,
+    this.semanticsRole,
+  }) : elevation = 0,
+       shadowColor = null,
+       surfaceTintColor = null,
+       insetPadding = EdgeInsets.zero,
+       clipBehavior = Clip.none,
+       shape = null,
+       alignment = null,
+       _fullscreen = true;
+  final Color? backgroundColor, shadowColor, surfaceTintColor;
   final double? elevation;
+  final Duration insetAnimationDuration;
+  final Curve insetAnimationCurve;
   final EdgeInsets? insetPadding;
+  final Clip? clipBehavior;
   final ShapeBorder? shape;
+  final AlignmentGeometry? alignment;
   final Widget? child;
+  final Object? semanticsRole;
+  final bool _fullscreen;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dialogTheme = DialogTheme.of(context);
     final inset =
         insetPadding ??
+        dialogTheme.insetPadding ??
         const EdgeInsets.symmetric(horizontal: 40, vertical: 24);
+    final dialogShape = shape ?? dialogTheme.shape;
+    final clip = clipBehavior ?? dialogTheme.clipBehavior ?? Clip.none;
+    final background =
+        backgroundColor ??
+        dialogTheme.backgroundColor ??
+        (_fullscreen ? scheme.surface : scheme.surfaceContainerHigh);
     return _Box(
-      css:
-          'box-sizing:border-box;min-width:280px;max-width:min(560px,calc(100vw - ${px(inset.horizontal)}));max-height:calc(100vh - ${px(inset.vertical)});overflow:auto;background-color:${colorCss(backgroundColor ?? scheme.surfaceContainerHigh)};${shape == null ? 'border-radius:28px;' : shapeCss(shape)}${elevationCss(elevation ?? 6, scheme.shadow)}',
+      css: _fullscreen
+          ? 'box-sizing:border-box;width:100vw;height:100vh;overflow:auto;background-color:${colorCss(background)};'
+          : 'box-sizing:border-box;min-width:280px;max-width:min(560px,calc(100vw - ${px(inset.horizontal)}));max-height:calc(100vh - ${px(inset.vertical)});overflow:auto;background-color:${colorCss(background)};${dialogShape == null ? 'border-radius:28px;' : shapeCss(dialogShape)}${elevationCss(elevation ?? dialogTheme.elevation ?? 6, shadowColor ?? dialogTheme.shadowColor ?? scheme.shadow)}${clip == Clip.none ? '' : 'overflow:hidden;'}',
       attributes: const {'role': 'dialog', 'aria-modal': 'true'},
       fill: _Fill.none,
       children: [?child],
@@ -1335,154 +1531,171 @@ class Dialog extends StatelessWidget {
 
 class AlertDialog extends StatelessWidget {
   const AlertDialog({
-    this.clipBehavior,
     super.key,
     this.icon,
-    this.title,
-    this.content,
-    this.actions,
-    this.backgroundColor,
-    this.shape,
-    this.titlePadding,
-    this.contentPadding,
-    this.actionsPadding,
-    this.actionsAlignment,
-    this.insetPadding,
     this.iconPadding,
     this.iconColor,
+    this.title,
+    this.titlePadding,
     this.titleTextStyle,
+    this.content,
+    this.contentPadding,
     this.contentTextStyle,
+    this.actions,
+    this.actionsPadding,
+    this.actionsAlignment,
     this.actionsOverflowAlignment,
     this.actionsOverflowDirection,
     this.actionsOverflowButtonSpacing,
     this.buttonPadding,
+    this.backgroundColor,
     this.elevation,
     this.shadowColor,
     this.surfaceTintColor,
     this.semanticLabel,
+    this.insetPadding,
+    this.clipBehavior,
+    this.shape,
     this.alignment,
-    this.constraints,
     this.scrollable = false,
   });
   const AlertDialog.adaptive({
-    this.clipBehavior,
     super.key,
     this.icon,
-    this.title,
-    this.content,
-    this.actions,
-    this.backgroundColor,
-    this.shape,
-    this.titlePadding,
-    this.contentPadding,
-    this.actionsPadding,
-    this.actionsAlignment,
-    this.insetPadding,
     this.iconPadding,
     this.iconColor,
+    this.title,
+    this.titlePadding,
     this.titleTextStyle,
+    this.content,
+    this.contentPadding,
     this.contentTextStyle,
+    this.actions,
+    this.actionsPadding,
+    this.actionsAlignment,
     this.actionsOverflowAlignment,
     this.actionsOverflowDirection,
     this.actionsOverflowButtonSpacing,
     this.buttonPadding,
+    this.backgroundColor,
     this.elevation,
     this.shadowColor,
     this.surfaceTintColor,
     this.semanticLabel,
+    this.insetPadding,
+    this.clipBehavior,
+    this.shape,
     this.alignment,
-    this.constraints,
     this.scrollable = false,
   });
 
-  /// Accepted for API compatibility; shaped boxes clip through CSS.
-  final Clip? clipBehavior;
-  final EdgeInsetsGeometry? iconPadding, buttonPadding;
-  final Color? iconColor, shadowColor, surfaceTintColor;
+  final Widget? icon, title, content;
+  final EdgeInsetsGeometry? iconPadding, titlePadding, contentPadding;
+  final EdgeInsetsGeometry? actionsPadding, buttonPadding;
+  final Color? iconColor, backgroundColor, shadowColor, surfaceTintColor;
   final TextStyle? titleTextStyle, contentTextStyle;
+  final List<Widget>? actions;
+  final MainAxisAlignment? actionsAlignment;
   final OverflowBarAlignment? actionsOverflowAlignment;
   final VerticalDirection? actionsOverflowDirection;
   final double? actionsOverflowButtonSpacing, elevation;
   final String? semanticLabel;
-  final AlignmentGeometry? alignment;
-  final BoxConstraints? constraints;
-  final bool scrollable;
-  final Widget? icon, title, content;
-  final List<Widget>? actions;
-  final Color? backgroundColor;
-  final ShapeBorder? shape;
-  final EdgeInsetsGeometry? titlePadding, contentPadding, actionsPadding;
-  final MainAxisAlignment? actionsAlignment;
   final EdgeInsets? insetPadding;
+  final Clip? clipBehavior;
+  final ShapeBorder? shape;
+  final AlignmentGeometry? alignment;
+  final bool scrollable;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final dialogTheme = DialogTheme.of(context);
+    Widget body = Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: icon == null
+            ? CrossAxisAlignment.stretch
+            : CrossAxisAlignment.center,
+        children: [
+          if (icon != null)
+            Padding(
+              padding: iconPadding ?? const EdgeInsets.only(bottom: 16),
+              child: IconTheme.merge(
+                data: IconThemeData(
+                  color: iconColor ?? dialogTheme.iconColor ?? scheme.secondary,
+                  size: 24,
+                ),
+                child: icon!,
+              ),
+            ),
+          if (title != null)
+            Padding(
+              padding: titlePadding ?? const EdgeInsets.only(bottom: 16),
+              child: Semantics(
+                header: true,
+                child: DefaultTextStyle(
+                  style: theme.textTheme.headlineSmall!
+                      .copyWith(color: scheme.onSurface)
+                      .merge(titleTextStyle ?? dialogTheme.titleTextStyle),
+                  child: title!,
+                ),
+              ),
+            ),
+          if (content != null)
+            Padding(
+              padding: contentPadding ?? EdgeInsets.zero,
+              child: DefaultTextStyle(
+                style: theme.textTheme.bodyMedium!
+                    .copyWith(color: scheme.onSurfaceVariant)
+                    .merge(contentTextStyle ?? dialogTheme.contentTextStyle),
+                child: content!,
+              ),
+            ),
+          if (actions != null && actions!.isNotEmpty)
+            Padding(
+              padding:
+                  actionsPadding ??
+                  dialogTheme.actionsPadding ??
+                  const EdgeInsets.only(top: 24),
+              child: Wrap(
+                alignment: switch (actionsAlignment) {
+                  MainAxisAlignment.start => WrapAlignment.start,
+                  MainAxisAlignment.center => WrapAlignment.center,
+                  MainAxisAlignment.spaceBetween => WrapAlignment.spaceBetween,
+                  _ => WrapAlignment.end,
+                },
+                spacing: 8,
+                runSpacing: actionsOverflowButtonSpacing ?? 8,
+                children: buttonPadding == null
+                    ? actions!
+                    : [
+                        for (final action in actions!)
+                          Padding(padding: buttonPadding!, child: action),
+                      ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (scrollable) body = SingleChildScrollView(child: body);
+    if (semanticLabel != null)
+      body = Semantics(label: semanticLabel, child: body);
     return Dialog(
       backgroundColor: backgroundColor,
+      elevation: elevation,
+      shadowColor: shadowColor,
+      surfaceTintColor: surfaceTintColor,
       shape: shape,
+      clipBehavior: clipBehavior,
+      alignment: alignment,
       insetPadding: insetPadding,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: icon == null
-              ? CrossAxisAlignment.stretch
-              : CrossAxisAlignment.center,
-          children: [
-            if (icon != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: IconTheme.merge(
-                  data: IconThemeData(color: scheme.secondary, size: 24),
-                  child: icon!,
-                ),
-              ),
-            if (title != null)
-              Padding(
-                padding: titlePadding ?? const EdgeInsets.only(bottom: 16),
-                child: Semantics(
-                  header: true,
-                  child: DefaultTextStyle(
-                    style: theme.textTheme.headlineSmall!.copyWith(
-                      color: scheme.onSurface,
-                    ),
-                    child: title!,
-                  ),
-                ),
-              ),
-            if (content != null)
-              Padding(
-                padding: contentPadding ?? EdgeInsets.zero,
-                child: DefaultTextStyle(
-                  style: theme.textTheme.bodyMedium!.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  child: content!,
-                ),
-              ),
-            if (actions != null && actions!.isNotEmpty)
-              Padding(
-                padding: actionsPadding ?? const EdgeInsets.only(top: 24),
-                child: Wrap(
-                  alignment: switch (actionsAlignment) {
-                    MainAxisAlignment.start => WrapAlignment.start,
-                    MainAxisAlignment.center => WrapAlignment.center,
-                    MainAxisAlignment.spaceBetween =>
-                      WrapAlignment.spaceBetween,
-                    _ => WrapAlignment.end,
-                  },
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: actions!,
-                ),
-              ),
-          ],
-        ),
-      ),
+      child: body,
     );
   }
 }
+
+enum OverflowBarAlignment { start, end, center }
 
 class SimpleDialog extends StatelessWidget {
   const SimpleDialog({

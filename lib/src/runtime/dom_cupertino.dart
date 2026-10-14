@@ -2406,7 +2406,7 @@ class CupertinoTabBar extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 IconTheme.merge(
                   data: IconThemeData(color: color, size: iconSize),
-                  child: selected ? (item.activeIcon ?? item.icon) : item.icon,
+                  child: selected ? item.activeIcon : item.icon,
                 ),
                 if (item.label != null)
                   Text(

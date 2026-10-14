@@ -50,6 +50,7 @@ export 'material_style.dart'
 
 import 'foundation_dom.dart';
 import 'services_dom.dart';
+import 'material_colors.dart';
 import 'material_icons_metadata.dart';
 import 'cupertino_icons_metadata.dart';
 import 'material_style.dart';
@@ -68,6 +69,8 @@ import 'package:vector_math/vector_math_64.dart' show Matrix4, Vector3;
 part 'dom_framework.dart';
 part 'dom_widgets.dart';
 part 'dom_material.dart';
+part 'dom_theme.dart';
+part 'dom_component_themes.dart';
 part 'dom_navigation.dart';
 part 'dom_input.dart';
 part 'dom_material_navigation.dart';

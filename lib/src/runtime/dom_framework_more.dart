@@ -813,6 +813,5 @@ class AnimatedTheme extends StatelessWidget {
 }
 
 const kThemeAnimationDuration = Duration(milliseconds: 200);
-const kThemeChangeDuration = Duration(milliseconds: 200);
 const kTabScrollDuration = Duration(milliseconds: 300);
 const kRadialReactionDuration = Duration(milliseconds: 100);
