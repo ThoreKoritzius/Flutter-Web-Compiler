@@ -55,3 +55,9 @@ jobs:
       - run: dart run tool/check_health_geometry.dart
       - run: dart run tool/showcase.dart --no-serve
       - run: dart run bin/flutter_dom.dart build --project examples/health --resolve-imports --dom-only --output build/resolved-health
+      - run: flutter pub get
+        working-directory: examples/records_panel
+      - run: flutter analyze
+        working-directory: examples/records_panel
+      - run: dart run bin/flutter_dom.dart build web --project examples/records_panel --dart-runtime --output build/records-panel
+      - run: test -f build/records-panel/assets/fonts/MaterialIcons-Regular.otf
