@@ -141,7 +141,10 @@ class WidgetRef {
   WidgetRef._(this._state)
     : _container = ProviderScope.containerOf(_state.context, listen: false);
   final ConsumerState<ConsumerStatefulWidget> _state;
-  final ProviderContainer _container;
+
+  /// The container of the nearest scope. Builds depend on the scope and
+  /// rebind here when an ancestor supplies a different container.
+  ProviderContainer _container;
   final _watched =
       <ProviderListenable<Object?>, ProviderSubscription<Object?>>{};
   final _listeners = <ProviderListenable<Object?>, _BuildListener>{};
@@ -235,6 +238,13 @@ class WidgetRef {
 
   void _begin() {
     _check();
+    final current = ProviderScope.containerOf(_state.context);
+    if (!identical(current, _container)) {
+      // Subscriptions belong to the previous container; Flutter Riverpod
+      // likewise drops them when the scope's container changes.
+      _closeAll();
+      _container = current;
+    }
     _building = true;
     _usedWatches.clear();
     _usedListeners.clear();
@@ -253,6 +263,10 @@ class WidgetRef {
 
   void _dispose() {
     _disposed = true;
+    _closeAll();
+  }
+
+  void _closeAll() {
     for (final subscription in [
       ..._watched.values,
       for (final entry in _listeners.values) entry.subscription,

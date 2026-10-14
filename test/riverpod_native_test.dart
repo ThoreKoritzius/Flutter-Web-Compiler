@@ -147,4 +147,58 @@ const text=v=>find(host,n=>n.tag==='p'&&n.textContent===v);
     expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
     expect(run.stdout, contains('Nested scopes passed'));
   });
+
+  test('consumers rebind when an ancestor supplies a new container', () async {
+    final directory = Directory.systemTemp.createTempSync('native-rebind-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    Directory('${directory.path}/lib').createSync();
+    File('${directory.path}/lib/main.dart').writeAsStringSync(r"""
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+final value = StateProvider<int>((ref) => 0);
+final first = ProviderContainer(overrides: [value.overrideWith((ref) => 1)]);
+final second = ProviderContainer(overrides: [value.overrideWith((ref) => 2)]);
+void main() => runApp(const MaterialApp(home: Host()));
+class Host extends StatefulWidget {
+  const Host({super.key});
+  @override
+  State<Host> createState() => HostState();
+}
+class HostState extends State<Host> {
+  ProviderContainer container = first;
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    ElevatedButton(onPressed: () => setState(() => container = second), child: const Text('Swap')),
+    UncontrolledProviderScope(container: container, child: const Reader()),
+  ]);
+}
+class Reader extends ConsumerWidget {
+  const Reader({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      ElevatedButton(onPressed: () => ref.read(value.notifier).state += 10, child: Text('value ${ref.watch(value)}'));
+}
+""");
+    final app = await buildNativeApp(directory.path, 'lib/main.dart');
+    final file = File('${directory.path}/app.js')
+      ..writeAsStringSync(app.javascript);
+    final run = await Process.run('node', [
+      '-e',
+      r"""
+const {install,find,label,until,tick}=require('./tool/browser/dom_shim.cjs');
+const {host}=install();
+const button=v=>find(host,n=>n.tag==='button'&&label(n)===v);
+(async()=>{require(process.argv[1]);
+ if(!button('value 1'))throw Error('initial container');
+ button('Swap').events.click();
+ await until(()=>button('value 2'),'consumer still reads the old container');
+ button('value 2').events.click();
+ await until(()=>button('value 12'),'writes reach the new container');
+ console.log('Container rebinding passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+""",
+      file.path,
+    ]);
+    expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+    expect(run.stdout, contains('Container rebinding passed'));
+  });
 }
