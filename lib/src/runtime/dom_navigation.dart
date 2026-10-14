@@ -91,10 +91,14 @@ class _OverlayRoute<T> extends ModalRoute<T> {
     required this.dismissible,
     required this.color,
     required this.sheet,
+    this.anchor,
     super.settings,
   });
   final WidgetBuilder builder;
   final bool dismissible, sheet;
+
+  /// Viewport rectangle to open beside (menus); centered when null.
+  final Rect? anchor;
   final Color color;
   @override
   bool get opaque => false;
@@ -688,6 +692,7 @@ class _RouteHost extends StatelessWidget {
       return _Box(
         css:
             'position:fixed;inset:0;z-index:10;display:flex;${route.sheet ? 'align-items:flex-end;justify-content:center;' : 'align-items:center;justify-content:center;'}background-color:${colorCss(route.color)};${hidden ? 'display:none;' : ''}',
+        key: const ValueKey('overlay'),
         attributes: {
           if (!current) 'inert': '',
           if (hidden) 'aria-hidden': 'true',
@@ -708,7 +713,9 @@ class _RouteHost extends StatelessWidget {
               fill: _Fill.none,
             ),
           _Box(
-            css: 'position:relative;max-width:100%;',
+            css: route.anchor == null
+                ? 'position:relative;max-width:100%;'
+                : 'position:absolute;left:${px(math.max(0, route.anchor!.left))};top:${px(math.max(0, route.anchor!.top))};max-height:calc(100vh - ${px(math.max(0, route.anchor!.top))} - 8px);overflow:auto;',
             fill: _Fill.none,
             children: [page],
           ),
@@ -1011,5 +1018,21 @@ class SimpleDialogOption extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
       child: child,
     ),
+  );
+}
+
+/// The viewport rectangle of [context]'s DOM box, for anchoring overlays.
+Rect? _viewportRect(BuildContext context) {
+  if (context is! Element || !context.mounted) return null;
+  final node = context._domNode as JSObject;
+  if (!node.has('getBoundingClientRect')) return null;
+  final box = node.callMethod<JSObject>('getBoundingClientRect'.toJS);
+  double read(String name) =>
+      box.getProperty<JSNumber?>(name.toJS)?.toDartDouble ?? 0;
+  return Rect.fromLTWH(
+    read('left'),
+    read('top'),
+    read('width'),
+    read('height'),
   );
 }

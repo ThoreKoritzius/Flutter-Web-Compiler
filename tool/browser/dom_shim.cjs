@@ -78,6 +78,8 @@ class Element {
     if (!connected(this)) throw new Error('Measured a detached element');
     return Element.measureHeight(this);
   }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0, ...Element.rect(this) }; }
+  setPointerCapture(id) { this.capturedPointer = id; }
   // Canvas elements record 2D context calls for assertions.
   getContext(kind) {
     if (this.tag !== 'canvas' || kind !== '2d') return null;
@@ -86,6 +88,7 @@ class Element {
 }
 Element.measure = () => 0;
 Element.measureHeight = () => 0;
+Element.rect = () => ({});
 
 function recordingContext(canvas) {
   const ops = [];
@@ -187,4 +190,14 @@ function key(node, name) {
   return prevented;
 }
 
-module.exports = { Element, install, label, find, findAll, style, until, tick, key };
+// Dispatches a pointer event at viewport coordinates (x, y).
+function pointer(node, type, { x = 0, y = 0, id = 1, kind = 'touch', time = 0, button = 0 } = {}) {
+  let prevented = false;
+  node.events[type]?.({
+    clientX: x, clientY: y, pointerId: id, pointerType: kind, timeStamp: time, button,
+    currentTarget: node, preventDefault() { prevented = true; },
+  });
+  return prevented;
+}
+
+module.exports = { Element, install, label, find, findAll, style, until, tick, key, pointer };

@@ -68,3 +68,5 @@ part 'dom_fl_chart.dart';
 part 'dom_go_router.dart';
 part 'dom_localizations.dart';
 part 'dom_flutter_localizations.dart';
+part 'dom_material_more.dart';
+part 'dom_gestures.dart';

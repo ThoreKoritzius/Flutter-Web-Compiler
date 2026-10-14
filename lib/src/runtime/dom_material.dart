@@ -13,7 +13,9 @@ class _Box extends _DomWidget {
     this.children = const [],
     this.layout = _DomLayout.block,
     this.fill = _Fill.child,
+    this.gestures,
   });
+  final _GestureCallbacks? gestures;
   final String tag;
   final String css;
   final Map<String, String> attributes;
@@ -31,7 +33,14 @@ class _Box extends _DomWidget {
   void _render(_DomBuilder out) {
     out.css(css);
     out.attributes.addAll(attributes);
+    if (gestures case final gestures?) _installGestures(out, gestures);
     out.handlers.addAll(handlers);
+    final click = handlers['click'];
+    if (gestures != null && click != null) {
+      out.handlers['click'] = (event) {
+        if (!_clickSuppressed(event)) click(event);
+      };
+    }
     out.children = children;
   }
 }
@@ -230,7 +239,10 @@ class MaterialApp extends StatelessWidget {
       throw UnsupportedError(
         'Only GoRouter router configurations are supported.',
       );
+    // As in Flutter, any home page runs inside a Navigator so dialogs and
+    // menus can be pushed from it.
     final usesNavigator =
+        home != null ||
         routes.isNotEmpty ||
         onGenerateRoute != null ||
         initialRoute != null ||
@@ -701,6 +713,9 @@ abstract class ButtonStyleButton extends StatelessWidget {
         if (tooltip != null && child is Icon) 'aria-label': tooltip!,
       },
       handlers: {if (enabled) 'click': (_) => onPressed!()},
+      gestures: enabled && onLongPress != null
+          ? _GestureCallbacks(onLongPress: onLongPress)
+          : null,
       children: [
         if (child != null)
           IconTheme.merge(
@@ -1230,9 +1245,7 @@ class InkWell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (onLongPress != null)
-      throw UnsupportedError('Long-press gestures are unsupported.');
-    final enabled = onTap != null || onDoubleTap != null;
+    final enabled = onTap != null || onDoubleTap != null || onLongPress != null;
     final overlay =
         hoverColor ??
         Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08);
@@ -1253,6 +1266,9 @@ class InkWell extends StatelessWidget {
         if (enabled) 'class': 'fd-ink',
       },
       handlers: handlers,
+      gestures: onLongPress == null
+          ? null
+          : _GestureCallbacks(onLongPress: onLongPress),
       layout: _DomLayout.grid,
       children: [?child],
     );
@@ -1407,8 +1423,13 @@ class ListTile extends StatelessWidget {
           ),
       ],
     );
-    if (!enabled || onTap == null) return row;
-    return InkWell(onTap: onTap, mouseCursor: mouseCursor, child: row);
+    if (!enabled || (onTap == null && onLongPress == null)) return row;
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      mouseCursor: mouseCursor,
+      child: row,
+    );
   }
 }
 

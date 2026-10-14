@@ -25,7 +25,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     assert(logs.includes('status forward'));
     await until(() => opacity(text('Fading')) > 0 && opacity(text('Fading')) < 1, 'intermediate opacity');
     await until(() => logs.includes('status completed'), 'controller completes');
-    assert.equal(opacity(text('Fading')), 1);
+    // The rebuild after the final tick is scheduled, not synchronous.
+    await until(() => opacity(text('Fading')) === 1, 'final opacity');
 
     // Implicit animation interpolates and can be retargeted mid-flight.
     assert.equal(widthOf('Box'), 100);

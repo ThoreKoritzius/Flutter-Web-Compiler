@@ -31,6 +31,13 @@ extension type _Event(JSObject _) implements JSObject {
   external void preventDefault();
   external double? get offsetX;
   external double? get offsetY;
+  external double? get clientX;
+  external double? get clientY;
+  external int? get button;
+  external int? get pointerId;
+  external String? get pointerType;
+  external double? get timeStamp;
+  external JSObject? get currentTarget;
 }
 
 @JS('window')

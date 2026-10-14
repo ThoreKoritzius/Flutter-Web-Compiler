@@ -1723,19 +1723,100 @@ abstract final class SystemMouseCursors {
 class GestureDetector extends _DomWidget {
   const GestureDetector({
     super.key,
+    this.onTapDown,
+    this.onTapUp,
     this.onTap,
+    this.onTapCancel,
     this.onDoubleTap,
     this.onLongPress,
+    this.onLongPressStart,
+    this.onLongPressEnd,
     this.onSecondaryTap,
+    this.onVerticalDragDown,
+    this.onVerticalDragStart,
+    this.onVerticalDragUpdate,
+    this.onVerticalDragEnd,
+    this.onVerticalDragCancel,
+    this.onHorizontalDragDown,
+    this.onHorizontalDragStart,
+    this.onHorizontalDragUpdate,
+    this.onHorizontalDragEnd,
+    this.onHorizontalDragCancel,
+    this.onPanDown,
+    this.onPanStart,
+    this.onPanUpdate,
+    this.onPanEnd,
+    this.onPanCancel,
     this.behavior,
+    this.excludeFromSemantics = false,
     this.child,
   });
-  final VoidCallback? onTap, onDoubleTap, onLongPress, onSecondaryTap;
+  final GestureTapDownCallback? onTapDown;
+  final GestureTapUpCallback? onTapUp;
+  final GestureTapCallback? onTap, onTapCancel, onDoubleTap, onSecondaryTap;
+  final GestureLongPressCallback? onLongPress;
+  final GestureLongPressStartCallback? onLongPressStart;
+  final GestureLongPressEndCallback? onLongPressEnd;
+  final GestureDragDownCallback? onVerticalDragDown,
+      onHorizontalDragDown,
+      onPanDown;
+  final GestureDragStartCallback? onVerticalDragStart,
+      onHorizontalDragStart,
+      onPanStart;
+  final GestureDragUpdateCallback? onVerticalDragUpdate,
+      onHorizontalDragUpdate,
+      onPanUpdate;
+  final GestureDragEndCallback? onVerticalDragEnd,
+      onHorizontalDragEnd,
+      onPanEnd;
+  final GestureDragCancelCallback? onVerticalDragCancel,
+      onHorizontalDragCancel,
+      onPanCancel;
   final HitTestBehavior? behavior;
+  final bool excludeFromSemantics;
   final Widget? child;
   @override
   void _render(_DomBuilder out) {
-    if (onTap != null) out.on('click', (_) => onTap!());
+    final drags = {
+      _DragAxis.vertical: _DragCallbacks(
+        onDown: onVerticalDragDown,
+        onStart: onVerticalDragStart,
+        onUpdate: onVerticalDragUpdate,
+        onEnd: onVerticalDragEnd,
+        onCancel: onVerticalDragCancel,
+      ),
+      _DragAxis.horizontal: _DragCallbacks(
+        onDown: onHorizontalDragDown,
+        onStart: onHorizontalDragStart,
+        onUpdate: onHorizontalDragUpdate,
+        onEnd: onHorizontalDragEnd,
+        onCancel: onHorizontalDragCancel,
+      ),
+      _DragAxis.free: _DragCallbacks(
+        onDown: onPanDown,
+        onStart: onPanStart,
+        onUpdate: onPanUpdate,
+        onEnd: onPanEnd,
+        onCancel: onPanCancel,
+      ),
+    }..removeWhere((_, callbacks) => callbacks.isEmpty);
+    _installGestures(
+      out,
+      _GestureCallbacks(
+        onTapDown: onTapDown,
+        onTapUp: onTapUp,
+        onTapCancel: onTapCancel,
+        onLongPress: onLongPress,
+        onLongPressStart: onLongPressStart,
+        onLongPressEnd: onLongPressEnd,
+        drags: drags,
+      ),
+    );
+    if (onTap != null) {
+      out.on('click', (event) {
+        if (!_clickSuppressed(event)) onTap!();
+      });
+    }
     if (onDoubleTap != null) out.on('dblclick', (_) => onDoubleTap!());
     if (onSecondaryTap != null) {
       out.on('contextmenu', (event) {
@@ -1743,8 +1824,6 @@ class GestureDetector extends _DomWidget {
         onSecondaryTap!();
       });
     }
-    if (onLongPress != null)
-      throw UnsupportedError('Long-press gestures are unsupported.');
     if (child != null) out.child(child!);
   }
 }

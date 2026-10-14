@@ -135,7 +135,7 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   `LinearGradient`, `RadialGradient`, `BoxShadow`, `Alignment(Directional)`,
   `EdgeInsets(Directional)`, `BorderRadius(Directional)`.
 - **Material:** `MaterialApp` (theme, dark theme/mode, routes, `builder`,
-  title), `Theme`, `ThemeData` (`colorScheme`, `colorSchemeSeed`,
+  title; `home` always runs inside a `Navigator`), `Theme`, `ThemeData` (`colorScheme`, `colorSchemeSeed`,
   `textTheme`, `fontFamily`, extensions), full Material 3 `ColorScheme`
   roles including `ColorScheme.fromSeed` (computed with the same
   `material_color_utilities` 0.13.0 schemes Flutter 3.41 uses), the Material 3
@@ -169,6 +169,21 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
 - **Images:** `Image`, `Image.asset`, `Image.network` (http(s) or relative
   URLs only), `AssetImage`, `NetworkImage`, `DecorationImage`, `BoxFit`,
   `errorBuilder`.
+- **Gestures:** `GestureDetector` taps with `TapDownDetails`/`TapUpDetails`
+  (global and local positions, pointer kind) and `onTapCancel`, long presses
+  (`onLongPress`, start/end details; also on `InkWell`, `ListTile` and
+  buttons), and pan, horizontal and vertical drags with start/update/end
+  details, `primaryDelta` and release velocity, all from DOM pointer events
+  with pointer capture and Flutter's touch slop. Clicks still deliver
+  `onTap`, so keyboard activation is unchanged; a long press or drag
+  swallows the following click. Drag detectors set `touch-action` so the
+  browser scrolls along the free axis only.
+- **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
+  `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
+  button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and
+  `showTimePicker` as dialogs on native date/time inputs, `TimeOfDay`,
+  `DateTimeRange`, `DateUtils`, `FilterChip`, `ChoiceChip`, `ActionChip`,
+  `InputChip` and `SegmentedButton`.
 - **Tables and text gestures:** `Table` (CSS grid with fixed, flex,
   fraction, intrinsic, min and max column widths, `TableBorder`, row
   decorations, `TableCell` vertical alignment) and `TextSpan.recognizer`
@@ -211,10 +226,10 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
 
 Not yet implemented: `Hero`, page transition animations, slivers and
 `CustomScrollView`, lazy/infinite lists (`itemCount` is required; at most
-10,000 eagerly built items), long-press gestures and drag/pan,
-`Overlay`/`OverlayEntry`, menus/popups, date and time pickers,
-`SegmentedButton`, `DataTable`, `Stepper`, localizations, Cupertino widgets,
-platform plugins and `dart:ui` window, image and paragraph APIs. CSS approximates Flutter layout;
+10,000 eagerly built items), scale/pinch gestures, `Draggable`/`DragTarget`,
+`Overlay`/`OverlayEntry`, calendar-grid date pickers (pickers use the
+browser's native inputs), `DataTable`, `Stepper`, Cupertino widgets, and
+`dart:ui` window, image and paragraph APIs. CSS approximates Flutter layout;
 widths that Flutter boxes expand to are propagated through wrappers so
 expanding rows and tiles fill their column, but heights remain document flow.
 
