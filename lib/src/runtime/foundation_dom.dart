@@ -33,3 +33,139 @@ void debugPrintSynchronously(String? message, {int? wrapWidth}) {
     throw UnsupportedError('Debug log wrapping is unsupported.');
   print(message);
 }
+
+typedef VoidCallback = void Function();
+typedef ValueChanged<T> = void Function(T value);
+typedef ValueSetter<T> = void Function(T value);
+typedef ValueGetter<T> = T Function();
+typedef AsyncCallback = Future<void> Function();
+
+/// Pure-Dart listener contracts matching Flutter's foundation semantics:
+/// listeners added during notification are not called until the next one,
+/// and removal during notification takes effect immediately.
+abstract class Listenable {
+  const Listenable();
+  factory Listenable.merge(Iterable<Listenable?> listenables) =
+      _MergingListenable;
+  void addListener(VoidCallback listener);
+  void removeListener(VoidCallback listener);
+}
+
+abstract class ValueListenable<T> extends Listenable {
+  const ValueListenable();
+  T get value;
+}
+
+class _MergingListenable extends Listenable {
+  _MergingListenable(this._children);
+  final Iterable<Listenable?> _children;
+  @override
+  void addListener(VoidCallback listener) {
+    for (final child in _children) child?.addListener(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    for (final child in _children) child?.removeListener(listener);
+  }
+}
+
+mixin class ChangeNotifier implements Listenable {
+  List<VoidCallback?> _listeners = [];
+  int _notificationDepth = 0;
+  bool _disposed = false;
+  int _removed = 0;
+
+  bool get hasListeners => _listeners.any((l) => l != null);
+
+  void _checkNotDisposed() {
+    if (_disposed) throw StateError('A $runtimeType was used after dispose.');
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    _checkNotDisposed();
+    _listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    for (var i = 0; i < _listeners.length; i++) {
+      if (_listeners[i] == listener) {
+        if (_notificationDepth > 0) {
+          _listeners[i] = null;
+          _removed++;
+        } else {
+          _listeners.removeAt(i);
+        }
+        return;
+      }
+    }
+  }
+
+  void dispose() {
+    _checkNotDisposed();
+    _disposed = true;
+    _listeners = [];
+  }
+
+  void notifyListeners() {
+    _checkNotDisposed();
+    final end = _listeners.length;
+    _notificationDepth++;
+    try {
+      for (var i = 0; i < end; i++) {
+        final listener = i < _listeners.length ? _listeners[i] : null;
+        listener?.call();
+      }
+    } finally {
+      _notificationDepth--;
+      if (_notificationDepth == 0 && _removed > 0) {
+        _listeners = _listeners.whereType<VoidCallback>().toList();
+        _removed = 0;
+      }
+    }
+  }
+}
+
+class ValueNotifier<T> extends ChangeNotifier implements ValueListenable<T> {
+  ValueNotifier(this._value);
+  T _value;
+  @override
+  T get value => _value;
+  set value(T newValue) {
+    if (_value == newValue) return;
+    _value = newValue;
+    notifyListeners();
+  }
+
+  @override
+  String toString() => 'ValueNotifier<$T>($value)';
+}
+
+/// Equality helpers commonly imported from foundation.
+bool listEquals<T>(List<T>? a, List<T>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool setEquals<T>(Set<T>? a, Set<T>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+  return a.containsAll(b);
+}
+
+bool mapEquals<K, V>(Map<K, V>? a, Map<K, V>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+  for (final key in a.keys) {
+    if (!b.containsKey(key) || a[key] != b[key]) return false;
+  }
+  return true;
+}
+
+String describeEnum(Enum value) => value.name;
