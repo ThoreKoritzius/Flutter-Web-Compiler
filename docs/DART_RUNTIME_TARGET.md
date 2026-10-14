@@ -282,6 +282,20 @@ behaviour inside a supported widget throws `UnsupportedError` at runtime.
   accessibility flags from media queries and `removePadding`;
   `WidgetsBindingObserver` lifecycle from page visibility and
   `AppLifecycleListener`; `Diagnosticable` for models.
+- **Selection tiles, tables and navigation:** `SwitchListTile`,
+  `CheckboxListTile` (tristate) and `RadioListTile` (+`.adaptive`) toggle
+  from the whole tile, one focusable switch/checkbox/radio element;
+  `ListTileControlAffinity`. `RangeSlider` on two native range inputs
+  (`RangeValues`, `RangeLabels`, start never passes end). `ToggleButtons`.
+  `Stepper` (vertical and horizontal, `controlsBuilder` with
+  `ControlsDetails`; no step animation). `DataTable` as a real `<table>` with
+  sortable header buttons (`aria-sort`), row selection and select-all,
+  `WidgetStateProperty` row colors. `ExpansionPanelList` (+`.radio`) with
+  `aria-expanded`. `NavigationRail` (label types, extended mode) and
+  `NavigationDrawer` (works as `Scaffold.drawer`). `BottomAppBar` (notched
+  shapes accepted, no notch cut). `MaterialBanner` through
+  `ScaffoldMessenger.showMaterialBanner` (sticky at the top of the
+  messenger, above the app bar). `GridTile`/`GridTileBar`.
 - **Menus, pickers and selection:** `PopupMenuButton`, `PopupMenuItem`,
   `CheckedPopupMenuItem`, `PopupMenuDivider` and `showMenu` (anchored to the
   button, arrow-key focus), `showDatePicker`, `showDateRangePicker` and

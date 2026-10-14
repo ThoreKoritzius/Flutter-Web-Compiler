@@ -81,3 +81,4 @@ part 'dom_slivers.dart';
 part 'dom_keyboard.dart';
 part 'dom_extras.dart';
 part 'dom_interactive.dart';
+part 'dom_material_extra.dart';

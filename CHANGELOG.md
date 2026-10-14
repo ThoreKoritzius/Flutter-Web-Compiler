@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add SwitchListTile/CheckboxListTile/RadioListTile, RangeSlider, ToggleButtons, Stepper, DataTable (real `<table>` with sorting and selection), ExpansionPanelList (+radio), NavigationRail, NavigationDrawer, BottomAppBar, MaterialBanner and GridTile.
 - Add keyboard focus, shortcuts and actions, clipboard/haptics/system chrome services, asset bundles, page views, nested scroll views, animated and wheel lists, scroll notifications, dismissibles, drag and drop, interactive viewers, search delegates, general/adaptive/about dialogs, CSS-mapped clipping, filters and shader masks, memory and fade-in images, richer text styles, HSL/HSV colors, media query flags and app lifecycle events (found by probing common Flutter APIs).
 - Add `CustomScrollView` and slivers (lists, grids, padding, fill, layout builder), sticky `SliverPersistentHeader`/`SliverAppBar` with `FlexibleSpaceBar`, a real `ScrollController`/`ScrollPosition` that follows the page or a bounded scroller, `RefreshIndicator`, `DraggableScrollableSheet` and `ReorderableListView`.
 - Add Riverpod `ChangeNotifierProvider` (+`autoDispose`/`family`), `TargetPlatform`/`defaultTargetPlatform` from the user agent, `debugPrintStack`, `PaintingBinding.imageCache`, `IgnorePointer`/`AbsorbPointer`, `DropdownButtonHideUnderline` (the default dropdown underline now shows as in Flutter), and missing parameters on progress indicators, `IconButton`, `AppBar`, sheets, dialogs, popup menus (`position`), fl_chart tooltips (`tooltipRoundedRadius`) and `clipBehavior` on common widgets.
