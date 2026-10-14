@@ -65,7 +65,15 @@ flutter_dom build --project examples/catalog --output build/site
 
 The executable must be on your `PATH`, usually from Dart's `.pub-cache/bin`. Alternatively, replace `flutter_dom` with `dart pub global run flutter_dom_compiler:flutter_dom`.
 
-`build` (or `build web`) defaults to the current project, `lib/main.dart` and `build/dom`. It discovers a direct `runApp(MyApp())` root; `flutter_dom.json` is optional for plain supported pages and required for explicit adapter/island configuration. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative native compatibility score. Each recognized direct widget subclass is compiled as a parameterless DOM-only root; failures include source locations and reasons. This measures compiler acceptance, not the fraction of an entire application that works. Keep private inspection reports outside version control.
+`build` (or `build web`) defaults to the current project, `lib/main.dart` and `build/dom`. It discovers a direct `runApp(MyApp())` root; `flutter_dom.json` is optional for plain supported pages and required for explicit adapter/island configuration. `inspect` requires no configuration and does not execute the input app; it scans non-generated Dart files under `lib/` and writes local JSON/Markdown inventories plus a conservative score labelled **static HTML compiler: parameterless widget acceptance**. Each recognized direct widget subclass is compiled by the static HTML compiler as a parameterless DOM-only root; failures include source locations, reasons and a category (`needs-inputs` with a `stateful-only`/`required-parameters`/context reason, `unsupported-api`, `dependency`, `untested`). This measures static compiler acceptance, not the fraction of an entire application that works, and it says nothing about the `--dart-runtime` target: stateful widgets and widgets needing inputs fail here even when they run there. Keep private inspection reports outside version control.
+
+To inspect the executable DOM runtime target instead, add `--dart-runtime`:
+
+```sh
+flutter_dom inspect --dart-runtime [--source lib/main.dart] [--compile]
+```
+
+This walks the entry's import graph the way `build --dart-runtime` does and reports, separately, original project libraries compiled as-is, imports replaced by runtime facades or bridges (attributed, e.g. `go_router`), third-party packages recompiled against the runtime, and unsupported features with the import chain that reaches them. `--compile` (slow, opt-in) runs the real dart2js build and lists its first errors. Runtime-rendered DOM is built by JavaScript in the browser and has no prerendered-HTML SEO advantage. See [the runtime target](docs/DART_RUNTIME_TARGET.md#inspecting-an-app-for-the-runtime).
 
 For project-local imports, opt into analyzer-backed resolution:
 

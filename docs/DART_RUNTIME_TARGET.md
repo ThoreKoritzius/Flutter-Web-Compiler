@@ -19,6 +19,49 @@ The installed CLI also accepts `flutter_dom build web --dart-runtime` from an
 app directory. The target defaults to `lib/main.dart`; `--source` selects another
 entry. Existing static/hybrid builds remain the default.
 
+## Inspecting an app for the runtime
+
+`flutter_dom inspect` scores the static HTML compiler, which checks every
+widget alone and without constructor arguments. That score does not apply to
+this target. Add `--dart-runtime` to inspect the `--source` entry (default
+`lib/main.dart`) the way this build sees it:
+
+```sh
+flutter_dom inspect --dart-runtime            # import graph only, fast
+flutter_dom inspect --dart-runtime --compile  # also run dart2js (slow)
+```
+
+The `domRuntime` section of the JSON/Markdown report lists every library in
+the graph with a status and keeps three groups apart:
+
+- **Original components** (`original`): project libraries compiled as-is,
+  with their widget classes. Original widgets are not checked individually;
+  they run with their real arguments and state.
+- **Replacements** (`replacements`): imports served by runtime facades
+  (`flutter-facade`), built-in bridges such as `go_router`, `fl_chart`,
+  `flutter_markdown`, `flutter_localizations`, `shared_preferences`,
+  `url_launcher` and `flutter_riverpod` (`built-in-bridge`), and explicit
+  `--runtime-bridges`/`--package-bridges` adapters, each with its importers.
+  Third-party packages that reach Flutter are listed under
+  `rewrittenPackages`; pure Dart packages under `purePackages`.
+- **Unsupported features** (`unsupported`): `blocking` imports with no runtime
+  path (a Flutter library without a facade, `dart:ffi`/`dart:mirrors`, an
+  unknown conditional-import variable, a package missing from the package
+  configuration, a parser error, `flutter_riverpod` without riverpod 2.6.1) and
+  `runtime-risk` imports that compile but throw in a browser (`dart:io`,
+  `dart:isolate`). Each has the import chain from the entry, for example
+  `lib/main.dart → lib/screens/home.dart → package:paint_kit/paint_kit.dart →
+  package:paint_kit/src/box.dart → package:flutter/physics.dart`.
+
+`status` is `graph-ready` when every import has a runtime path, `blocked`
+otherwise. This is an import-level check: APIs the facades do not implement
+only show up in the `--compile` check, which runs this build and reports the
+first dart2js errors with temporary paths mapped back to project paths and
+`package:` URIs. The inspector mirrors the builder's facade and bridge tables;
+a test fails when the builder handles a package URI the inspector does not
+know. Runtime-rendered DOM has no prerendered HTML, so it has no SEO
+advantage over Flutter web.
+
 ## What executes
 
 The original `examples/logic/lib/main.dart` imports Flutter material and defines

@@ -35,6 +35,17 @@ class ProjectInspector {
     final findings = <Map<String, Object?>>[];
     final entries = <Map<String, Object?>>[];
     var lines = 0, diagnostics = 0;
+    // Class names declared anywhere in lib/, to tell imported project
+    // declarations (dependency failures) from unsupported framework APIs.
+    final declared = <String>{
+      for (final file in files)
+        ...parseString(
+          content: file.readAsStringSync(),
+          throwIfDiagnostics: false,
+        ).unit.declarations.whereType<NamedCompilationUnitMember>().map(
+          (d) => d.name.lexeme,
+        ),
+    };
     for (final file in files) {
       final source = file.readAsStringSync();
       lines += '\n'.allMatches(source).length + (source.endsWith('\n') ? 0 : 1);
@@ -53,18 +64,37 @@ class ProjectInspector {
         ].contains(base))
           continue;
         String? blocker;
+        String? code;
         try {
           FlutterDomCompiler().compile(source, {
             'root': node.name.lexeme,
           }, domOnly: true);
         } on CompileException catch (error) {
           blocker = error.message;
+          code = error.code;
+        } on Object catch (error) {
+          blocker = 'Inspection could not complete: $error';
+          code = 'internal';
         }
+        final (category, reason) = blocker == null
+            ? ('native', null)
+            : classifyStaticBlocker(
+                blocker,
+                code,
+                isProjectDeclaration: (name) =>
+                    declared.contains(name) &&
+                    !parsed.unit.declarations
+                        .whereType<NamedCompilationUnitMember>()
+                        .any((d) => d.name.lexeme == name),
+              );
         entries.add({
           'file': p.relative(file.path, from: project.path),
           'line': parsed.lineInfo.getLocation(node.offset).lineNumber,
           'widget': node.name.lexeme,
           'status': blocker == null ? 'native' : 'blocked',
+          'category': category,
+          if (reason != null) 'reason': reason,
+          if (code != null) 'code': code,
           if (blocker != null) 'blocker': blocker,
         });
       }
@@ -103,8 +133,11 @@ class ProjectInspector {
       dependencies.sort();
     }
     return {
-      'schemaVersion': 2,
+      'schemaVersion': 3,
+      'targets': _targets,
       'compatibility': {
+        'target': 'static-html',
+        'label': staticCompatibilityLabel,
         'metric': 'parameterless-widget-entry-dry-run',
         'native': entries.where((e) => e['status'] == 'native').length,
         'total': entries.length,
@@ -113,11 +146,20 @@ class ProjectInspector {
             : 100 *
                   entries.where((e) => e['status'] == 'native').length /
                   entries.length,
+        ..._categoryCounts(entries),
         'entries': entries,
+        'scope': _staticScope,
         'definition':
-            'Each recognized direct widget subclass is compiled as a parameterless root, '
+            'Each recognized direct widget subclass is compiled by the static HTML compiler as a parameterless root, '
             'with no islands or adapters. Required inputs, imported widgets and runtime state '
-            'are conservatively blocked. This is compiler acceptance, not verified app behavior.',
+            'are conservatively blocked. This is compiler acceptance, not verified app behavior, '
+            'and it does not measure the --dart-runtime target.',
+      },
+      'domRuntime': {
+        'target': 'dart-runtime',
+        'measured': false,
+        'hint':
+            'Run `flutter_dom inspect --dart-runtime [--source lib/main.dart]` to inspect the entry dependency graph for the DOM runtime.',
       },
       'kind': 'syntax-inventory-not-conversion-coverage',
       'project': project.path,
@@ -177,18 +219,23 @@ class ProjectInspector {
       } on ArgumentError catch (error) {
         blocker = error.message.toString();
         code = 'unsupported';
+      } on Object catch (error) {
+        blocker = 'Inspection could not complete: $error';
+        code = 'internal';
       }
+      // Resolved checks see every project declaration in the graph, so an
+      // unknown widget is a framework or package API outside the subset.
+      final (category, reason) = blocker == null
+          ? ('native', null)
+          : classifyStaticBlocker(blocker, code);
       entries.add({
         'file': p.relative(unit.path, from: project),
         'line': unit.lineInfo.getLocation(node.offset).lineNumber,
         'widget': node.name.lexeme,
         'symbol': entry.key,
         'status': blocker == null ? 'native' : 'blocked',
-        'category': blocker == null
-            ? 'native'
-            : code == 'requires-inputs'
-            ? 'needs-inputs'
-            : 'unsupported',
+        'category': category,
+        if (reason != null) 'reason': reason,
         if (code != null) 'code': code,
         if (blocker != null) 'blocker': blocker,
       });
@@ -197,7 +244,7 @@ class ProjectInspector {
       (a, b) => (a['symbol'] as String).compareTo(b['symbol'] as String),
     );
     final accepted = entries.where((e) => e['status'] == 'native').length;
-    report['schemaVersion'] = 4;
+    report['schemaVersion'] = 5;
     report['kind'] = 'syntax-inventory-with-resolved-entry-checks';
     report['analysis'] = 'resolved project';
     report['analysisTarget'] = 'web-js';
@@ -207,22 +254,21 @@ class ProjectInspector {
         model.units.map((u) => p.relative(u.path, from: project)).toList()
           ..sort();
     report['compatibility'] = {
+      'target': 'static-html',
+      'label': staticCompatibilityLabel,
       'metric': 'resolved-parameterless-widget-entry-dry-run',
       'native': accepted,
       'total': entries.length,
       'percent': entries.isEmpty ? null : 100 * accepted / entries.length,
       'entries': entries,
-      'needsInputs': entries
-          .where((e) => e['category'] == 'needs-inputs')
-          .length,
-      'unsupported': entries
-          .where((e) => e['category'] == 'unsupported')
-          .length,
+      ..._categoryCounts(entries),
+      'scope': _staticScope,
       'definition':
           'Recognized direct widget subclasses in the selected entry library graph, '
-          'including selected web imports and parts, compiled independently without arguments, adapters or islands. '
+          'including selected web imports and parts, compiled independently by the static HTML compiler '
+          'without arguments, adapters or islands. '
           'Imports and constants are resolved; required inputs and runtime state remain blockers. '
-          'This measures compiler acceptance, not app-wide behavior or runtime reachability.',
+          'This measures compiler acceptance, not app-wide behavior, runtime reachability or the --dart-runtime target.',
     };
     report['limitations'] = [
       'The compatibility denominator covers the selected library graph, not every project file or runtime widget.',
@@ -302,26 +348,33 @@ class ProjectInspector {
       ..writeln('- Parser diagnostics: ${report['parserDiagnostics']}\n');
     final coverage = report['compatibility'] as Map<String, Object?>;
     final percent = coverage['percent'] as num?;
-    out.writeln('## Native compiler compatibility\n');
-    if (report.containsKey('callSites')) {
-      out.writeln(
-        '${coverage['native']} native · ${coverage['needsInputs']} need inputs · '
-        '${coverage['unsupported']} unsupported (${coverage['total']} roots).\n',
-      );
-    } else {
-      out.writeln(
-        '**${percent?.toStringAsFixed(1) ?? 'N/A'}${percent == null ? '' : '%'}** '
-        '(${coverage['native']}/${coverage['total']} widget entry points).\n',
-      );
+    out.writeln('## ${coverage['label'] ?? staticCompatibilityLabel}\n');
+    out.writeln(
+      '**${percent?.toStringAsFixed(1) ?? 'N/A'}${percent == null ? '' : '%'}** '
+      '(${coverage['native']}/${coverage['total']} widget roots accepted).\n',
+    );
+    if (coverage['scope'] != null) out.writeln('> ${coverage['scope']}\n');
+    final categories = coverage['categories'] as Map?;
+    if (categories != null) {
+      out.writeln('| Static result | Widget roots |\n| --- | ---: |');
+      out.writeln('| accepted | ${coverage['native']} |');
+      for (final item in categories.entries) {
+        out.writeln(
+          '| ${item.key}${item.key == 'needs-inputs' ? ' (stateful-only: ${coverage['statefulOnly']})' : ''} | ${item.value} |',
+        );
+      }
+      out.writeln();
     }
     out.writeln('${coverage['definition']}\n');
     for (final entry in coverage['entries'] as List) {
       out.writeln(
         '- `${entry['file']}:${entry['line']}` **${entry['widget']}**: '
-        '${entry['category'] ?? entry['status']}${entry['blocker'] == null ? '' : ' — ${entry['blocker']}'}',
+        '${entry['category'] ?? entry['status']}${entry['reason'] == null ? '' : ' (${entry['reason']})'}'
+        '${entry['blocker'] == null ? '' : ' — ${entry['blocker']}'}',
       );
     }
     out.writeln();
+    _runtimeMarkdown(out, report['domRuntime'] as Map<String, Object?>?);
     final sites = report['callSites'] as Map<String, Object?>?;
     if (sites != null) {
       out.writeln('## Constructor call sites\n');
@@ -361,6 +414,168 @@ class ProjectInspector {
     }
     return out.toString();
   }
+}
+
+/// Label for the static compiler score. It never describes whole-app coverage.
+const staticCompatibilityLabel =
+    'Static HTML compiler: parameterless widget acceptance';
+
+const _staticScope =
+    'Not whole-app coverage. Widgets are compiled one at a time by the static HTML compiler '
+    'without constructor arguments, so stateful widgets and widgets needing inputs fail here '
+    'even when they run through --dart-runtime. Use `inspect --dart-runtime` for the executable DOM runtime.';
+
+const _targets = {
+  'static-html':
+      'Static HTML compiler (default build): prerendered HTML from a restricted static subset.',
+  'dart-runtime':
+      'DOM runtime (build --dart-runtime): original source compiled by dart2js against a Flutter-shaped DOM runtime. '
+      'Measured only by `inspect --dart-runtime`.',
+};
+
+/// Static-compiler failure categories, in report order.
+const staticBlockerCategories = [
+  'needs-inputs',
+  'unsupported-api',
+  'dependency',
+  'untested',
+];
+
+/// Classifies a static HTML compiler blocker into a category and reason:
+///
+/// * `needs-inputs`: the widget needs constructor arguments, enclosing
+///   runtime context, inherited theme data or mutable state the isolated
+///   parameterless check cannot supply (`required-parameters`,
+///   `runtime-context`, `inherited-context`, `stateful-only`).
+/// * `dependency`: the widget refers to a project declaration in another
+///   library that the single-file check does not load.
+/// * `unsupported-api`: a framework or package API outside the static subset.
+/// * `untested`: the check was inconclusive (evaluation limits, startup logic
+///   or an internal failure), so behaviour was not exercised.
+(String, String) classifyStaticBlocker(
+  String message,
+  String? code, {
+  bool Function(String name)? isProjectDeclaration,
+}) {
+  if (code == 'requires-inputs') return ('needs-inputs', 'required-parameters');
+  if (code == 'requires-context') return ('needs-inputs', 'runtime-context');
+  if (code == 'internal') return ('untested', 'internal-error');
+  if (RegExp(
+    r'createState|stateful|native state|setState|state initializer|'
+    r'state assignment|state update|lifecycle',
+    caseSensitive: false,
+  ).hasMatch(message))
+    return ('needs-inputs', 'stateful-only');
+  if (RegExp(
+    r'Theme\.of requires|Theme extension \S+ requires an explicit',
+  ).hasMatch(message))
+    return ('needs-inputs', 'inherited-context');
+  if (RegExp(r'budget exceeded|limit exceeded|startup logic').hasMatch(message))
+    return ('untested', 'inconclusive');
+  final unknown = RegExp(r'Unknown widget (\S+) or').firstMatch(message);
+  if (unknown != null) {
+    final name = unknown[1]!.split('.').last;
+    return isProjectDeclaration?.call(name) ?? false
+        ? ('dependency', 'imported-project-declaration')
+        : ('unsupported-api', 'unknown-widget');
+  }
+  if (message.contains('adapter') || message.contains('Adapter'))
+    return ('dependency', 'adapter-declaration');
+  return ('unsupported-api', 'static-subset');
+}
+
+void _runtimeMarkdown(StringBuffer out, Map<String, Object?>? runtime) {
+  out.writeln('## DOM runtime (--dart-runtime)\n');
+  if (runtime == null || runtime['measured'] == false) {
+    out.writeln(
+      'Not measured. ${runtime?['hint'] ?? 'Run `flutter_dom inspect --dart-runtime`.'}\n',
+    );
+    return;
+  }
+  final summary = runtime['summary'] as Map;
+  out
+    ..writeln('Entry `${runtime['entry']}` · status **${runtime['status']}**\n')
+    ..writeln('${runtime['definition']}\n')
+    ..writeln(
+      '- Libraries in the graph: ${summary['libraries']}\n'
+      '- Original project libraries (source unmodified): ${summary['originalLibraries']} '
+      '(${summary['originalWidgets']} widget classes; ${summary['blockedLibraries']} libraries in the graph blocked)\n'
+      '- Project library bridges: ${summary['libraryBridges']}\n'
+      '- Built-in package bridges: ${summary['builtInBridges']}\n'
+      '- Third-party packages recompiled against the runtime: ${summary['rewrittenPackages']}\n'
+      '- Pure Dart packages compiled as-is: ${summary['purePackages']}\n'
+      '- Blocking imports: ${summary['blockingImports']} · runtime risks: ${summary['runtimeRisks']}\n',
+    )
+    ..writeln('### Original components\n');
+  for (final library in runtime['original'] as List) {
+    final widgets = library['widgets'] as List;
+    out.writeln(
+      '- `${library['library']}`: ${library['status']}'
+      '${widgets.isEmpty ? '' : ' — ${widgets.join(', ')}'}'
+      '${library['blockers'] == null ? '' : ' — blocked by ${(library['blockers'] as List).join(', ')}'}',
+    );
+  }
+  final rewritten = runtime['rewrittenPackages'] as Map;
+  for (final item in rewritten.entries) {
+    out.writeln(
+      '- package `${item.key}`: rewritten-package (${(item.value as List).length} libraries, source unchanged)',
+    );
+  }
+  out.writeln('\n### Replacements\n');
+  for (final item in runtime['replacements'] as List) {
+    final by = item['importedBy'] as List;
+    out.writeln(
+      '- `${item['import']}` → ${item['kind']} **${item['bridge']}** '
+      '(imported by ${by.take(3).join(', ')}${by.length > 3 ? ' and ${by.length - 3} more' : ''})',
+    );
+  }
+  out.writeln('\n### Unsupported features\n');
+  final unsupported = runtime['unsupported'] as List;
+  if (unsupported.isEmpty) out.writeln('None found at import level.');
+  for (final item in unsupported) {
+    out.writeln(
+      '- ${item['severity']}: `${item['feature']}` in `${item['library']}'
+      '${item['line'] == null ? '' : ':${item['line']}'}` — ${item['reason']}\n'
+      '  Chain: ${(item['chain'] as List).join(' → ')}',
+    );
+  }
+  final compile = runtime['compile'] as Map;
+  out.writeln('\n### Compile check\n');
+  if (compile['attempted'] != true) {
+    out.writeln('Not attempted. ${compile['hint']}');
+  } else if (compile['succeeded'] == true) {
+    out.writeln(
+      'dart2js compiled ${compile['libraries']} libraries to ${compile['javascriptBytes']} bytes of JavaScript.',
+    );
+  } else {
+    out.writeln('dart2js failed. First errors:\n');
+    for (final error in compile['errors'] as List) {
+      out.writeln(
+        '- ${error['location'] == null ? '' : '`${error['location']}`: '}${error['message']}',
+      );
+    }
+  }
+  out.writeln('\n### Notes\n');
+  for (final note in runtime['notes'] as List) {
+    out.writeln('- $note');
+  }
+  out.writeln();
+}
+
+Map<String, Object?> _categoryCounts(List<Map<String, Object?>> entries) {
+  int count(String category) =>
+      entries.where((e) => e['category'] == category).length;
+  final stateful = entries.where((e) => e['reason'] == 'stateful-only').length;
+  return {
+    'categories': {
+      for (final category in staticBlockerCategories) category: count(category),
+    },
+    'needsInputs': count('needs-inputs'),
+    'statefulOnly': stateful,
+    'unsupported': count('unsupported-api'),
+    'dependency': count('dependency'),
+    'untested': count('untested'),
+  };
 }
 
 Map<String, int> _sort(Map<String, int> values) => Map.fromEntries(

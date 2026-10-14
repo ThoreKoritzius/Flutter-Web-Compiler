@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -124,4 +125,90 @@ class Landing extends StatelessWidget { Widget build(BuildContext c) => Text('He
     expect(result.stderr, contains('DOM-only build forbids'));
     expect(Directory(output).existsSync(), isFalse);
   });
+
+  test(
+    'inspect separates the static HTML score from the DOM runtime graph',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('dom-inspect-cli-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      void write(String path, String content) => (File(
+        p.join(directory.path, path),
+      )..createSync(recursive: true)).writeAsStringSync(content);
+      write('lib/main.dart', '''
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'screen.dart';
+void main() => runApp(MaterialApp.router(routerConfig: GoRouter(routes: [])));
+''');
+      write('lib/screen.dart', '''
+import 'package:flutter/physics.dart';
+import 'package:flutter/material.dart';
+class Screen extends StatefulWidget {
+  const Screen({required this.id});
+  final int id;
+  State<Screen> createState() => _ScreenState();
+}
+class _ScreenState extends State<Screen> {
+  Widget build(BuildContext context) => Text('\${widget.id}');
+}
+''');
+      final output = p.join(directory.path, 'report', 'inspection.json');
+      final result = await Process.run(Platform.resolvedExecutable, [
+        'run',
+        'bin/flutter_dom.dart',
+        'inspect',
+        '--project',
+        directory.path,
+        '--dart-runtime',
+        '--output',
+        output,
+      ]);
+      expect(result.exitCode, 0, reason: '\${result.stdout} \${result.stderr}');
+      final stdout = result.stdout as String;
+      expect(
+        stdout,
+        contains('Static HTML compiler: parameterless widget acceptance: 0.0%'),
+      );
+      expect(stdout, contains('Not whole-app coverage: 1 need inputs'));
+      expect(stdout, contains('DOM runtime (--dart-runtime)'));
+      expect(
+        stdout,
+        contains('runtime facades for material · bridges go_router'),
+      );
+      expect(
+        stdout,
+        contains(
+          '2 project libraries (1 widget classes), source unmodified · 1 libraries blocked',
+        ),
+      );
+      expect(
+        stdout,
+        contains(
+          'blocking package:flutter/physics.dart: lib/main.dart → lib/screen.dart → package:flutter/physics.dart',
+        ),
+      );
+      expect(stdout, contains('no SEO advantage'));
+      final report = jsonDecode(File(output).readAsStringSync()) as Map;
+      expect((report['compatibility'] as Map)['target'], 'static-html');
+      final dom = report['domRuntime'] as Map;
+      expect(dom['measured'], true);
+      expect(dom['status'], 'blocked');
+      expect(
+        File(p.setExtension(output, '.md')).readAsStringSync(),
+        contains('### Unsupported features'),
+      );
+      final rejected = await Process.run(Platform.resolvedExecutable, [
+        'run',
+        'bin/flutter_dom.dart',
+        'inspect',
+        '--project',
+        directory.path,
+        '--compile',
+        '--output',
+        output,
+      ]);
+      expect(rejected.exitCode, 1);
+      expect(rejected.stderr, contains('require inspect --dart-runtime'));
+    },
+  );
 }

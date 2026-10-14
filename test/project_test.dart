@@ -566,7 +566,7 @@ class Unrelated extends StatelessWidget {
 """);
       final report = await ProjectInspector().inspectResolved(directory.path);
       final coverage = report['compatibility'] as Map;
-      expect(report['schemaVersion'], 4);
+      expect(report['schemaVersion'], 5);
       expect(report['analysisTarget'], 'web-js');
       expect(coverage['total'], 2);
       expect(coverage['native'], 1);

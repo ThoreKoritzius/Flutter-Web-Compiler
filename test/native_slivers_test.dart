@@ -4,11 +4,13 @@ import 'package:flutter_dom_compiler/native_app_builder.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('slivers, scroll controllers, notifier providers and reordering', () async {
-    final directory = Directory.systemTemp.createTempSync('native-slivers-');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    Directory('${directory.path}/lib').createSync();
-    File('${directory.path}/lib/main.dart').writeAsStringSync(r"""
+  test(
+    'slivers, scroll controllers, notifier providers and reordering',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-slivers-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      File('${directory.path}/lib/main.dart').writeAsStringSync(r"""
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,12 +132,12 @@ class _PageState extends ConsumerState<Page> {
   }
 }
 """);
-    final app = await buildNativeApp(directory.path, 'lib/main.dart');
-    final file = File('${directory.path}/app.js')
-      ..writeAsStringSync(app.javascript);
-    final run = await Process.run('node', [
-      '-e',
-      r"""
+      final app = await buildNativeApp(directory.path, 'lib/main.dart');
+      final file = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final run = await Process.run('node', [
+        '-e',
+        r"""
 const {install,until,label,find,findAll,pointer,Element,style}=require('./tool/browser/dom_shim.cjs');
 Element.measure=()=>400;Element.measureHeight=()=>400;
 const {host,windowListeners}=install();
@@ -176,9 +178,10 @@ const logs=[];const log=console.log;console.log=(...a)=>logs.push(a.join(' '));
  await until(()=>text().includes('order bac'),'reordered '+text());
  console.log=log;console.log('Slivers passed');})().catch(e=>{console.error(e);process.exitCode=1;});
 """,
-      file.path,
-    ]);
-    expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
-    expect(run.stdout, contains('Slivers passed'));
-  });
+        file.path,
+      ]);
+      expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
+      expect(run.stdout, contains('Slivers passed'));
+    },
+  );
 }

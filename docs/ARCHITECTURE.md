@@ -6,7 +6,7 @@ The package exposes a Dart CLI with `build` and `inspect` commands. Default buil
 
 The island is compiled separately using Flutter. The initial document loads a small host script; only activation loads the island bootstrap, engine, application and fonts. Island state remains inside Flutter. A separate opt-in filter-list adapter supports native local search with its own isolated state; there is no shared-state runtime.
 
-Inspection is a separate read-only syntax inventory. It is not semantic analysis, a dependency reachability model or an automatic renderer partitioner.
+Inspection is a separate read-only syntax inventory plus a static-HTML acceptance score. With `--dart-runtime`, `src/runtime_inspection.dart` also walks the entry's import graph using read-only copies of the runtime builder's facade and bridge tables, and can optionally run the real build. It is not semantic analysis or an automatic renderer partitioner.
 
 ## Why a standalone CLI first
 
