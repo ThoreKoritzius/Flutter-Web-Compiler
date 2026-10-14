@@ -82,6 +82,19 @@ class RootState extends State<Root> {
               key: item == 'b' ? itemKey : ValueKey(item),
               name: item,
             ),
+          SizedBox(
+            height: 40,
+            child: Stack(children: [
+              for (final item in items) Item(key: ValueKey('s$item'), name: 's$item'),
+            ]),
+          ),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            children: [
+              for (final item in items) Item(key: ValueKey('g$item'), name: 'g$item'),
+            ],
+          ),
         ],
       ),
     );

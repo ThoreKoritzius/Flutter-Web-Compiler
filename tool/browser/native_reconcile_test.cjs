@@ -23,8 +23,15 @@ function findButtons() {
     button('c:0').events.click(); await until(() => button('c:1'));
     button('c:1').events.click(); await until(() => button('c:2'));
 
+    // Keyed children inside Stack and GridView slots keep their state too.
+    button('sa:0').events.click(); await until(() => button('sa:1'));
+    button('gc:0').events.click(); await until(() => button('gc:1'));
+    const stackNode = button('sa:1'), gridNode = button('gc:1');
+
     // Reversal keeps each keyed state (and DOM node) with its item.
     button('Reverse').events.click(); await until(() => order()[0] === 'c:2');
+    assert.equal(button('sa:1'), stackNode, 'stack child state and node survive reorder');
+    assert.equal(button('gc:1'), gridNode, 'grid child state and node survive reorder');
     assert.deepEqual(order(), ['c:2', 'b:0', 'a:1']);
     assert.equal(button('a:1'), aNode, 'moved DOM node is reused');
     assert.equal(logs.filter(l => l.startsWith('dispose')).length, 0);
@@ -37,7 +44,7 @@ function findButtons() {
     // Removing a keyed item disposes exactly that state.
     button('Drop first').events.click(); await until(() => !button('c:2'));
     assert.deepEqual(order(), ['b:1', 'a:1']);
-    assert.deepEqual(logs.filter(l => l.startsWith('dispose')), ['dispose c 2']);
+    assert.deepEqual(logs.filter(l => l.startsWith('dispose')).sort(), ['dispose c 2', 'dispose gc 1', 'dispose sc 0']);
 
     // InheritedNotifier and ValueListenableBuilder rebuild without the root.
     const builds = text('root builds 3') ? 3 : null;

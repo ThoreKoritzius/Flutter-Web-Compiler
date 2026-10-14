@@ -1092,7 +1092,7 @@ class Stack extends _DomWidget {
         child is Positioned
             ? child
             : _StackSlot(
-                key: child.key == null ? null : ObjectKey(child.key),
+                key: child.key == null ? null : ValueKey<Key>(child.key!),
                 alignment: alignment,
                 expand: fit == StackFit.expand,
                 child: child,
@@ -1573,7 +1573,7 @@ class _Grid extends _DomWidget {
     out.children = [
       for (final child in children)
         _GridCell(
-          key: child.key == null ? null : ObjectKey(child.key),
+          key: child.key == null ? null : ValueKey<Key>(child.key!),
           aspectRatio: extent == null ? ratio : null,
           height: extent,
           child: child,
