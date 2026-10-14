@@ -524,6 +524,20 @@ supported; storage failures return `false`.
 `window.open(..., '_blank', 'noopener,noreferrer')`, protocol links
 (`mailto:`, `tel:`, `sms:`) in place, honours `webOnlyWindowName`, and refuses
 other schemes such as `javascript:`. In-app web views are not available.
+`package:url_launcher/link.dart` provides `Link` and `LinkTarget`; the
+builder's `followLink` opens the URI the same way.
+
+### Third-party packages that use Flutter
+
+Package libraries that (transitively) import `package:flutter/*` or
+`dart:ui` are compiled against the runtime too: the build resolves them
+through the project's package configuration, copies only those libraries and
+rewrites their Flutter, bridged-plugin and relative imports, so widget
+packages work without adapters. Libraries that never reach Flutter keep their
+`package:` URIs (one type identity whether imported directly or through a
+rewritten library). The package sources are not modified; the build report
+lists them as `rewrittenPackages`. Their Flutter API use is held to the same
+contract as app code: anything the runtime lacks is a compile error.
 
 ## Explicit package boundaries and compile-time configuration
 
@@ -539,7 +553,7 @@ client through an adapter; unused widget APIs then remain compiler errors.
 The build reports reached replacements in `nativePackageAdapters`. Missing,
 invalid and unused mappings fail. Built-in Flutter framework and root consumer
 bridges cannot be replaced through this option. This rewrites selected imports
-in the copied local graph, not arbitrary transitive imports inside packages.
+in the copied graph: app sources and package libraries that reach Flutter.
 Adapter source/dependencies are checked by the official compiler. No plugin
 implementation is inferred: unavailable operations should explicitly fail.
 

@@ -30,7 +30,12 @@ class NativeAppBuild {
     this.generatedAssets = const {},
     this.iconCodePoints,
     this.builtInBridges = const [],
+    this.rewrittenPackages = const [],
   });
+
+  /// Third-party packages whose libraries reach Flutter and were compiled
+  /// against the runtime facades (their sources are not modified).
+  final List<String> rewrittenPackages;
 
   /// Built-in package API implementations that replaced package imports
   /// (for example `fl_chart`); reported separately from translated code.
@@ -165,6 +170,24 @@ Future<NativeAppBuild> buildNativeApp(
   final packagesUri = projectPackages.existsSync()
       ? projectPackages.absolute.uri
       : compilerPackages;
+  // Package name → library directory, for rewriting Flutter-dependent
+  // package libraries alongside project sources.
+  final packageLibs = <String, String>{};
+  if (packagesUri != null) {
+    final config =
+        jsonDecode(File.fromUri(packagesUri).readAsStringSync()) as Map;
+    for (final entry in (config['packages'] as List).cast<Map>()) {
+      final rootDir = packagesUri.resolve(
+        (entry['rootUri'] as String).endsWith('/')
+            ? entry['rootUri'] as String
+            : '${entry['rootUri']}/',
+      );
+      final lib = rootDir.resolve((entry['packageUri'] as String?) ?? 'lib/');
+      packageLibs[entry['name'] as String] = p.normalize(
+        Directory.fromUri(lib).path,
+      );
+    }
+  }
   final riverpodUri = await Isolate.resolvePackageUri(
     Uri.parse('package:flutter_dom_compiler/src/runtime/riverpod_dom.dart'),
   );
@@ -243,6 +266,10 @@ Future<NativeAppBuild> buildNativeApp(
       'url_launcher',
       await runtimeLibrary('url_launcher_dom'),
     ),
+    'package:url_launcher/link.dart': (
+      'url_launcher',
+      await runtimeLibrary('url_launcher_link_dom'),
+    ),
   };
   final uiUri = await Isolate.resolvePackageUri(
     Uri.parse('package:flutter_dom_compiler/src/runtime/ui_dom.dart'),
@@ -299,6 +326,7 @@ Future<NativeAppBuild> buildNativeApp(
         "export '$runtimeUri' show ${flutterLocalizationsBridgeNames.join(', ')};\n",
       );
   final builtInBridges = <String>{};
+  final rewrittenPackages = <String>{};
   final foundationFacade = annotatedFacade('foundation', foundationUri);
   const webEnvironment = {
     'dart.library.js_interop': true,
@@ -308,20 +336,120 @@ Future<NativeAppBuild> buildNativeApp(
     'dart.library.ffi': false,
   };
   try {
-    String copy(File input) {
-      final path = input.resolveSymbolicLinksSync();
-      if (!p.isWithin(root, path))
-        throw ArgumentError('Local dependency is outside project.');
-      if (seen.containsKey(path)) return seen[path]!;
-      if (seen.length >= 500)
-        throw ArgumentError(
-          'Native runtime source graph exceeds 500 libraries.',
-        );
-      final destination = p.join(
-        temporary.path,
-        'source',
-        p.relative(path, from: root),
+    // URIs replaced by facades, bridges or adapters never pull in Flutter.
+    bool replacedUri(String uri) =>
+        packageAdapters.containsKey(uri) ||
+        uri == 'dart:ui' ||
+        uri.startsWith('package:flutter/') ||
+        _bridgedPackageUris.contains(uri) ||
+        pluginBridges.containsKey(uri);
+
+    File? packageFile(String uri) {
+      final parsed = Uri.parse(uri);
+      if (parsed.scheme != 'package' || parsed.pathSegments.length < 2)
+        return null;
+      final lib = packageLibs[parsed.pathSegments.first];
+      if (lib == null) return null;
+      final file = File(p.joinAll([lib, ...parsed.pathSegments.skip(1)]));
+      return file.existsSync() ? file : null;
+    }
+
+    // Dependency facts per package library: whether it imports Flutter or
+    // dart:ui directly, and which package libraries it depends on.
+    final packageFacts = <String, (bool, List<String>)>{};
+    (bool, List<String>) factsFor(String path) {
+      final cached = packageFacts[path];
+      if (cached != null) return cached;
+      packageFacts[path] = (false, const []);
+      final parsed = parseString(
+        content: File(path).readAsStringSync(),
+        throwIfDiagnostics: false,
       );
+      var direct = false;
+      final deps = <String>[];
+      for (final directive in parsed.unit.directives) {
+        if (directive is! UriBasedDirective) continue;
+        var uri = directive.uri.stringValue;
+        final configurations = directive is ImportDirective
+            ? directive.configurations
+            : directive is ExportDirective
+            ? directive.configurations
+            : <Configuration>[];
+        for (final configuration in configurations) {
+          final name = configuration.name.toSource();
+          final expected = configuration.value?.stringValue ?? 'true';
+          if ('${webEnvironment[name]}' == expected) {
+            uri = configuration.uri.stringValue;
+            break;
+          }
+        }
+        if (uri == null) continue;
+        if (uri == 'dart:ui' || uri.startsWith('package:flutter/')) {
+          direct = true;
+          continue;
+        }
+        if (replacedUri(uri)) continue;
+        final file = Uri.parse(uri).hasScheme
+            ? packageFile(uri)
+            : File(p.normalize(p.join(p.dirname(path), uri)));
+        if (file != null && file.existsSync()) deps.add(file.path);
+      }
+      return packageFacts[path] = (direct, deps);
+    }
+
+    final flutterReach = <String, bool>{};
+    bool reachesFlutter(String path) {
+      final known = flutterReach[path];
+      if (known != null) return known;
+      // Collect the reachable package graph, then propagate to a fixpoint.
+      final graph = <String>{};
+      final pending = [path];
+      while (pending.isNotEmpty) {
+        final next = pending.removeLast();
+        if (!graph.add(next) || flutterReach.containsKey(next)) continue;
+        pending.addAll(factsFor(next).$2);
+      }
+      final result = {
+        for (final node in graph) node: flutterReach[node] ?? factsFor(node).$1,
+      };
+      var changed = true;
+      while (changed) {
+        changed = false;
+        for (final node in graph) {
+          if (result[node]!) continue;
+          if (factsFor(node).$2.any((dep) => result[dep] ?? false)) {
+            result[node] = true;
+            changed = true;
+          }
+        }
+      }
+      flutterReach.addAll(result);
+      return result[path]!;
+    }
+
+    String copy(File input, {String? package}) {
+      final path = input.resolveSymbolicLinksSync();
+      final base = package == null ? root : packageLibs[package]!;
+      if (!p.isWithin(base, path))
+        throw ArgumentError(
+          package == null
+              ? 'Local dependency is outside project.'
+              : 'Package library is outside package $package.',
+        );
+      if (seen.containsKey(path)) return seen[path]!;
+      if (seen.length >= 2000)
+        throw ArgumentError(
+          'Native runtime source graph exceeds 2000 libraries.',
+        );
+      final destination = package == null
+          ? p.join(temporary.path, 'source', p.relative(path, from: root))
+          : p.join(
+              temporary.path,
+              'packages',
+              package,
+              p.relative(path, from: base),
+            );
+      if (package != null) rewrittenPackages.add(package);
       seen[path] = destination;
       final implementation = bridges[path] ?? input;
       if (bridges.containsKey(path))
@@ -412,6 +540,35 @@ Future<NativeAppBuild> buildNativeApp(
           replacement = widgetsFacade.toString();
         } else if (uri.startsWith('package:flutter/')) {
           unsupported('Unsupported Flutter/engine import: $uri');
+        } else if (!Uri.parse(uri).hasScheme &&
+            package != null &&
+            directive is! PartDirective &&
+            !reachesFlutter(
+              p.normalize(
+                p.join(
+                  p.dirname(implementation.resolveSymbolicLinksSync()),
+                  uri,
+                ),
+              ),
+            )) {
+          // Pure package libraries keep their package identity.
+          replacement = Uri(
+            scheme: 'package',
+            path: p.posix.joinAll([
+              package,
+              ...p.split(
+                p.relative(
+                  p.normalize(
+                    p.join(
+                      p.dirname(implementation.resolveSymbolicLinksSync()),
+                      uri,
+                    ),
+                  ),
+                  from: packageLibs[package]!,
+                ),
+              ),
+            ]),
+          ).toString();
         } else if (!Uri.parse(uri).hasScheme) {
           replacement = Uri.file(
             copy(
@@ -421,7 +578,14 @@ Future<NativeAppBuild> buildNativeApp(
                   uri,
                 ),
               ),
+              package: package,
             ),
+          ).toString();
+        } else if (packageFile(uri) case final file?
+            when reachesFlutter(file.path)) {
+          // A package that reaches Flutter compiles against the runtime too.
+          replacement = Uri.file(
+            copy(file, package: Uri.parse(uri).pathSegments.first),
           ).toString();
         }
         if (replacement != null)
@@ -513,6 +677,7 @@ Future<NativeAppBuild> buildNativeApp(
       }),
       iconCodePoints: subsetFont == null ? null : Set.unmodifiable(iconCodes!),
       builtInBridges: List.unmodifiable(builtInBridges.toList()..sort()),
+      rewrittenPackages: List.unmodifiable(rewrittenPackages.toList()..sort()),
       fontFaces: List.unmodifiable([
         if (iconFont != null)
           const NativeFontFace('MaterialIcons', _materialIconsPath),
@@ -810,3 +975,13 @@ List<String> writeNativeApp(NativeAppBuild app, String outputDirectory) {
   }
   return written;
 }
+
+/// Package library URIs replaced by built-in bridges.
+const _bridgedPackageUris = {
+  'package:fl_chart/fl_chart.dart',
+  'package:go_router/go_router.dart',
+  'package:flutter_riverpod/flutter_riverpod.dart',
+  'package:flutter_localizations/flutter_localizations.dart',
+  'package:flutter_markdown/flutter_markdown.dart',
+  'package:flutter_markdown_plus/flutter_markdown_plus.dart',
+};

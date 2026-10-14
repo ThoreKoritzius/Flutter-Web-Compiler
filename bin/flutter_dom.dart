@@ -202,6 +202,7 @@ Future<void> main(List<String> arguments) async {
           'nativeLibraryAdapters': app.libraryAdapters,
           'nativePackageAdapters': app.packageAdapters,
           'builtInPackageBridges': app.builtInBridges,
+          'rewrittenPackages': app.rewrittenPackages,
           'nativeSourceSelections': {
             for (final item in app.sourceSelections.entries)
               item.key: {
