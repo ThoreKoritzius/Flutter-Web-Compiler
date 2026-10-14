@@ -1,7 +1,7 @@
 /// Public names of built-in package bridges that live in the runtime
 /// library. Material and widgets facades hide them; each bridge facade
-/// shows exactly its names. `test/bridge_names_test.dart` keeps this list in
-/// sync with the declarations.
+/// shows exactly its names. `test/bridge_names_test.dart` keeps these lists
+/// in sync with the declarations.
 library;
 
 const flChartBridgeNames = [
@@ -110,3 +110,35 @@ const flChartBridgeNames = [
   'showAllDots',
   'showAllGrids',
 ];
+
+const goRouterBridgeNames = [
+  'CustomTransitionPage',
+  'ExitCallback',
+  'GoError',
+  'GoException',
+  'GoExceptionHandler',
+  'GoRoute',
+  'GoRouter',
+  'GoRouterDelegate',
+  'GoRouterHelper',
+  'GoRouterPageBuilder',
+  'GoRouterRedirect',
+  'GoRouterState',
+  'GoRouterWidgetBuilder',
+  'NoTransitionPage',
+  'RouteBase',
+  'RouteMatch',
+  'RouteMatchList',
+  'ShellNavigationContainerBuilder',
+  'ShellRoute',
+  'ShellRouteBuilder',
+  'ShellRoutePageBuilder',
+  'StatefulNavigationShell',
+  'StatefulNavigationShellState',
+  'StatefulShellBranch',
+  'StatefulShellRoute',
+  'StatefulShellRouteBuilder',
+  'StatefulShellRoutePageBuilder',
+];
+
+const allBridgeNames = [...flChartBridgeNames, ...goRouterBridgeNames];

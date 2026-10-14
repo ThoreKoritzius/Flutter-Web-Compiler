@@ -253,16 +253,20 @@ Future<NativeAppBuild> buildNativeApp(
   final materialFacade = annotatedFacade(
     'material',
     runtimeUri,
-    hide: flChartBridgeNames,
+    hide: allBridgeNames,
   );
   final widgetsFacade = annotatedFacade(
     'widgets',
     widgetsUri,
-    hide: flChartBridgeNames,
+    hide: allBridgeNames,
   );
   final flChartFacade = File(p.join(temporary.path, 'fl_chart.dart'))
     ..writeAsStringSync(
       "export '$runtimeUri' show ${flChartBridgeNames.join(', ')};\n",
+    );
+  final goRouterFacade = File(p.join(temporary.path, 'go_router.dart'))
+    ..writeAsStringSync(
+      "export '$runtimeUri' show ${goRouterBridgeNames.join(', ')};\n",
     );
   final builtInBridges = <String>{};
   final foundationFacade = annotatedFacade('foundation', foundationUri);
@@ -337,6 +341,9 @@ Future<NativeAppBuild> buildNativeApp(
         if (packageAdapters.containsKey(uri)) {
           usedPackages.add(uri);
           replacement = Uri.file(packageAdapters[uri]!).toString();
+        } else if (uri == 'package:go_router/go_router.dart') {
+          builtInBridges.add('go_router');
+          replacement = goRouterFacade.uri.toString();
         } else if (uri == 'package:fl_chart/fl_chart.dart') {
           builtInBridges.add('fl_chart');
           replacement = flChartFacade.uri.toString();

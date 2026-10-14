@@ -115,9 +115,69 @@ class NavigatorObserver {
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {}
 }
 
+// ---------------------------------------------------------------------------
+// Declarative pages.
+
+abstract class Page<T> extends RouteSettings {
+  const Page({this.key, super.name, super.arguments, this.restorationId});
+  final LocalKey? key;
+  final String? restorationId;
+  bool canUpdate(Page<dynamic> other) =>
+      other.runtimeType == runtimeType && other.key == key;
+  Route<T> createRoute(BuildContext context);
+}
+
+class MaterialPage<T> extends Page<T> {
+  const MaterialPage({
+    required this.child,
+    this.maintainState = true,
+    this.fullscreenDialog = false,
+    this.allowSnapshotting = true,
+    super.key,
+    super.name,
+    super.arguments,
+    super.restorationId,
+  });
+  final Widget child;
+  final bool maintainState, fullscreenDialog, allowSnapshotting;
+  @override
+  Route<T> createRoute(BuildContext context) => _PageBasedRoute<T>(this);
+}
+
+/// A route whose content comes from its (replaceable) page.
+class _PageBasedRoute<T> extends PageRoute<T> {
+  _PageBasedRoute(Page<T> page) : super(settings: page);
+  Page<T> get page => settings as Page<T>;
+  @override
+  bool get opaque {
+    final page = this.page;
+    return page is _OpaquePage ? (page as _OpaquePage).isOpaque : true;
+  }
+
+  @override
+  Widget _buildPage(BuildContext context) => switch (page) {
+    final MaterialPage<T> page => page.child,
+    final _ChildPage page => page.pageChild,
+    _ => throw UnsupportedError('Unsupported page type: ${page.runtimeType}'),
+  };
+}
+
+/// Pages from other libraries (such as router pages) expose their child.
+abstract interface class _ChildPage {
+  Widget get pageChild;
+}
+
+abstract interface class _OpaquePage {
+  bool get isOpaque;
+}
+
+typedef PopPageCallback = bool Function(Route<dynamic> route, dynamic result);
+typedef DidRemovePageCallback = void Function(Page<Object?> page);
+
 class _RouteEntry {
-  _RouteEntry(this.route) : key = UniqueKey();
+  _RouteEntry(this.route, {this.page}) : key = UniqueKey();
   final Route<dynamic> route;
+  Page<dynamic>? page;
   final Key key;
   final popScopes = <_PopScopeState>[];
   int historyIndex = 0;
@@ -168,7 +228,13 @@ class Navigator extends StatefulWidget {
     this.onGenerateRoute,
     this.onUnknownRoute,
     this.observers = const [],
+    this.pages = const [],
+    @Deprecated('Use onDidRemovePage instead.') this.onPopPage,
+    this.onDidRemovePage,
   });
+  final List<Page<dynamic>> pages;
+  final PopPageCallback? onPopPage;
+  final DidRemovePageCallback? onDidRemovePage;
   final Widget? home;
   final Map<String, WidgetBuilder> routes;
   final String? initialRoute;
@@ -259,6 +325,12 @@ class NavigatorState extends State<Navigator> {
     for (final observer in widget.observers) {
       observer._navigator = this;
     }
+    if (widget.pages.isNotEmpty) {
+      // Declarative navigators leave the URL to their router.
+      _isRoot = false;
+      _reconcilePages();
+      return;
+    }
     final history = _isRoot ? _history : null;
     final initialName =
         (history == null ? null : _locationHash()) ??
@@ -276,6 +348,40 @@ class NavigatorState extends State<Navigator> {
       _popListener = ((JSAny? _) => _onBrowserPop()).toJS;
       _window.addEventListener('popstate', _popListener!);
     }
+  }
+
+  @override
+  void didUpdateWidget(Navigator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.pages, widget.pages)) _reconcilePages();
+  }
+
+  /// Matches pages to existing routes by [Page.canUpdate], keeping their
+  /// state; imperative routes stay above the page-based ones.
+  void _reconcilePages() {
+    final old = _entries.where((e) => e.page != null).toList();
+    final imperative = _entries.where((e) => e.page == null).toList();
+    final next = <_RouteEntry>[];
+    for (final page in widget.pages) {
+      final index = old.indexWhere((e) => e.page!.canUpdate(page));
+      if (index >= 0) {
+        final entry = old.removeAt(index);
+        entry.page = page;
+        entry.route._settings = page;
+        next.add(entry);
+      } else {
+        next.add(
+          _RouteEntry(page.createRoute(context), page: page).._attach(this),
+        );
+      }
+    }
+    for (final removed in old) {
+      removed._detach(null);
+    }
+    _entries
+      ..clear()
+      ..addAll(next)
+      ..addAll(imperative);
   }
 
   JSAny _historyState(int depth) => {'flutterDomDepth': depth}.jsify()!;
@@ -421,7 +527,23 @@ class NavigatorState extends State<Navigator> {
   }
 
   void _popEntry(Object? result, {required bool fromBrowser}) {
-    final entry = _entries.removeLast();
+    final entry = _entries.last;
+    final page = entry.page;
+    if (page != null) {
+      // Page-based routes are removed by their owner updating `pages`.
+      final onPopPage = widget.onPopPage;
+      if (widget.onDidRemovePage == null &&
+          onPopPage != null &&
+          !onPopPage(entry.route, result)) {
+        return;
+      }
+      _entries.removeLast();
+      entry._detach(result);
+      widget.onDidRemovePage?.call(page);
+      _notify();
+      return;
+    }
+    _entries.removeLast();
     entry._detach(result);
     for (final observer in widget.observers) {
       observer.didPop(entry.route, _entries.last.route);

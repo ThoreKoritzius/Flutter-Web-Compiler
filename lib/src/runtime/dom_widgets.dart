@@ -1130,6 +1130,37 @@ class _StackSlot extends _DomWidget {
   }
 }
 
+/// Shows one child; the others stay mounted (keeping their state) but are
+/// removed from rendering and the accessibility tree.
+class IndexedStack extends StatelessWidget {
+  const IndexedStack({
+    super.key,
+    this.alignment = AlignmentDirectional.topStart,
+    this.sizing = StackFit.loose,
+    this.index = 0,
+    this.children = const [],
+  });
+  final AlignmentGeometry alignment;
+  final StackFit sizing;
+  final int? index;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => Stack(
+    alignment: alignment,
+    fit: sizing,
+    children: [
+      for (var i = 0; i < children.length; i++)
+        Offstage(
+          key: children[i].key == null
+              ? ValueKey(i)
+              : ValueKey<Key>(children[i].key!),
+          offstage: i != index,
+          child: children[i],
+        ),
+    ],
+  );
+}
+
 class Positioned extends _DomWidget {
   const Positioned({
     super.key,

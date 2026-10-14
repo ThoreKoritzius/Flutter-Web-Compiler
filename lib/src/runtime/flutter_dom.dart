@@ -48,6 +48,7 @@ import 'painting_ui.dart';
 import 'visual_metadata.dart';
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:collection';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
@@ -64,3 +65,4 @@ part 'dom_material_navigation.dart';
 part 'dom_paint.dart';
 part 'dom_animation.dart';
 part 'dom_fl_chart.dart';
+part 'dom_go_router.dart';

@@ -422,6 +422,37 @@ or image line decorations. Charts need bounded height from their parent, as
 in Flutter. Visuals approximate fl_chart's rendering; they are not pixel
 identical.
 
+### go_router
+
+`package:go_router/go_router.dart` maps to an implementation of the
+go_router public API (v14+): `GoRouter` (`initialLocation`, `redirect`,
+`redirectLimit`, `refreshListenable`, `errorBuilder`/`errorPageBuilder`,
+`onException`, `navigatorKey`, `observers`, `routerNeglect`), `GoRoute`
+(paths with `:parameters`, nested sub-routes, `name`, `builder`,
+`pageBuilder`, per-route `redirect`, `onExit`, `parentNavigatorKey`),
+`ShellRoute`, `StatefulShellRoute.indexedStack` with `StatefulShellBranch`
+and `StatefulNavigationShell` (`currentIndex`, `goBranch`), `GoRouterState`
+(`uri`, `matchedLocation`, `pathParameters`, `extra`, `pageKey`, `of`),
+`NoTransitionPage`, `CustomTransitionPage`, `MaterialApp.router` and the
+`BuildContext` helpers (`go`, `goNamed`, `push`/`pushNamed` with typed
+results, `pop`, `canPop`, `pushReplacement`, `replace`, `namedLocation`).
+
+- Routing renders through declarative `Navigator(pages:)`, so dialogs,
+  sheets and `Navigator.of` work on top of router pages; covered pages keep
+  their state, and stateful shell branches stay mounted in an `IndexedStack`.
+- Locations use Flutter web's default hash URLs: `go` adds a history entry,
+  redirects (including `refreshListenable` refreshes) replace it, browser
+  back navigates to the previous location, and the initial hash is honoured
+  as a deep link. Imperative pushes write the URL only with
+  `GoRouter.optionURLReflectsImperativeAPIs`.
+- Redirects may be asynchronous; loops and the redirect limit produce a
+  `GoException` shown by the error builder.
+
+Not provided: page transition animations (transition builders receive
+completed animations), `GoRouter.routingConfig`, `onEnter`, type-safe
+`GoRouteData` code generation, path URL strategy, `extraCodec`
+serialization and state restoration.
+
 ## Explicit package boundaries and compile-time configuration
 
 `--package-bridges adapters.json` maps exact package library URIs to explicit

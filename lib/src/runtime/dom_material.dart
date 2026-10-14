@@ -80,6 +80,13 @@ class _InheritedTheme extends InheritedWidget {
 
 enum ThemeMode { system, light, dark }
 
+/// Router configurations accepted by `MaterialApp.router`.
+abstract interface class RouterConfig<T> {}
+
+abstract interface class _DomRouterConfig {
+  Widget _buildRouterView();
+}
+
 enum MaterialTapTargetSize { padded, shrinkWrap }
 
 class VisualDensity {
@@ -146,7 +153,26 @@ class MaterialApp extends StatelessWidget {
     this.darkTheme,
     this.themeMode = ThemeMode.system,
     this.debugShowCheckedModeBanner = true,
-  });
+  }) : routerConfig = null;
+  const MaterialApp.router({
+    super.key,
+    this.scaffoldMessengerKey,
+    required RouterConfig<Object> this.routerConfig,
+    this.builder,
+    this.title = '',
+    this.color,
+    this.theme,
+    this.darkTheme,
+    this.themeMode = ThemeMode.system,
+    this.debugShowCheckedModeBanner = true,
+  }) : navigatorKey = null,
+       home = null,
+       routes = const {},
+       initialRoute = null,
+       onGenerateRoute = null,
+       onUnknownRoute = null,
+       navigatorObservers = const [];
+  final RouterConfig<Object>? routerConfig;
   final GlobalKey<NavigatorState>? navigatorKey;
   final GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey;
   final Widget? home;
@@ -168,12 +194,19 @@ class MaterialApp extends StatelessWidget {
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system && platform == Brightness.dark);
     final data = (dark ? darkTheme : null) ?? theme ?? _defaultTheme;
+    final router = routerConfig;
+    if (router != null && router is! _DomRouterConfig)
+      throw UnsupportedError(
+        'Only GoRouter router configurations are supported.',
+      );
     final usesNavigator =
         routes.isNotEmpty ||
         onGenerateRoute != null ||
         initialRoute != null ||
         navigatorKey != null;
-    Widget content = usesNavigator
+    Widget content = router != null
+        ? (router as _DomRouterConfig)._buildRouterView()
+        : usesNavigator
         ? Navigator(
             key: navigatorKey,
             home: home,
