@@ -253,9 +253,23 @@ class FlutterError extends Error {
   final String message;
   @override
   String toString() => message;
-  static void Function(FlutterErrorDetails details)? onError;
+  static void Function(FlutterErrorDetails details)? onError = presentError;
   static void reportError(FlutterErrorDetails details) =>
       onError?.call(details);
+  static void presentError(FlutterErrorDetails details) =>
+      dumpErrorToConsole(details);
+  static void dumpErrorToConsole(
+    FlutterErrorDetails details, {
+    bool forceReport = false,
+  }) {
+    debugPrint(details.toString());
+    if (details.stack != null) debugPrint('${details.stack}');
+  }
+
+  List<Object> get diagnostics => [message];
+  static int get errorCount => 0;
+  static void resetErrorCount() {}
+  static Iterable<String> defaultStackFilter(Iterable<String> frames) => frames;
 }
 
 class FlutterErrorDetails {
@@ -264,11 +278,21 @@ class FlutterErrorDetails {
     this.stack,
     this.library,
     this.context,
+    this.stackFilter,
+    this.informationCollector,
+    this.silent = false,
   });
   final Object exception;
   final StackTrace? stack;
   final String? library;
   final Object? context;
+  final Iterable<String> Function(Iterable<String> frames)? stackFilter;
+  final Iterable<Object> Function()? informationCollector;
+  final bool silent;
+  String exceptionAsString() => '$exception';
+  @override
+  String toString() =>
+      'Error${library == null ? '' : ' in $library'}: $exception';
 }
 
 // ---------------------------------------------------------------------------
@@ -470,3 +494,27 @@ String describeIdentity(Object? object) =>
 
 String shortHash(Object? object) =>
     object.hashCode.toUnsigned(20).toRadixString(16).padLeft(5, '0');
+
+/// Parts of structured Flutter error messages.
+class ErrorSummary extends DiagnosticsNode {
+  ErrorSummary(String message) : super(name: null, value: message);
+}
+
+class ErrorDescription extends DiagnosticsNode {
+  ErrorDescription(String message) : super(name: null, value: message);
+}
+
+class ErrorHint extends DiagnosticsNode {
+  ErrorHint(String message) : super(name: null, value: message);
+}
+
+class ErrorSpacer extends DiagnosticsNode {
+  ErrorSpacer() : super(name: null, value: '');
+}
+
+class DiagnosticsBlock extends DiagnosticsNode {
+  DiagnosticsBlock({String? name, List<DiagnosticsNode> children = const []})
+    : super(name: name, value: children.join('\n'));
+}
+
+typedef InformationCollector = Iterable<DiagnosticsNode> Function();

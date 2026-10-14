@@ -151,7 +151,7 @@ const flutterLocalizationsBridgeNames = [
 ];
 
 /// Runtime support for standalone bridge libraries, never app-visible.
-const runtimeSupportNames = ['NativeSizeBuilder'];
+const runtimeSupportNames = ['NativeMaskedImage', 'NativeSizeBuilder'];
 
 const allBridgeNames = [
   ...runtimeSupportNames,

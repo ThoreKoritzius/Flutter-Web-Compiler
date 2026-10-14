@@ -270,6 +270,18 @@ Future<NativeAppBuild> buildNativeApp(
       'url_launcher',
       await runtimeLibrary('url_launcher_dom'),
     ),
+    'package:cached_network_image/cached_network_image.dart': (
+      'cached_network_image',
+      await runtimeLibrary('cached_network_image_dom'),
+    ),
+    'package:flutter_svg/flutter_svg.dart': (
+      'flutter_svg',
+      await runtimeLibrary('flutter_svg_dom'),
+    ),
+    'package:flutter_svg/svg.dart': (
+      'flutter_svg',
+      await runtimeLibrary('flutter_svg_dom'),
+    ),
     'package:flutter_map/flutter_map.dart': (
       'flutter_map',
       await runtimeLibrary('flutter_map_dom'),
@@ -690,6 +702,21 @@ Future<NativeAppBuild> buildNativeApp(
       }),
       generatedAssets: Map.unmodifiable({
         if (subsetFont != null) _materialIconsPath: subsetFont,
+        // Flutter's asset manifest: asset keys with their variants.
+        if (resources.assets.isNotEmpty || packageResources.assets.isNotEmpty)
+          'assets/AssetManifest.json': Uint8List.fromList(
+            utf8.encode(
+              jsonEncode({
+                for (final url in [
+                  ...packageResources.assets.keys,
+                  ...resources.assets.keys,
+                ]..sort())
+                  url.substring('assets/'.length): [
+                    url.substring('assets/'.length),
+                  ],
+              }),
+            ),
+          ),
       }),
       iconCodePoints: subsetFont == null ? null : Set.unmodifiable(iconCodes!),
       builtInBridges: List.unmodifiable(builtInBridges.toList()..sort()),
@@ -729,6 +756,7 @@ const nativeRuntimeIcons = [
   'expand_less',
   'expand_more',
   'menu',
+  'search',
 ];
 
 Map<String, int>? _iconNameCache;

@@ -2482,3 +2482,14 @@ class NestedScrollViewState extends State<NestedScrollView> {
     ],
   );
 }
+
+/// Base type for slivers that keep children alive; slivers here are plain
+/// widgets.
+abstract class SliverWithKeepAliveWidget extends StatelessWidget {
+  const SliverWithKeepAliveWidget({super.key});
+}
+
+abstract class SliverMultiBoxAdaptorWidget extends SliverWithKeepAliveWidget {
+  const SliverMultiBoxAdaptorWidget({super.key, required this.delegate});
+  final SliverChildDelegate delegate;
+}

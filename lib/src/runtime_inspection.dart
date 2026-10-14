@@ -48,6 +48,10 @@ const runtimeBuiltInBridges = {
   'package:url_launcher/url_launcher_string.dart': 'url_launcher',
   'package:url_launcher/link.dart': 'url_launcher',
   'package:flutter_map/flutter_map.dart': 'flutter_map',
+  'package:cached_network_image/cached_network_image.dart':
+      'cached_network_image',
+  'package:flutter_svg/flutter_svg.dart': 'flutter_svg',
+  'package:flutter_svg/svg.dart': 'flutter_svg',
 };
 
 /// `dart:` libraries dart2js rejects at compile time.

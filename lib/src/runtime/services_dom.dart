@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'material_style.dart' show Brightness;
+import 'ui_enums.dart';
 import 'browser_services.dart'
     if (dart.library.js_interop) 'browser_services_web.dart';
 
@@ -799,3 +799,64 @@ class FlutterAssetError extends Error {
 }
 
 final AssetBundle rootBundle = PlatformAssetBundle();
+
+/// Registers fonts at runtime, as `dart:ui`'s FontLoader does.
+class FontLoader {
+  FontLoader(this.family);
+  final String family;
+  final _fonts = <Future<ByteData>>[];
+  void addFont(Future<ByteData> bytes) => _fonts.add(bytes);
+  Future<void> load() async {
+    for (final font in _fonts) {
+      final data = await font;
+      await browserLoadFont(
+        family,
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+    }
+  }
+}
+
+/// Bundled asset keys, read from the build's `AssetManifest.json`.
+class AssetManifest {
+  AssetManifest._(this._assets);
+  final Map<String, List<String>> _assets;
+
+  static Future<AssetManifest> loadFromAssetBundle(AssetBundle bundle) async {
+    try {
+      final json = jsonDecode(await bundle.loadString('AssetManifest.json'));
+      return AssetManifest._({
+        for (final entry in (json as Map).entries)
+          entry.key as String: [
+            for (final variant in entry.value as List) '$variant',
+          ],
+      });
+    } catch (_) {
+      return AssetManifest._(const {});
+    }
+  }
+
+  List<String> listAssets() => _assets.keys.toList();
+
+  List<AssetMetadata>? getAssetVariants(String key) => _assets[key] == null
+      ? null
+      : [
+          for (final variant in _assets[key]!)
+            AssetMetadata(
+              key: variant,
+              targetDevicePixelRatio: null,
+              main: variant == key,
+            ),
+        ];
+}
+
+class AssetMetadata {
+  const AssetMetadata({
+    required this.key,
+    required this.targetDevicePixelRatio,
+    required this.main,
+  });
+  final String key;
+  final double? targetDevicePixelRatio;
+  final bool main;
+}

@@ -1012,3 +1012,35 @@ class View extends InheritedWidget {
   @override
   bool updateShouldNotify(View oldWidget) => false;
 }
+
+/// Runtime support for bridge libraries: paints [color] through the image
+/// at [url] used as a mask (tinted icons). Facades hide it from apps.
+class NativeMaskedImage extends _DomWidget {
+  const NativeMaskedImage({
+    super.key,
+    required this.url,
+    required this.color,
+    this.width,
+    this.height,
+    this.fit = BoxFit.contain,
+  });
+  final String url;
+  final Color color;
+  final double? width, height;
+  final BoxFit fit;
+  @override
+  _Fill get _fill => _Fill.none;
+  @override
+  void _render(_DomBuilder out) {
+    final size = switch (fit) {
+      BoxFit.cover => 'cover',
+      BoxFit.fill => '100% 100%',
+      _ => 'contain',
+    };
+    final mask = cssUrl(url);
+    out.attributes['role'] = 'img';
+    out.css(
+      'display:inline-block;flex-shrink:0;box-sizing:border-box;width:${width == null ? '100%' : px(width!)};height:${height == null ? (width == null ? '100%' : px(width!)) : px(height!)};background-color:${colorCss(color)};-webkit-mask:$mask center/$size no-repeat;mask:$mask center/$size no-repeat;',
+    );
+  }
+}

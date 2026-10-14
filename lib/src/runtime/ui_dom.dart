@@ -22,7 +22,14 @@ export 'material_style.dart'
         FontFeature,
         Brightness,
         Clip,
-        Locale;
+        Locale,
+        Shadow,
+        TextDecorationStyle,
+        TextLeadingDistribution,
+        TextHeightBehavior,
+        FontVariation,
+        StrutStyle;
+export 'services_dom.dart' show FontLoader;
 export 'painting_ui.dart'
     hide
         UiGradient,

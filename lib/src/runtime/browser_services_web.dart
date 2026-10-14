@@ -1,5 +1,6 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
+import 'dart:typed_data';
 
 JSObject? _navigator() =>
     globalContext.getProperty<JSObject?>('navigator'.toJS);
@@ -75,4 +76,17 @@ Future<List<int>?> browserFetchBytes(String url) async {
   } catch (_) {
     return null;
   }
+}
+
+/// Registers [bytes] as a font face named [family] (CSS Font Loading API).
+Future<void> browserLoadFont(String family, List<int> bytes) async {
+  final document = globalContext.getProperty<JSObject?>('document'.toJS);
+  final fonts = document?.getProperty<JSObject?>('fonts'.toJS);
+  if (fonts == null || !globalContext.has('FontFace')) return;
+  final buffer = Uint8List.fromList(bytes).buffer.toJS;
+  final face = globalContext
+      .getProperty<JSFunction>('FontFace'.toJS)
+      .callAsConstructor<JSObject>(family.toJS, buffer);
+  await face.callMethod<JSPromise<JSAny?>>('load'.toJS).toDart;
+  fonts.callMethod<JSAny?>('add'.toJS, face);
 }

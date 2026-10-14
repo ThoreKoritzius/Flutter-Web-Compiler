@@ -737,8 +737,8 @@ class _PaintElement extends _DomElement {
   }
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     _owner!._painters.add(this);
     _listen();
     _owner!._schedulePaint(this);

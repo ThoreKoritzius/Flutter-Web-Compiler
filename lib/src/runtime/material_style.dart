@@ -10,6 +10,9 @@ import 'dart:typed_data';
 import 'package:material_color_utilities/material_color_utilities.dart';
 
 import 'painting_ui.dart';
+import 'ui_enums.dart';
+
+export 'ui_enums.dart';
 import 'visual_metadata.dart';
 
 enum FontWeight {
@@ -125,8 +128,6 @@ enum BoxShape { rectangle, circle }
 enum BorderStyle { none, solid }
 
 enum Clip { none, hardEdge, antiAlias, antiAliasWithSaveLayer }
-
-enum Brightness { light, dark }
 
 enum DynamicSchemeVariant {
   tonalSpot,

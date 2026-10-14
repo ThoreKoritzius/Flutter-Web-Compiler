@@ -713,6 +713,32 @@ ignored; tiles load as plain images).
 delivers pointer down/move/up/cancel/hover events and wheel
 `PointerScrollEvent`s.
 
+### cached_network_image and flutter_svg
+
+`package:cached_network_image` maps to a bridge on plain `<img>` elements
+(the browser's HTTP cache does the caching): `CachedNetworkImage` with
+`placeholder`, `progressIndicatorBuilder`, `errorWidget`, `imageBuilder`,
+and `CachedNetworkImageProvider` as an `ImageProvider`.
+`package:flutter_svg` (and `svg.dart`) maps to `SvgPicture.asset`/
+`network`/`string`/`memory` and loader-based `SvgPicture(...)`, decoded by
+the browser as images; a `srcIn`/`srcATop`/`modulate` color filter (or the
+deprecated `color`) tints the picture through a CSS mask.
+
+### Packages compiled from source
+
+Packages that build on Flutter's framework compile from their own source
+when the runtime provides the APIs they use. Checked with real releases:
+provider 6.1 (custom `InheritedElement`s with per-dependent aspects),
+flutter_bloc 9, equatable, intl, http and google_fonts 6 (fonts load
+through `FontLoader` and the CSS Font Loading API). This relies on
+Flutter's element API: `mount(parent, newSlot)`, `ProxyElement`/
+`InheritedElement` dependency hooks (`getDependencies`, `setDependencies`,
+`updateDependencies`, `notifyDependent`, `updated`, `notifyClients`),
+`dependOnInheritedElement`, `activate`/`deactivate`/`reassemble`,
+`Diagnosticable` widgets and states, `BuildOwner`, and structured
+`FlutterError` parts. Builds also emit `assets/AssetManifest.json`, read by
+`AssetManifest.loadFromAssetBundle`.
+
 ### Fonts and assets from packages
 
 As Flutter does, fonts declared in a dependency's pubspec are bundled under

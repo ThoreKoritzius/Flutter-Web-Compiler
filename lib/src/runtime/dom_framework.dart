@@ -146,7 +146,7 @@ class GlobalObjectKey<T extends State<StatefulWidget>> extends GlobalKey<T> {
 // ---------------------------------------------------------------------------
 // Widgets.
 
-abstract class Widget {
+abstract class Widget with Diagnosticable {
   const Widget({this.key});
   final Key? key;
   Element createElement();
@@ -176,7 +176,7 @@ abstract interface class DomBuildLifecycle {
   void disposeDomBuild();
 }
 
-abstract class State<T extends StatefulWidget> {
+abstract class State<T extends StatefulWidget> with Diagnosticable {
   T? _widget;
   T get widget => _widget!;
   StatefulElement? _element;
@@ -248,6 +248,12 @@ abstract class BuildContext {
   void visitChildElements(void Function(Element element) visitor);
   T? findAncestorRenderObjectOfType<T extends RenderObject>();
   RenderObject? findRenderObject();
+  InheritedWidget dependOnInheritedElement(
+    InheritedElement ancestor, {
+    Object? aspect,
+  });
+  BuildOwner? get owner;
+  bool get debugDoingBuild;
   Size? get size;
   void dispatchNotification(Notification notification);
 }
@@ -262,13 +268,31 @@ abstract class Element implements BuildContext {
   int _depth = 0;
   bool _active = false;
   bool _dirty = true;
+  Object? _slot;
   Map<Type, InheritedElement> _inherited = const {};
+
+  Object? get slot => _slot;
+  bool get dirty => _dirty;
+  @override
+  BuildOwner? get owner => _owner == null ? null : BuildOwner._shared;
+  @override
+  bool get debugDoingBuild => false;
+
+  /// Lifecycle hooks Flutter calls when elements move between parents; the
+  /// runtime re-creates rather than reparents, so these are notifications.
+  void activate() {}
+  void deactivate() {}
+  void reassemble() => markNeedsBuild();
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {}
+  String toStringShort() => '${widget.runtimeType}';
+  void updateSlotForChild(Element child, Object? newSlot) {}
   Set<InheritedElement>? _dependencies;
 
   @override
   bool get mounted => _widget != null && _active;
 
-  void mount(Element? parent) {
+  void mount(Element? parent, Object? newSlot) {
+    _slot = newSlot;
     _parent = parent;
     if (parent != null) {
       _owner = parent._owner;
@@ -356,7 +380,7 @@ abstract class Element implements BuildContext {
 
   Element inflateWidget(Widget newWidget) {
     final element = newWidget.createElement();
-    element.mount(this);
+    element.mount(this, null);
     return element;
   }
 
@@ -434,9 +458,17 @@ abstract class Element implements BuildContext {
   }) {
     final ancestor = _inherited[T];
     if (ancestor == null) return null;
+    return dependOnInheritedElement(ancestor, aspect: aspect) as T;
+  }
+
+  @override
+  InheritedWidget dependOnInheritedElement(
+    InheritedElement ancestor, {
+    Object? aspect,
+  }) {
     (_dependencies ??= HashSet.identity()).add(ancestor);
-    ancestor._dependents.add(this);
-    return ancestor.widget as T;
+    ancestor.updateDependencies(this, aspect);
+    return ancestor.widget as InheritedWidget;
   }
 
   @override
@@ -508,8 +540,8 @@ abstract class ComponentElement extends Element {
   bool get _fillsWidth => _child?._fillsWidth ?? false;
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     _firstBuild();
   }
 
@@ -621,31 +653,62 @@ class StatefulElement extends ComponentElement {
   }
 }
 
-class InheritedElement extends ComponentElement {
+/// An element for a [ProxyWidget]: it builds its child and tells clients
+/// when the widget changes.
+abstract class ProxyElement extends ComponentElement {
+  ProxyElement(ProxyWidget super.widget);
+
+  @override
+  Widget build() => (widget as ProxyWidget).child;
+
+  @override
+  void update(ProxyWidget newWidget) {
+    final old = widget as ProxyWidget;
+    super.update(newWidget);
+    updated(old);
+    _dirty = true;
+    rebuild();
+  }
+
+  void updated(covariant ProxyWidget oldWidget) => notifyClients(oldWidget);
+
+  void notifyClients(covariant ProxyWidget oldWidget);
+}
+
+class InheritedElement extends ProxyElement {
   InheritedElement(InheritedWidget super.widget);
-  final _dependents = HashSet<Element>.identity();
+  final _dependents = HashMap<Element, Object?>.identity();
 
   @override
   void _updateInheritance() {
     _inherited = {..._inherited, widget.runtimeType: this};
   }
 
-  @override
-  Widget build() => (widget as ProxyWidget).child;
+  Object? getDependencies(Element dependent) => _dependents[dependent];
 
-  void notifyClients() {
-    for (final dependent in _dependents.toList()) {
-      if (dependent._active) dependent.didChangeDependencies();
+  void setDependencies(Element dependent, Object? value) =>
+      _dependents[dependent] = value;
+
+  void updateDependencies(Element dependent, Object? aspect) =>
+      setDependencies(dependent, null);
+
+  void notifyDependent(
+    covariant InheritedWidget oldWidget,
+    Element dependent,
+  ) => dependent.didChangeDependencies();
+
+  @override
+  void updated(InheritedWidget oldWidget) {
+    if ((widget as InheritedWidget).updateShouldNotify(oldWidget)) {
+      super.updated(oldWidget);
     }
   }
 
   @override
-  void update(InheritedWidget newWidget) {
-    final old = widget as InheritedWidget;
-    super.update(newWidget);
-    if (newWidget.updateShouldNotify(old)) notifyClients();
-    _dirty = true;
-    rebuild();
+  void notifyClients(InheritedWidget oldWidget) {
+    for (final dependent in _dependents.keys.toList()) {
+      if (dependent._active) notifyDependent(oldWidget, dependent);
+    }
   }
 
   @override
@@ -653,6 +716,23 @@ class InheritedElement extends ComponentElement {
     _dependents.clear();
     super.unmount();
   }
+}
+
+/// Coordinates builds. The runtime's owner schedules frames itself, so
+/// this exposes Flutter's API surface for code that asks for it.
+class BuildOwner {
+  BuildOwner({this.onBuildScheduled, FocusManager? focusManager})
+    : focusManager = focusManager ?? FocusManager.instance;
+  static final _shared = BuildOwner();
+  final VoidCallback? onBuildScheduled;
+  final FocusManager focusManager;
+  bool get debugBuilding => false;
+  void scheduleBuildFor(Element element) => element.markNeedsBuild();
+  void buildScope(Element context, [VoidCallback? callback]) =>
+      callback?.call();
+  void lockState(VoidCallback callback) => callback();
+  void finalizeTree() {}
+  void reassemble(Element root) => root.reassemble();
 }
 
 class _InheritedNotifierElement<T extends Listenable> extends InheritedElement {
@@ -675,8 +755,8 @@ class _InheritedNotifierElement<T extends Listenable> extends InheritedElement {
   }
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     _listen();
   }
 
@@ -690,7 +770,7 @@ class _InheritedNotifierElement<T extends Listenable> extends InheritedElement {
   void performRebuild() {
     if (_notified) {
       _notified = false;
-      notifyClients();
+      notifyClients(widget as InheritedWidget);
     }
     super.performRebuild();
   }
@@ -818,8 +898,8 @@ class _DomElement extends Element with _DomParent {
   }
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     rebuild();
   }
 
@@ -1238,8 +1318,8 @@ class _RootElement extends Element with _DomParent {
       (_child as InheritedElement)._dependents.isNotEmpty;
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     rebuild();
   }
 
@@ -1423,7 +1503,7 @@ void runApp(Widget app) {
     host.replaceChildren();
     final root = _RootElement(app, owner);
     owner._root = root;
-    root.mount(null);
+    root.mount(null, null);
     owner._flush();
   });
 }
@@ -1903,8 +1983,8 @@ class _LayoutBuilderElement extends _DomElement {
   bool _needsLayout = true;
 
   @override
-  void mount(Element? parent) {
-    super.mount(parent);
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
     _owner!._layoutBuilders.add(this);
   }
 
