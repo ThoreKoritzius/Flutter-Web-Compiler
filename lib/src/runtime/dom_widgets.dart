@@ -647,7 +647,7 @@ class Flex extends _DomWidget {
   void _render(_DomBuilder out) {
     final reversed = verticalDirection == VerticalDirection.up && !_horizontal;
     out.css(
-      'display:flex;flex-direction:${_horizontal ? 'row' : 'column'}${reversed ? '-reverse' : ''};box-sizing:border-box;min-width:0;',
+      'display:flex;flex-direction:${_horizontal ? 'row' : 'column'}${reversed ? '-reverse' : ''};box-sizing:border-box;min-width:0;min-height:0;',
     );
     if (mainAxisAlignment != MainAxisAlignment.start)
       out.css('justify-content:${_justifyCss(mainAxisAlignment)};');
@@ -800,7 +800,7 @@ class Padding extends _DomWidget {
   void _render(_DomBuilder out) {
     final p = padding.resolve(TextDirection.ltr);
     out.css(
-      'box-sizing:border-box;min-width:0;padding:${px(p.top)} ${px(p.right)} ${px(p.bottom)} ${px(p.left)};',
+      'box-sizing:border-box;min-width:0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);padding:${px(p.top)} ${px(p.right)} ${px(p.bottom)} ${px(p.left)};',
     );
     if (child != null) out.child(child!);
   }

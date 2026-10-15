@@ -67,6 +67,7 @@ final theme = ThemeData(
     color: Color(0xff0000aa),
   ),
   navigationBarTheme: const NavigationBarThemeData(
+    height: 64,
     backgroundColor: Color(0xff101010),
     indicatorColor: Color(0xff202020),
   ),
@@ -91,7 +92,9 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) => DefaultTabController(
     length: 2,
     child: Scaffold(
-      appBar: AppBar(title: const Text('Themed')),
+      appBar: AppBar(title: const Row(children: [Text('Themed'), Icon(Icons.expand_more)]), actions: [
+        IconButton(tooltip: 'Previous date', onPressed: () {}, icon: const Icon(Icons.chevron_left)),
+      ]),
       bottomNavigationBar: NavigationBar(
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
@@ -337,6 +340,9 @@ const {host}=install();
  const progress=find(host,n=>n.attributes.role==='progressbar');
  if(!style(progress).includes('--fd-indicator:rgba(0,0,170,1)'))throw Error('progress theme');
  const nav=find(host,n=>n.tag==='nav');
+ if(!style(nav).includes('height:64px;'))throw Error('navigation height '+style(nav));
+ const previous=find(host,n=>n.attributes['aria-label']==='Previous date');
+ if(!find(previous,n=>style(n).includes('color:rgba(250,250,250,1)')))throw Error('app bar icon foreground');
  if(!style(nav).includes(bg('rgba(16,16,16,1)')))throw Error('navigation bar theme');
  if(!find(nav,n=>style(n).includes(bg('rgba(32,32,32,1)'))))throw Error('navigation indicator');
  const tab=find(host,n=>n.attributes.role==='tab'&&n.attributes['aria-selected']==='true');

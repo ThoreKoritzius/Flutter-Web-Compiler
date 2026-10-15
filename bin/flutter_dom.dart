@@ -148,18 +148,27 @@ Future<void> main(List<String> arguments) async {
           final value = item.value;
           if (item.key is! String ||
               value is! Map ||
-              value.length != 2 ||
+              value.keys.any(
+                (k) => !['declarations', 'imports', 'expose'].contains(k),
+              ) ||
               value['declarations'] is! List ||
               value['imports'] is! List ||
               (value['declarations'] as List).any((e) => e is! String) ||
-              (value['imports'] as List).any((e) => e is! String)) {
+              (value['imports'] as List).any((e) => e is! String) ||
+              (value.containsKey('expose') &&
+                  (value['expose'] is! Map ||
+                      (value['expose'] as Map).entries.any(
+                        (e) => e.key is! String || e.value is! String,
+                      )))) {
             throw ArgumentError(
-              'Each selection requires declarations and imports string lists.',
+              'Each selection requires declarations/imports string lists and optional expose name mappings.',
             );
           }
           selections[item.key as String] = NativeSourceSelection(
             declarations: (value['declarations'] as List).cast<String>(),
             imports: (value['imports'] as List).cast<String>(),
+            expose: (value['expose'] as Map? ?? const {})
+                .cast<String, String>(),
           );
         }
       }
@@ -208,6 +217,7 @@ Future<void> main(List<String> arguments) async {
               item.key: {
                 'declarations': item.value.declarations,
                 'imports': item.value.imports,
+                if (item.value.expose.isNotEmpty) 'expose': item.value.expose,
               },
           },
           'dartDefinitionKeys': defines.keys.toList(),

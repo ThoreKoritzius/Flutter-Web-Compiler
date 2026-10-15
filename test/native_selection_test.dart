@@ -108,4 +108,76 @@ class Unrelated { Unknown broken = Unknown(); }
       );
     },
   );
+  test(
+    'selected private widgets and metadata are exposed without rewriting bodies',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('native-expose-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      Directory('${directory.path}/lib').createSync();
+      File('${directory.path}/lib/main.dart').writeAsStringSync(
+        "import 'package:flutter/material.dart'; import 'components.dart'; void main()=>runApp(PublicPanel(label:entries.first.text));",
+      );
+      const source = r"""
+import 'package:flutter/material.dart';
+const _entries = [_Entry('Original')];
+class _Entry { const _Entry(this.text); final String text; }
+class _Panel extends StatelessWidget {
+ const _Panel({required this.label}); final String label;
+ Widget build(BuildContext context)=>Column(children:[Text(label),const _Badge()]);
+}
+class _Badge extends StatelessWidget {
+ const _Badge(); Widget build(BuildContext context)=>const Text(' retained helper');
+}
+class Unused { Missing value=Missing(); }
+""";
+      File('${directory.path}/lib/components.dart').writeAsStringSync(source);
+      const selection = NativeSourceSelection(
+        declarations: ['_Panel'],
+        imports: ['package:flutter/material.dart'],
+        expose: {'PublicPanel': '_Panel', 'entries': '_entries'},
+      );
+      final selected = selectNativeSource(source, selection);
+      expect(selected, contains('class _Badge extends StatelessWidget'));
+      expect(selected, contains('const _entries = [_Entry(\'Original\')];'));
+      expect(selected, isNot(contains('class Unused')));
+      final app = await buildNativeApp(
+        directory.path,
+        'lib/main.dart',
+        sourceSelections: {'lib/components.dart': selection},
+      );
+      expect(
+        app.sourceSelections['lib/components.dart']!.expose,
+        selection.expose,
+      );
+      final js = File('${directory.path}/app.js')
+        ..writeAsStringSync(app.javascript);
+      final result = await Process.run('node', [
+        '-e',
+        "const {install,label}=require('./tool/browser/dom_shim.cjs');const {host}=install();require(process.argv[1]);if(label(host)!=='Original retained helper')throw Error(label(host));",
+        js.path,
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
+    },
+  );
+  test('invalid or colliding exposed aliases are rejected', () {
+    for (final aliases in <Map<String, String>>[
+      {'_hidden': '_Panel'},
+      {'_Panel': '_Panel'},
+      {'Public': 'Missing'},
+      {'class': '_Panel'},
+      {'Public': 'helper'},
+    ]) {
+      expect(
+        () => selectNativeSource(
+          'class _Panel {} void helper() {}',
+          NativeSourceSelection(
+            declarations: ['_Panel'],
+            imports: [],
+            expose: aliases,
+          ),
+        ),
+        throwsA(anyOf(isA<ArgumentError>(), isA<UnsupportedError>())),
+      );
+    }
+  });
 }

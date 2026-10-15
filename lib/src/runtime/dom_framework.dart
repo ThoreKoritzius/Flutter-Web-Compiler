@@ -51,6 +51,13 @@ extension type _Event(JSObject _) implements JSObject {
   external void stopPropagation();
 }
 
+@JS('ResizeObserver')
+extension type _ResizeObserver._(JSObject _) implements JSObject {
+  external factory _ResizeObserver(JSFunction callback);
+  external void observe(_Node node);
+  external void disconnect();
+}
+
 @JS('window')
 external _Window get _window;
 
@@ -1971,8 +1978,9 @@ class LayoutBuilder extends _DomWidget {
   @override
   _Fill get _fill => _Fill.expand;
   @override
-  void _render(_DomBuilder out) =>
-      out.css('width:100%;min-width:0;box-sizing:border-box;');
+  void _render(_DomBuilder out) => out.css(
+    'width:100%;min-width:0;min-height:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);',
+  );
   @override
   Element createElement() => _LayoutBuilderElement(this);
 }
@@ -1981,11 +1989,19 @@ class _LayoutBuilderElement extends _DomElement {
   _LayoutBuilderElement(LayoutBuilder super.widget);
   double? _width;
   bool _needsLayout = true;
+  _ResizeObserver? _observer;
 
   @override
   void mount(Element? parent, Object? newSlot) {
     super.mount(parent, newSlot);
     _owner!._layoutBuilders.add(this);
+    if (globalContext.has('ResizeObserver')) {
+      _observer = _ResizeObserver(
+        (() {
+          if (_active) _owner?._scheduleLayout(this);
+        }).toJS,
+      )..observe(node);
+    }
   }
 
   @override
@@ -1997,6 +2013,9 @@ class _LayoutBuilderElement extends _DomElement {
 
   void _performLayout() {
     final width = checkedDimension(node.clientWidth);
+    // Hidden retained routes have no measurable constraints. Preserve their
+    // subtree until ResizeObserver reports a visible container again.
+    if (width == 0) return;
     if (!_needsLayout && width == _width) return;
     _needsLayout = false;
     _width = width;
@@ -2009,6 +2028,8 @@ class _LayoutBuilderElement extends _DomElement {
 
   @override
   void unmount() {
+    _observer?.disconnect();
+    _observer = null;
     _owner?._layoutBuilders.remove(this);
     _owner?._layoutQueue.remove(this);
     super.unmount();

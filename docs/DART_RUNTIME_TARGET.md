@@ -819,6 +819,14 @@ can select declarations without copying their implementation into an adapter:
 }
 ```
 
+An optional `"expose": {"PublicCard": "_PrivateCard", "items": "_items"}`
+map exposes selected library-private components for an experimental entry. Type
+aliases reference original classes/enums/type aliases; getters reference original
+top-level variables. Function aliases, missing targets and colliding or invalid
+public names are rejected. Exposed targets participate in dependency selection,
+including helper types used in const constructors. Original declaration bodies
+remain unchanged, and aliases are recorded in the build report.
+
 Selection retains named declarations and their same-library identifier dependencies
 verbatim. The import list is explicit: omitted imports and all exports are removed.
 The official Dart compiler checks the resulting graph and rejects missing symbols.
@@ -828,8 +836,9 @@ Selections cannot overlap adapters or point outside the project; unreachable ent
 fail. Parts, extensions, unnamed declarations and conditional imports are rejected
 because their dependencies need resolved library analysis.
 
-`LayoutBuilder` measures its attached DOM container's `clientWidth` after the
-build pass and rebuilds only when the measured width changes or its builder's
+`LayoutBuilder` observes container resizes (including animated parent widths),
+disconnects its observer on disposal, and measures its attached DOM container's
+`clientWidth` after the build pass and rebuilds only when the measured width changes or its builder's
 dependencies change; nested builders are measured in depth order. `MediaQuery`
 is an inherited viewport snapshot (size, platform brightness): resize and
 color-scheme changes rebuild only dependents. A resize listener exists only

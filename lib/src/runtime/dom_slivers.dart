@@ -1474,7 +1474,7 @@ class RefreshIndicatorState extends State<RefreshIndicator> {
       },
       child: _Box(
         css:
-            'position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;',
+            'position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;',
         layout: _DomLayout.grid,
         fill: _Fill.expand,
         children: [

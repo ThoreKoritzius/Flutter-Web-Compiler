@@ -577,6 +577,9 @@ class Listener extends _DomWidget {
 
   @override
   void _render(_DomBuilder out) {
+    out.css(
+      'display:grid;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;',
+    );
     Duration stamp(_Event event) =>
         Duration(microseconds: ((event.timeStamp ?? 0) * 1000).round());
     Offset move(_Event event, Offset global, {bool end = false}) {

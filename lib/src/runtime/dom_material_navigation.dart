@@ -42,10 +42,12 @@ class _NavItem extends StatelessWidget {
     this.labelStyle,
     this.labelPadding,
     this.overlay,
+    this.compactPadding = false,
   });
   final Widget icon;
   final String label;
   final bool selected, enabled, showLabel, indicator;
+  final bool compactPadding;
   final VoidCallback onTap;
   final Color? indicatorColor, overlay;
   final ShapeBorder? indicatorShape;
@@ -74,7 +76,7 @@ class _NavItem extends StatelessWidget {
     return _Box(
       tag: 'button',
       css:
-          'flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-sizing:border-box;margin:0;border:0;padding:12px 0 16px;background:transparent;font:inherit;${_stateLayerCss(overlay ?? scheme.onSurface)}',
+          'flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-sizing:border-box;margin:0;border:0;padding:${compactPadding ? '0' : '12px 0 16px'};background:transparent;font:inherit;${_stateLayerCss(overlay ?? scheme.onSurface)}',
       attributes: {
         'type': 'button',
         'class': 'fd-ink fd-button',
@@ -152,7 +154,7 @@ class NavigationBar extends StatelessWidget {
     return _Box(
       tag: 'nav',
       css:
-          'display:flex;flex-direction:row;box-sizing:border-box;min-height:${px(height ?? barTheme.height ?? 80)};background-color:${colorCss(backgroundColor ?? barTheme.backgroundColor ?? scheme.surfaceContainer)};${depth > 3 ? elevationCss(depth, shadowColor ?? barTheme.shadowColor ?? scheme.shadow) : ''}',
+          'display:flex;flex-direction:row;box-sizing:border-box;flex-shrink:0;height:${px(height ?? barTheme.height ?? 80)};background-color:${colorCss(backgroundColor ?? barTheme.backgroundColor ?? scheme.surfaceContainer)};${depth > 3 ? elevationCss(depth, shadowColor ?? barTheme.shadowColor ?? scheme.shadow) : ''}',
       layout: _DomLayout.row,
       fill: _Fill.expand,
       children: [
@@ -172,6 +174,7 @@ class NavigationBar extends StatelessWidget {
               selected: selected,
               enabled: enabled,
               indicator: true,
+              compactPadding: true,
               indicatorColor: indicatorColor ?? barTheme.indicatorColor,
               indicatorShape: indicatorShape ?? barTheme.indicatorShape,
               iconTheme: barTheme.iconTheme?.resolve(states),

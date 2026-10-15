@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain same-library named-type dependencies in runtime source selections, and allow explicit public aliases for selected private components and metadata. Report aliases separately from adapters.
+- Observe container size changes for LayoutBuilder, including animated parent widths; disconnect observers on disposal.
+- Respect inherited icon colors for standard icon buttons (including app-bar date controls), and keep NavigationBar at its configured/theme height without intrinsic padding enlarging it.
+
 - Fix `StackFit.expand` height propagation for positioned painters and chart hit areas. Segmented buttons share available width and honor compact density, themed text, colors and padding.
 
 - Complete `ThemeData` (Flutter's constructor, `copyWith`, `from`/`light`/`dark`, `lerp`, `estimateBrightnessForColor`, `platform`) with every Material component theme and inherited theme widget; Material widgets resolve widget value, then component theme, then Material 3 default (buttons per state like `ButtonStyleButton`, text fields through `InputDecoration.applyDefaults`); plus many missing Material constructors and parameters (IconButton variants, FAB sizes, `showBottomSheet`, `ExpansibleController`, TextField/DropdownMenu parameters).

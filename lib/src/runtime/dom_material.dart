@@ -1804,6 +1804,9 @@ class _IconButton extends ButtonStyleButton {
     if (!useTheme) return const ButtonStyle();
     final scheme = Theme.of(context).colorScheme;
     final disabled = scheme.onSurface.withValues(alpha: 0.38);
+    final inheritedIcons = context
+        .dependOnInheritedWidgetOfExactType<IconTheme>()
+        ?.data;
     Color foreground(Set<WidgetState> states) => switch (variant) {
       _ when states.contains(WidgetState.disabled) => disabled,
       _IconButtonVariant.filled => scheme.onPrimary,
@@ -1812,7 +1815,7 @@ class _IconButton extends ButtonStyleButton {
         variant == _IconButtonVariant.outlined
             ? scheme.onInverseSurface
             : scheme.primary,
-      _ => scheme.onSurfaceVariant,
+      _ => inheritedIcons?.color ?? scheme.onSurfaceVariant,
     };
     return ButtonStyle(
       foregroundColor: WidgetStateProperty.resolveWith(foreground),
@@ -3240,7 +3243,7 @@ class AppBar extends StatelessWidget implements PreferredSizeWidget {
                     .merge(titleTextStyle ?? barTheme.titleTextStyle),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                child: title!,
+                child: IconTheme(data: icons, child: title!),
               ),
           ],
         ),
